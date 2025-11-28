@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["ES2020", "DOM"],
+    "module": "ESNext",
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": "./src",
+    "moduleResolution": "node",
+    "paths": {
+      "@/*": ["*"],
+      "@components/*": ["components/*"],
+      "@features/*": ["features/*"],
+      "@hooks/*": ["hooks/*"],
+      "@utils/*": ["utils/*"],
+      "@theme/*": ["theme/*"],
+      "@pages/*": ["pages/*"],
+      "@api/*": ["api/*"],
+      "@types/*": ["types/*"]
+    },
+    "noEmit": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
+}
