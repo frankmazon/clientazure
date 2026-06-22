@@ -117,7 +117,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">
-                  Total Files
+                  Total Files sdasd
                 </p>
                 <h2 className="mt-2 text-3xl font-extrabold text-slate-900">
                   {submissions.length}
