@@ -1,26 +1,77 @@
-import { Routes, Route } from 'react-router-dom';
-import { Box, Typography } from '@mui/joy';
+import { Routes, Route, Navigate } from 'react-router-dom';
 
-import SidebarLayout from '@components/layout/SidebarLayout';
-import Header from '@components/layout/Header';
+import Home from '../components/layout/page';
+import Dashboard from '../pages/Dashboard';
+import Clients from '../pages/Clients';
+import ExportClients from '../pages/ExportClients';
+import ClientDashboard from '../pages/ClientDashboard';
+import Login from '../pages/Login';
+import ProtectedRoute from './ProtectedRoute';
+import DocumentTypePage from '@/pages/DocumentTypePage';
+import ClientPortalUploads from '@/pages/ClientPortalUploads';
+import ClientDocumentSearch from '@/pages/ClientDocumentSearch';
 
-const DashboardPage = () => (
-    <Box sx={{ p: 2 }}>
-        <Typography level="h2">Dashboard</Typography>
-        <Typography level="body-md" className="mt-2">
-            Welcome to Pacific Dimension!
-        </Typography>
-    </Box>
-);
+export default function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/client-dashboard" element={<ClientDashboard />} />
+      <Route path="/login" element={<Login />} />
 
-const AppRoutes = () => (
-    <SidebarLayout>
-        <Header />
-        <Routes>
-            <Route path="/" element={<DashboardPage />} />
-            {/* Add more routes here later */}
-        </Routes>
-    </SidebarLayout>
-);
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
 
-export default AppRoutes;
+      <Route
+        path="/dashboard/clients"
+        element={
+          <ProtectedRoute>
+            <Clients />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dashboard/export-clients"
+        element={
+          <ProtectedRoute>
+            <ExportClients />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dashboard/documents/:type"
+        element={
+          <ProtectedRoute>
+            <DocumentTypePage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dashboard/client-portal-uploads"
+        element={
+          <ProtectedRoute>
+            <ClientPortalUploads />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+  path="/dashboard/client-search"
+  element={
+    <ProtectedRoute>
+      <ClientDocumentSearch/>
+    </ProtectedRoute>
+  }
+/>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}

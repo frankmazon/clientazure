@@ -5,15 +5,15 @@ import CssBaseline from '@mui/joy/CssBaseline';
 import { BrowserRouter } from 'react-router-dom';
 
 import './index.css';
-import AppRoutes from "@/routes/AppRoutes";
+import AppRoutes from '@/routes/AppRoutes';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-    <React.StrictMode>
-        <CssVarsProvider>
-            <CssBaseline />
-            <BrowserRouter>
-                <AppRoutes />
-            </BrowserRouter>
-        </CssVarsProvider>
-    </React.StrictMode>,
+  <React.StrictMode>
+    <CssVarsProvider>
+      <CssBaseline />
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </CssVarsProvider>
+  </React.StrictMode>,
 );
