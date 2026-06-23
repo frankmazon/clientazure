@@ -5,6 +5,10 @@ const SERVICE_ID = 'service_4d8mjir';
 const TEMPLATE_ID = 'template_5iexv1b';
 const PUBLIC_KEY = 'Z-lJJhTln-512oNez';
 
+const API_URL = 'https://docsuploadpythonapi.azurewebsites.net/api/uploadclient';
+const CLIENT_DASHBOARD_URL =
+  'https://icy-river-055fcb80f.7.azurestaticapps.net/client-dashboard';
+
 const documentOptions = [
   { label: 'ID', value: 'id' },
   { label: 'Property Documents', value: 'property-documents' },
@@ -35,11 +39,7 @@ export default function HomePage() {
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = event.target;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleDocumentTypeToggle = (type: string) => {
@@ -47,11 +47,8 @@ export default function HomePage() {
       const isSelected = prev.documentTypes.includes(type);
       const updatedFiles = { ...prev.documentFiles };
 
-      if (isSelected) {
-        delete updatedFiles[type];
-      } else {
-        updatedFiles[type] = null;
-      }
+      if (isSelected) delete updatedFiles[type];
+      else updatedFiles[type] = null;
 
       return {
         ...prev,
@@ -78,22 +75,11 @@ export default function HomePage() {
     }));
   };
 
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const formatDocumentType = (type: string) => {
-    return type
+  const formatDocumentType = (type: string) =>
+    type
       .split('-')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
-  };
 
   const getMissingRequirements = (data: typeof initialFormData) => {
     const missing: string[] = [];
@@ -113,6 +99,36 @@ export default function HomePage() {
     }
 
     return missing;
+  };
+
+  const uploadToAzure = async (documentType: string, file: File) => {
+    const azureFormData = new FormData();
+
+    azureFormData.append('firstName', formData.firstName);
+    azureFormData.append('middleName', formData.middleName);
+    azureFormData.append('lastName', formData.lastName);
+    azureFormData.append('email', formData.email);
+    azureFormData.append('documentType', documentType);
+    azureFormData.append('file', file);
+
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      body: azureFormData,
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || 'Azure upload failed.');
+    }
+
+    return result as {
+      success: boolean;
+      message: string;
+      clientId: number;
+      uniqueId: string;
+      blobUrl: string;
+    };
   };
 
   const scheduleIncompleteReminder = (clientData: {
@@ -159,11 +175,9 @@ export default function HomePage() {
             message:
               'Your submission is incomplete. Please upload the missing required documents.',
             missing_fields: clientData.missingRequirements.join(', '),
-            dashboard_link: 'http://localhost:5174/client-dashboard',
+            dashboard_link: CLIENT_DASHBOARD_URL,
           },
-          {
-            publicKey: PUBLIC_KEY,
-          },
+          { publicKey: PUBLIC_KEY },
         );
       } catch (error) {
         console.error('Incomplete reminder email failed:', error);
@@ -191,7 +205,6 @@ export default function HomePage() {
     try {
       setIsSubmitting(true);
 
-      const existingClients = JSON.parse(localStorage.getItem('clients') || '[]');
       const existingNotifications = JSON.parse(
         localStorage.getItem('notifications') || '[]',
       );
@@ -201,47 +214,39 @@ export default function HomePage() {
         .trim();
 
       const submittedAt = new Date().toLocaleString();
-      const uniqueId = `CLIENT-${Date.now()}`;
+      const uploadResults = [];
 
-      const newClients = await Promise.all(
-        formData.documentTypes.map(async (selectedDocumentType) => {
-          const file = formData.documentFiles[selectedDocumentType];
+      for (const selectedDocumentType of formData.documentTypes) {
+        const file = formData.documentFiles[selectedDocumentType];
 
-          if (!file) return null;
+        if (!file) continue;
 
-          return {
-            id: Date.now() + Math.random(),
-            uniqueId,
-            firstName: formData.firstName,
-            middleName: formData.middleName,
-            lastName: formData.lastName,
-            name: fullName,
-            email: formData.email,
-            documentType: selectedDocumentType,
-            sssNumber: formData.sssNumber,
-            hdmfNumber: formData.hdmfNumber,
-            philhealthNumber: formData.philhealthNumber,
-            tinNumber: formData.tinNumber,
-            licenseNumber: formData.licenseNumber,
-            fileName: file.name,
-            fileUrl: await fileToBase64(file),
-            submittedAt,
-          };
-        }),
-      ).then((items) => items.filter(Boolean));
+        const result = await uploadToAzure(selectedDocumentType, file);
+
+        uploadResults.push({
+          ...result,
+          documentType: selectedDocumentType,
+          fileName: file.name,
+        });
+      }
+
+      const uniqueId = uploadResults[0]?.uniqueId;
+
+      if (!uniqueId) {
+        throw new Error('No upload result returned from Azure.');
+      }
 
       const selectedDocumentLabels = formData.documentTypes
         .map(formatDocumentType)
         .join(', ');
 
-      const uploadedFileNames = formData.documentTypes
-        .map((type) => formData.documentFiles[type]?.name)
-        .filter(Boolean)
+      const uploadedFileNames = uploadResults
+        .map((item) => item.fileName)
         .join(', ');
 
       const newNotification = {
         id: Date.now(),
-        clientId: newClients[0]?.id,
+        clientId: uploadResults[0]?.clientId,
         title: 'New Document Submission',
         message: `${fullName} submitted ${selectedDocumentLabels}.`,
         time: submittedAt,
@@ -250,11 +255,6 @@ export default function HomePage() {
         documentType: formData.documentTypes[0],
         redirectTo: `/dashboard/documents/${formData.documentTypes[0]}`,
       };
-
-      localStorage.setItem(
-        'clients',
-        JSON.stringify([...newClients, ...existingClients]),
-      );
 
       localStorage.setItem(
         'notifications',
@@ -280,11 +280,9 @@ export default function HomePage() {
           license_number: formData.licenseNumber || 'N/A',
           message: 'Your documents have been successfully submitted.',
           missing_fields: 'None',
-          dashboard_link: 'http://localhost:5174/client-dashboard',
+          dashboard_link: CLIENT_DASHBOARD_URL,
         },
-        {
-          publicKey: PUBLIC_KEY,
-        },
+        { publicKey: PUBLIC_KEY },
       );
 
       const missingRequirements = getMissingRequirements(formData);
@@ -309,7 +307,7 @@ export default function HomePage() {
         });
     } catch (error) {
       console.error('Submit error:', error);
-      alert('Document was saved, but email notification failed.');
+      alert(error instanceof Error ? error.message : 'Document submission failed.');
     } finally {
       setIsSubmitting(false);
     }
