@@ -37,19 +37,10 @@ export default function AppRoutes() {
       />
 
       <Route
-        path="/dashboard/export-clients"
+        path="/dashboard/client-search"
         element={
           <ProtectedRoute>
-            <ExportClients />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/dashboard/documents/:type"
-        element={
-          <ProtectedRoute>
-            <DocumentTypePage />
+            <ClientDocumentSearch />
           </ProtectedRoute>
         }
       />
@@ -64,13 +55,23 @@ export default function AppRoutes() {
       />
 
       <Route
-  path="/dashboard/client-search"
-  element={
-    <ProtectedRoute>
-      <ClientDocumentSearch/>
-    </ProtectedRoute>
-  }
-/>
+        path="/dashboard/documents/:type"
+        element={
+          <ProtectedRoute>
+            <DocumentTypePage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dashboard/export-clients"
+        element={
+          <ProtectedRoute>
+            <ExportClients />
+          </ProtectedRoute>
+        }
+      />
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

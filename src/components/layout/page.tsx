@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import emailjs from '@emailjs/browser';
 
+const SERVICE_ID = 'service_4d8mjir';
+const TEMPLATE_ID = 'template_5iexv1b';
+const PUBLIC_KEY = 'Z-lJJhTln-512oNez';
+
 const documentOptions = [
   { label: 'ID', value: 'id' },
   { label: 'Property Documents', value: 'property-documents' },
@@ -41,7 +45,6 @@ export default function HomePage() {
   const handleDocumentTypeToggle = (type: string) => {
     setFormData((prev) => {
       const isSelected = prev.documentTypes.includes(type);
-
       const updatedFiles = { ...prev.documentFiles };
 
       if (isSelected) {
@@ -90,6 +93,82 @@ export default function HomePage() {
       .split('-')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+  };
+
+  const getMissingRequirements = (data: typeof initialFormData) => {
+    const missing: string[] = [];
+
+    documentOptions.forEach((item) => {
+      if (!data.documentTypes.includes(item.value)) {
+        missing.push(`${item.label} document`);
+      }
+    });
+
+    if (data.documentTypes.includes('id')) {
+      if (!data.sssNumber.trim()) missing.push('SSS Number');
+      if (!data.hdmfNumber.trim()) missing.push('HDMF / Pag-IBIG Number');
+      if (!data.philhealthNumber.trim()) missing.push('PhilHealth Number');
+      if (!data.tinNumber.trim()) missing.push('TIN Number');
+      if (!data.licenseNumber.trim()) missing.push('License Number');
+    }
+
+    return missing;
+  };
+
+  const scheduleIncompleteReminder = (clientData: {
+    uniqueId: string;
+    fullName: string;
+    email: string;
+    missingRequirements: string[];
+  }) => {
+    window.setTimeout(async () => {
+      const existingNotifications = JSON.parse(
+        localStorage.getItem('notifications') || '[]',
+      );
+
+      const reminderNotification = {
+        id: Date.now(),
+        title: 'Incomplete Client Submission',
+        message: `${clientData.fullName} is incomplete. Missing: ${clientData.missingRequirements.join(
+          ', ',
+        )}.`,
+        time: new Date().toLocaleString(),
+        unread: true,
+        type: 'incomplete',
+        redirectTo: `/dashboard/client-search?uid=${clientData.uniqueId}`,
+      };
+
+      localStorage.setItem(
+        'notifications',
+        JSON.stringify([reminderNotification, ...existingNotifications]),
+      );
+
+      try {
+        await emailjs.send(
+          SERVICE_ID,
+          TEMPLATE_ID,
+          {
+            to_email: clientData.email,
+            email: clientData.email,
+            email_title: 'Incomplete Document Submission',
+            unique_id: clientData.uniqueId,
+            full_name: clientData.fullName,
+            document_type: 'Incomplete Submission',
+            file_name: 'N/A',
+            submitted_at: new Date().toLocaleString(),
+            message:
+              'Your submission is incomplete. Please upload the missing required documents.',
+            missing_fields: clientData.missingRequirements.join(', '),
+            dashboard_link: 'http://localhost:5174/client-dashboard',
+          },
+          {
+            publicKey: PUBLIC_KEY,
+          },
+        );
+      } catch (error) {
+        console.error('Incomplete reminder email failed:', error);
+      }
+    }, 5 * 60 * 1000);
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -155,6 +234,11 @@ export default function HomePage() {
         .map(formatDocumentType)
         .join(', ');
 
+      const uploadedFileNames = formData.documentTypes
+        .map((type) => formData.documentFiles[type]?.name)
+        .filter(Boolean)
+        .join(', ');
+
       const newNotification = {
         id: Date.now(),
         clientId: newClients[0]?.id,
@@ -178,31 +262,44 @@ export default function HomePage() {
       );
 
       await emailjs.send(
-        'service_4d8mjir',
-        'template_5iexv1b',
+        SERVICE_ID,
+        TEMPLATE_ID,
         {
+          to_email: formData.email,
+          email: formData.email,
+          email_title: 'New Document Submission',
           unique_id: uniqueId,
           full_name: fullName,
-          email: formData.email,
           document_type: selectedDocumentLabels,
-          file_name: formData.documentTypes
-            .map((type) => formData.documentFiles[type]?.name)
-            .filter(Boolean)
-            .join(', '),
+          file_name: uploadedFileNames,
           submitted_at: submittedAt,
           sss_number: formData.sssNumber || 'N/A',
           hdmf_number: formData.hdmfNumber || 'N/A',
           philhealth_number: formData.philhealthNumber || 'N/A',
           tin_number: formData.tinNumber || 'N/A',
           license_number: formData.licenseNumber || 'N/A',
+          message: 'Your documents have been successfully submitted.',
+          missing_fields: 'None',
           dashboard_link: 'http://localhost:5174/client-dashboard',
         },
         {
-          publicKey: 'Z-lJJhTln-512oNez',
+          publicKey: PUBLIC_KEY,
         },
       );
 
+      const missingRequirements = getMissingRequirements(formData);
+
+      if (missingRequirements.length > 0) {
+        scheduleIncompleteReminder({
+          uniqueId,
+          fullName,
+          email: formData.email,
+          missingRequirements,
+        });
+      }
+
       alert(`Document submitted successfully! Unique ID: ${uniqueId}`);
+
       setFormData(initialFormData);
 
       document
@@ -228,6 +325,7 @@ export default function HomePage() {
             <h1 className="text-3xl font-extrabold text-slate-900 sm:text-4xl">
               Secure Document Submission
             </h1>
+
             <p className="mt-2 text-sm text-slate-500">
               Fill out the form and upload your required document.
             </p>

@@ -3,6 +3,7 @@ import {
   FaChevronRight,
   FaDownload,
   FaEdit,
+  FaExclamationTriangle,
   FaEye,
   FaFileAlt,
   FaFolder,
@@ -27,6 +28,11 @@ type Client = {
   fileName?: string;
   fileUrl?: string;
   submittedAt?: string;
+  sssNumber?: string;
+  hdmfNumber?: string;
+  philhealthNumber?: string;
+  tinNumber?: string;
+  licenseNumber?: string;
 };
 
 const documentTypes = [
@@ -35,6 +41,14 @@ const documentTypes = [
   { label: 'Credit History', value: 'credit-history' },
   { label: 'Income Documents', value: 'income-documents' },
   { label: 'Other', value: 'other' },
+];
+
+const requiredDocumentTypes = [
+  'id',
+  'property-documents',
+  'credit-history',
+  'income-documents',
+  'other',
 ];
 
 const fileToBase64 = (file: File): Promise<string> => {
@@ -68,6 +82,12 @@ export default function ClientDocumentSearch() {
       .replace(/\s+/g, ' ')
       .trim();
 
+  const formatDocumentType = (type?: string) =>
+    (type || 'document')
+      .split('-')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+
   const matchedFiles = useMemo(() => {
     const keyword = search.toLowerCase().trim();
 
@@ -86,6 +106,32 @@ export default function ClientDocumentSearch() {
   const getFilesByType = (type: string) => {
     return matchedFiles.filter((file) => file.documentType === type);
   };
+
+  const getMissingIdFields = (client?: Client | null) => {
+    if (!client) return [];
+
+    const missing: string[] = [];
+
+    if (!client.sssNumber?.trim()) missing.push('SSS Number');
+    if (!client.hdmfNumber?.trim()) missing.push('HDMF / Pag-IBIG Number');
+    if (!client.philhealthNumber?.trim()) missing.push('PhilHealth Number');
+    if (!client.tinNumber?.trim()) missing.push('TIN Number');
+    if (!client.licenseNumber?.trim()) missing.push('License Number');
+
+    return missing;
+  };
+
+  const idFiles = getFilesByType('id');
+
+  const missingDocumentTypes = requiredDocumentTypes.filter(
+    (type) => getFilesByType(type).length === 0,
+  );
+
+  const missingIdFields = getMissingIdFields(idFiles[0] || selectedClient);
+
+  const isIncomplete =
+    selectedClient &&
+    (missingDocumentTypes.length > 0 || missingIdFields.length > 0);
 
   const handleDownload = (file: Client) => {
     if (!file.fileUrl) {
@@ -189,25 +235,60 @@ export default function ClientDocumentSearch() {
 
         {selectedClient && (
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center gap-5">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-xl font-extrabold text-blue-700">
-                <FaUser />
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-5">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-xl font-extrabold text-blue-700">
+                  <FaUser />
+                </div>
+
+                <div>
+                  <h2 className="text-xl font-extrabold text-slate-900">
+                    {getFullName(selectedClient)}
+                  </h2>
+
+                  <p className="mt-1 text-sm text-slate-500">
+                    Unique ID: {selectedClient.uniqueId || 'N/A'}
+                  </p>
+
+                  <p className="text-sm text-slate-500">
+                    Email: {selectedClient.email || 'N/A'}
+                  </p>
+                </div>
               </div>
 
-              <div>
-                <h2 className="text-xl font-extrabold text-slate-900">
-                  {getFullName(selectedClient)}
-                </h2>
-
-                <p className="mt-1 text-sm text-slate-500">
-                  Unique ID: {selectedClient.uniqueId || 'N/A'}
-                </p>
-
-                <p className="text-sm text-slate-500">
-                  Email: {selectedClient.email || 'N/A'}
-                </p>
-              </div>
+              {isIncomplete ? (
+                <span className="inline-flex items-center gap-2 rounded-full bg-red-100 px-4 py-2 text-sm font-bold text-red-700">
+                  <FaExclamationTriangle />
+                  Incomplete File
+                </span>
+              ) : (
+                <span className="inline-flex rounded-full bg-green-100 px-4 py-2 text-sm font-bold text-green-700">
+                  Complete
+                </span>
+              )}
             </div>
+
+            {isIncomplete && (
+              <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4">
+                <p className="flex items-center gap-2 font-bold text-red-700">
+                  <FaExclamationTriangle />
+                  Incomplete Requirements
+                </p>
+
+                {missingDocumentTypes.length > 0 && (
+                  <p className="mt-2 text-sm text-red-600">
+                    Missing documents:{' '}
+                    {missingDocumentTypes.map(formatDocumentType).join(', ')}
+                  </p>
+                )}
+
+                {missingIdFields.length > 0 && (
+                  <p className="mt-2 text-sm text-red-600">
+                    Missing ID information: {missingIdFields.join(', ')}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -215,25 +296,60 @@ export default function ClientDocumentSearch() {
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {documentTypes.map((type) => {
               const files = getFilesByType(type.value);
+              const folderIncomplete =
+                requiredDocumentTypes.includes(type.value) &&
+                files.length === 0;
+
+              const idFolderIncomplete =
+                type.value === 'id' && missingIdFields.length > 0;
 
               return (
                 <div
                   key={type.value}
-                  className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+                  className={`rounded-3xl border bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg ${
+                    folderIncomplete || idFolderIncomplete
+                      ? 'border-red-300'
+                      : 'border-slate-200'
+                  }`}
                 >
                   <div className="mb-6 flex items-center justify-between">
                     <FaFolder className="text-6xl text-yellow-400" />
-                    <FaChevronRight className="text-slate-400" />
+
+                    {folderIncomplete || idFolderIncomplete ? (
+                      <FaExclamationTriangle className="text-red-500" />
+                    ) : (
+                      <FaChevronRight className="text-slate-400" />
+                    )}
                   </div>
 
-                  <h3 className="text-lg font-extrabold text-slate-900">
-                    {type.label}
-                  </h3>
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-lg font-extrabold text-slate-900">
+                      {type.label}
+                    </h3>
+
+                    {(folderIncomplete || idFolderIncomplete) && (
+                      <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">
+                        Incomplete
+                      </span>
+                    )}
+                  </div>
 
                   <p className="mt-2 flex items-center gap-2 text-sm text-slate-500">
                     <FaFileAlt />
                     {files.length} file(s)
                   </p>
+
+                  {folderIncomplete && (
+                    <div className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">
+                      Missing document: {type.label}
+                    </div>
+                  )}
+
+                  {idFolderIncomplete && (
+                    <div className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-semibold text-red-700">
+                      Missing ID information: {missingIdFields.join(', ')}
+                    </div>
+                  )}
 
                   {files.length > 0 && (
                     <div className="mt-4 space-y-3">
