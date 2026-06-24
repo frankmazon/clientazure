@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   FaCloudUploadAlt,
   FaDownload,
@@ -13,6 +13,7 @@ import {
 
 type Submission = {
   id: number;
+  clientId?: number;
   uniqueId?: string;
   firstName?: string;
   middleName?: string;
@@ -48,21 +49,21 @@ export default function ClientDashboard() {
   const [previewFile, setPreviewFile] = useState<Submission | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const getFullName = (client: Submission) => {
-    return (
+  const selectedClient = clientFiles[0];
+
+  const getFullName = (client: Submission) =>
+    (
       client.name ||
       `${client.firstName || ''} ${client.middleName || ''} ${client.lastName || ''}`
-        .replace(/\s+/g, ' ')
-        .trim()
-    );
-  };
+    )
+      .replace(/\s+/g, ' ')
+      .trim();
 
-  const formatDocumentType = (type?: string) => {
-    return (type || 'document')
+  const formatDocumentType = (type?: string) =>
+    (type || 'document')
       .split('-')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
-  };
 
   const loadClientFiles = async (idValue = uniqueId) => {
     if (!idValue.trim()) {
@@ -108,7 +109,9 @@ export default function ClientDashboard() {
   });
 
   const handleUpload = async () => {
-    if (!uniqueId.trim()) {
+    const cleanUniqueId = uniqueId.trim();
+
+    if (!cleanUniqueId) {
       alert('Please enter Unique ID first.');
       return;
     }
@@ -123,8 +126,6 @@ export default function ClientDashboard() {
       return;
     }
 
-    const selectedClient = clientFiles[0];
-
     if (!selectedClient) {
       alert('Please load the client files first before uploading.');
       return;
@@ -136,6 +137,7 @@ export default function ClientDashboard() {
       for (const file of Array.from(newFiles)) {
         const formData = new FormData();
 
+        formData.append('uniqueId', cleanUniqueId);
         formData.append('firstName', selectedClient.firstName || '');
         formData.append('middleName', selectedClient.middleName || '');
         formData.append('lastName', selectedClient.lastName || '');
@@ -161,7 +163,7 @@ export default function ClientDashboard() {
       const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
       if (fileInput) fileInput.value = '';
 
-      await loadClientFiles(uniqueId);
+      await loadClientFiles(cleanUniqueId);
 
       alert('File uploaded successfully to Azure.');
     } catch (error) {
@@ -179,8 +181,6 @@ export default function ClientDashboard() {
 
     window.open(file.fileUrl, '_blank');
   };
-
-  const selectedClient = clientFiles[0];
 
   const isImageFile =
     previewFile?.fileName?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/) ||

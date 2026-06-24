@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  FaCheckCircle,
   FaDownload,
+  FaExclamationTriangle,
   FaEye,
   FaFileAlt,
   FaSearch,
@@ -11,8 +13,25 @@ import DashboardLayout from '../components/layout/layout';
 const CLIENTS_API =
   'https://docsuploadpythonapi.azurewebsites.net/api/clients';
 
+const requiredDocuments = [
+  'id',
+  'property-documents',
+  'credit-history',
+  'income-documents',
+  'other',
+];
+
+const documentLabels: Record<string, string> = {
+  id: 'ID',
+  'property-documents': 'Property Documents',
+  'credit-history': 'Credit History',
+  'income-documents': 'Income Documents',
+  other: 'Other',
+};
+
 type Client = {
   id: number;
+  clientId?: number;
   uniqueId?: string;
   firstName?: string;
   middleName?: string;
@@ -23,6 +42,15 @@ type Client = {
   fileName?: string;
   fileUrl?: string;
   submittedAt?: string;
+};
+
+type ClientGroup = {
+  key: string;
+  client: Client;
+  files: Client[];
+  uploadedDocuments: string[];
+  missingDocuments: string[];
+  isComplete: boolean;
 };
 
 export default function Clients() {
@@ -56,36 +84,75 @@ export default function Clients() {
     loadClients();
   }, []);
 
-  const getFullName = (client: Client) => {
-    return (
+  const getFullName = (client: Client) =>
+    (
       client.name ||
       `${client.firstName || ''} ${client.middleName || ''} ${client.lastName || ''}`
-        .replace(/\s+/g, ' ')
-        .trim()
-    );
-  };
+    )
+      .replace(/\s+/g, ' ')
+      .trim();
 
-  const formatDocumentType = (type?: string) => {
-    return (type || 'document')
+  const formatDocumentType = (type?: string) =>
+    documentLabels[type || ''] ||
+    (type || 'document')
       .split('-')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
-  };
 
-  const filteredClients = useMemo(() => {
-    const searchValue = search.toLowerCase();
+  const clientGroups = useMemo<ClientGroup[]>(() => {
+    const map = new Map<string, Client[]>();
 
-    return clients.filter((client) => {
-      const fullName = getFullName(client).toLowerCase();
+    clients.forEach((client) => {
+      const key = client.uniqueId || String(client.clientId || client.id);
+
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+
+      map.get(key)?.push(client);
+    });
+
+    return Array.from(map.entries()).map(([key, files]) => {
+      const uploadedDocuments = Array.from(
+        new Set(
+          files
+            .map((file) => file.documentType?.toLowerCase())
+            .filter(Boolean) as string[],
+        ),
+      );
+
+      const missingDocuments = requiredDocuments.filter(
+        (doc) => !uploadedDocuments.includes(doc),
+      );
+
+      return {
+        key,
+        client: files[0],
+        files,
+        uploadedDocuments,
+        missingDocuments,
+        isComplete: missingDocuments.length === 0,
+      };
+    });
+  }, [clients]);
+
+  const filteredGroups = useMemo(() => {
+    const searchValue = search.toLowerCase().trim();
+
+    return clientGroups.filter((group) => {
+      const fullName = getFullName(group.client).toLowerCase();
 
       return (
+        !searchValue ||
         fullName.includes(searchValue) ||
-        (client.email || '').toLowerCase().includes(searchValue) ||
-        (client.uniqueId || '').toLowerCase().includes(searchValue) ||
-        (client.fileName || '').toLowerCase().includes(searchValue)
+        (group.client.email || '').toLowerCase().includes(searchValue) ||
+        (group.client.uniqueId || '').toLowerCase().includes(searchValue) ||
+        group.files.some((file) =>
+          (file.fileName || '').toLowerCase().includes(searchValue),
+        )
       );
     });
-  }, [clients, search]);
+  }, [clientGroups, search]);
 
   const handleDownload = (client: Client) => {
     if (!client.fileUrl) {
@@ -99,7 +166,7 @@ export default function Clients() {
   return (
     <DashboardLayout
       title="Clients"
-      subtitle="View and manage all submitted clients from Azure SQL."
+      subtitle="View submitted clients and completion status from Azure SQL."
     >
       <div className="mx-auto max-w-7xl space-y-5">
         <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
@@ -130,25 +197,55 @@ export default function Clients() {
 
         {!loading && !error && (
           <>
-            {/* Mobile Cards */}
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                <p className="text-sm font-bold text-slate-500">Clients</p>
+                <p className="mt-2 text-3xl font-extrabold text-slate-900">
+                  {clientGroups.length}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm">
+                <p className="text-sm font-bold text-green-700">Complete</p>
+                <p className="mt-2 text-3xl font-extrabold text-green-700">
+                  {clientGroups.filter((group) => group.isComplete).length}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm">
+                <p className="text-sm font-bold text-red-700">Incomplete</p>
+                <p className="mt-2 text-3xl font-extrabold text-red-700">
+                  {clientGroups.filter((group) => !group.isComplete).length}
+                </p>
+              </div>
+            </div>
+
             <div className="space-y-4 lg:hidden">
-              {filteredClients.map((client) => (
+              {filteredGroups.map((group) => (
                 <div
-                  key={`${client.id}-${client.fileName}`}
-                  className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"
+                  key={group.key}
+                  className={`rounded-2xl bg-white p-5 shadow-sm ring-1 ${
+                    group.isComplete ? 'ring-green-200' : 'ring-red-200'
+                  }`}
                 >
                   <div className="mb-4 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h3 className="truncate text-lg font-extrabold text-slate-900">
-                        {getFullName(client) || '-'}
+                        {getFullName(group.client) || '-'}
                       </h3>
                       <p className="truncate text-sm text-slate-500">
-                        {client.email || 'No email'}
+                        {group.client.email || 'No email'}
                       </p>
                     </div>
 
-                    <span className="shrink-0 rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
-                      {formatDocumentType(client.documentType)}
+                    <span
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
+                        group.isComplete
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}
+                    >
+                      {group.isComplete ? 'Complete' : 'Incomplete'}
                     </span>
                   </div>
 
@@ -158,63 +255,78 @@ export default function Clients() {
                         Unique ID
                       </p>
                       <p className="mt-1 font-semibold text-slate-800">
-                        {client.uniqueId || '-'}
+                        {group.client.uniqueId || '-'}
                       </p>
                     </div>
 
                     <div className="rounded-xl bg-slate-50 p-3">
                       <p className="text-xs font-bold uppercase text-slate-400">
-                        File
+                        Uploaded
                       </p>
-                      <p className="mt-1 break-all font-semibold text-slate-800">
-                        {client.fileName || '-'}
-                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {group.uploadedDocuments.map((doc) => (
+                          <span
+                            key={doc}
+                            className="rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-700"
+                          >
+                            {formatDocumentType(doc)}
+                          </span>
+                        ))}
+                      </div>
                     </div>
 
                     <div className="rounded-xl bg-slate-50 p-3">
                       <p className="text-xs font-bold uppercase text-slate-400">
-                        Submitted
+                        Missing
                       </p>
-                      <p className="mt-1 font-semibold text-slate-800">
-                        {client.submittedAt || '-'}
-                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {group.missingDocuments.length > 0 ? (
+                          group.missingDocuments.map((doc) => (
+                            <span
+                              key={doc}
+                              className="rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700"
+                            >
+                              {formatDocumentType(doc)}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-700">
+                            None
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedClient(client)}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-500 text-sm font-bold text-white hover:bg-blue-600"
-                    >
-                      <FaEye />
-                      View
-                    </button>
+                    {group.files.slice(0, 1).map((file) => (
+                      <>
+                        <button
+                          key={`${file.id}-view`}
+                          type="button"
+                          onClick={() => setSelectedClient(file)}
+                          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-500 text-sm font-bold text-white hover:bg-blue-600"
+                        >
+                          <FaEye />
+                          View
+                        </button>
 
-                    <button
-                      type="button"
-                      onClick={() => handleDownload(client)}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 text-sm font-bold text-white hover:bg-orange-600"
-                    >
-                      <FaDownload />
-                      Download
-                    </button>
+                        <button
+                          key={`${file.id}-download`}
+                          type="button"
+                          onClick={() => handleDownload(file)}
+                          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 text-sm font-bold text-white hover:bg-orange-600"
+                        >
+                          <FaDownload />
+                          Download
+                        </button>
+                      </>
+                    ))}
                   </div>
                 </div>
               ))}
-
-              {filteredClients.length === 0 && (
-                <div className="rounded-2xl bg-white p-10 text-center shadow-sm ring-1 ring-slate-200">
-                  <FaFileAlt className="mx-auto mb-3 text-3xl text-slate-300" />
-                  <p className="font-bold text-slate-700">No clients found</p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Try adjusting your search.
-                  </p>
-                </div>
-              )}
             </div>
 
-            {/* Desktop Table */}
             <div className="hidden overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 lg:block">
               <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
                 <div>
@@ -222,8 +334,8 @@ export default function Clients() {
                     Client List
                   </h2>
                   <p className="text-sm text-slate-500">
-                    {filteredClients.length} submitted file
-                    {filteredClients.length !== 1 ? 's' : ''}
+                    {filteredGroups.length} client
+                    {filteredGroups.length !== 1 ? 's' : ''}
                   </p>
                 </div>
 
@@ -231,16 +343,17 @@ export default function Clients() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="min-w-[1000px]">
+                <table className="min-w-[1200px]">
                   <thead className="bg-slate-50">
                     <tr>
                       {[
                         'Unique ID',
                         'Name',
                         'Email',
-                        'Document Type',
-                        'File',
-                        'Submitted',
+                        'Status',
+                        'Uploaded',
+                        'Missing',
+                        'Files',
                         'Action',
                       ].map((header) => (
                         <th
@@ -256,72 +369,112 @@ export default function Clients() {
                   </thead>
 
                   <tbody className="divide-y divide-slate-200">
-                    {filteredClients.map((client) => (
-                      <tr
-                        key={`${client.id}-${client.fileName}`}
-                        className="hover:bg-slate-50"
-                      >
+                    {filteredGroups.map((group) => (
+                      <tr key={group.key} className="hover:bg-slate-50">
                         <td className="px-6 py-4 text-sm font-semibold text-slate-700">
-                          {client.uniqueId || '-'}
+                          {group.client.uniqueId || '-'}
                         </td>
 
                         <td className="px-6 py-4">
                           <p className="font-bold text-slate-900">
-                            {getFullName(client) || '-'}
+                            {getFullName(group.client) || '-'}
                           </p>
                         </td>
 
                         <td className="px-6 py-4 text-sm text-slate-600">
-                          {client.email || '-'}
+                          {group.client.email || '-'}
                         </td>
 
                         <td className="px-6 py-4">
-                          <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
-                            {formatDocumentType(client.documentType)}
+                          <span
+                            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ${
+                              group.isComplete
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-red-100 text-red-700'
+                            }`}
+                          >
+                            {group.isComplete ? (
+                              <FaCheckCircle />
+                            ) : (
+                              <FaExclamationTriangle />
+                            )}
+                            {group.isComplete ? 'Complete' : 'Incomplete'}
                           </span>
                         </td>
 
-                        <td className="max-w-[260px] px-6 py-4">
-                          <p className="truncate text-sm font-semibold text-slate-800">
-                            {client.fileName || '-'}
-                          </p>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-wrap gap-2">
+                            {group.uploadedDocuments.map((doc) => (
+                              <span
+                                key={doc}
+                                className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700"
+                              >
+                                {formatDocumentType(doc)}
+                              </span>
+                            ))}
+                          </div>
                         </td>
 
-                        <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
-                          {client.submittedAt || '-'}
+                        <td className="px-6 py-4">
+                          <div className="flex flex-wrap gap-2">
+                            {group.missingDocuments.length > 0 ? (
+                              group.missingDocuments.map((doc) => (
+                                <span
+                                  key={doc}
+                                  className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700"
+                                >
+                                  {formatDocumentType(doc)}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
+                                None
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4 text-sm font-semibold text-slate-700">
+                          {group.files.length}
                         </td>
 
                         <td className="px-6 py-4">
                           <div className="flex justify-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedClient(client)}
-                              className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
-                            >
-                              <FaEye />
-                              View
-                            </button>
+                            {group.files.slice(0, 1).map((file) => (
+                              <>
+                                <button
+                                  key={`${file.id}-view`}
+                                  type="button"
+                                  onClick={() => setSelectedClient(file)}
+                                  className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
+                                >
+                                  <FaEye />
+                                  View
+                                </button>
 
-                            <button
-                              type="button"
-                              onClick={() => handleDownload(client)}
-                              className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
-                            >
-                              <FaDownload />
-                              Download
-                            </button>
+                                <button
+                                  key={`${file.id}-download`}
+                                  type="button"
+                                  onClick={() => handleDownload(file)}
+                                  className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
+                                >
+                                  <FaDownload />
+                                  Download
+                                </button>
+                              </>
+                            ))}
                           </div>
                         </td>
                       </tr>
                     ))}
 
-                    {filteredClients.length === 0 && (
+                    {filteredGroups.length === 0 && (
                       <tr>
                         <td
-                          colSpan={7}
+                          colSpan={8}
                           className="px-6 py-12 text-center text-sm text-slate-500"
                         >
-                          No submitted files yet.
+                          No clients found.
                         </td>
                       </tr>
                     )}

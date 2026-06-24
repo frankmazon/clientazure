@@ -76,6 +76,7 @@ export default function HomePage() {
   };
 
   const formatDocumentType = (type: string) =>
+    documentOptions.find((item) => item.value === type)?.label ||
     type
       .split('-')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -90,19 +91,19 @@ export default function HomePage() {
       }
     });
 
-    if (data.documentTypes.includes('id')) {
-      if (!data.sssNumber.trim()) missing.push('SSS Number');
-      if (!data.hdmfNumber.trim()) missing.push('HDMF / Pag-IBIG Number');
-      if (!data.philhealthNumber.trim()) missing.push('PhilHealth Number');
-      if (!data.tinNumber.trim()) missing.push('TIN Number');
-      if (!data.licenseNumber.trim()) missing.push('License Number');
-    }
-
     return missing;
   };
 
-  const uploadToAzure = async (documentType: string, file: File) => {
+  const uploadToAzure = async (
+    documentType: string,
+    file: File,
+    existingUniqueId?: string,
+  ) => {
     const azureFormData = new FormData();
+
+    if (existingUniqueId) {
+      azureFormData.append('uniqueId', existingUniqueId);
+    }
 
     azureFormData.append('firstName', formData.firstName);
     azureFormData.append('middleName', formData.middleName);
@@ -137,28 +138,28 @@ export default function HomePage() {
     email: string;
     missingRequirements: string[];
   }) => {
+    const existingNotifications = JSON.parse(
+      localStorage.getItem('notifications') || '[]',
+    );
+
+    const reminderNotification = {
+      id: Date.now(),
+      title: 'Incomplete Client Submission',
+      message: `${clientData.fullName} is incomplete. Missing: ${clientData.missingRequirements.join(
+        ', ',
+      )}.`,
+      time: new Date().toLocaleString(),
+      unread: true,
+      type: 'incomplete',
+      redirectTo: '/dashboard',
+    };
+
+    localStorage.setItem(
+      'notifications',
+      JSON.stringify([reminderNotification, ...existingNotifications]),
+    );
+
     window.setTimeout(async () => {
-      const existingNotifications = JSON.parse(
-        localStorage.getItem('notifications') || '[]',
-      );
-
-      const reminderNotification = {
-        id: Date.now(),
-        title: 'Incomplete Client Submission',
-        message: `${clientData.fullName} is incomplete. Missing: ${clientData.missingRequirements.join(
-          ', ',
-        )}.`,
-        time: new Date().toLocaleString(),
-        unread: true,
-        type: 'incomplete',
-        redirectTo: `/dashboard/client-search?uid=${clientData.uniqueId}`,
-      };
-
-      localStorage.setItem(
-        'notifications',
-        JSON.stringify([reminderNotification, ...existingNotifications]),
-      );
-
       try {
         await emailjs.send(
           SERVICE_ID,
@@ -215,13 +216,22 @@ export default function HomePage() {
 
       const submittedAt = new Date().toLocaleString();
       const uploadResults = [];
+      let sharedUniqueId = '';
 
       for (const selectedDocumentType of formData.documentTypes) {
         const file = formData.documentFiles[selectedDocumentType];
 
         if (!file) continue;
 
-        const result = await uploadToAzure(selectedDocumentType, file);
+        const result = await uploadToAzure(
+          selectedDocumentType,
+          file,
+          sharedUniqueId,
+        );
+
+        if (!sharedUniqueId) {
+          sharedUniqueId = result.uniqueId;
+        }
 
         uploadResults.push({
           ...result,
@@ -230,7 +240,7 @@ export default function HomePage() {
         });
       }
 
-      const uniqueId = uploadResults[0]?.uniqueId;
+      const uniqueId = sharedUniqueId || uploadResults[0]?.uniqueId;
 
       if (!uniqueId) {
         throw new Error('No upload result returned from Azure.');
@@ -244,16 +254,25 @@ export default function HomePage() {
         .map((item) => item.fileName)
         .join(', ');
 
+      const missingRequirements = getMissingRequirements(formData);
+      const isIncomplete = missingRequirements.length > 0;
+
       const newNotification = {
         id: Date.now(),
         clientId: uploadResults[0]?.clientId,
-        title: 'New Document Submission',
-        message: `${fullName} submitted ${selectedDocumentLabels}.`,
+        title: isIncomplete
+          ? 'Incomplete Client Submission'
+          : 'New Complete Document Submission',
+        message: isIncomplete
+          ? `${fullName} submitted ${selectedDocumentLabels}. Missing: ${missingRequirements.join(
+              ', ',
+            )}.`
+          : `${fullName} submitted all required documents.`,
         time: submittedAt,
         unread: true,
-        type: 'submission',
+        type: isIncomplete ? 'incomplete' : 'submission',
         documentType: formData.documentTypes[0],
-        redirectTo: `/dashboard/documents/${formData.documentTypes[0]}`,
+        redirectTo: '/dashboard',
       };
 
       localStorage.setItem(
@@ -267,7 +286,9 @@ export default function HomePage() {
         {
           to_email: formData.email,
           email: formData.email,
-          email_title: 'New Document Submission',
+          email_title: isIncomplete
+            ? 'Incomplete Document Submission'
+            : 'New Document Submission',
           unique_id: uniqueId,
           full_name: fullName,
           document_type: selectedDocumentLabels,
@@ -278,16 +299,18 @@ export default function HomePage() {
           philhealth_number: formData.philhealthNumber || 'N/A',
           tin_number: formData.tinNumber || 'N/A',
           license_number: formData.licenseNumber || 'N/A',
-          message: 'Your documents have been successfully submitted.',
-          missing_fields: 'None',
+          message: isIncomplete
+            ? 'Your submission is incomplete. Please upload the missing required documents.'
+            : 'Your documents have been successfully submitted.',
+          missing_fields: isIncomplete
+            ? missingRequirements.join(', ')
+            : 'None',
           dashboard_link: CLIENT_DASHBOARD_URL,
         },
         { publicKey: PUBLIC_KEY },
       );
 
-      const missingRequirements = getMissingRequirements(formData);
-
-      if (missingRequirements.length > 0) {
+      if (isIncomplete) {
         scheduleIncompleteReminder({
           uniqueId,
           fullName,
@@ -296,7 +319,13 @@ export default function HomePage() {
         });
       }
 
-      alert(`Document submitted successfully! Unique ID: ${uniqueId}`);
+      alert(
+        isIncomplete
+          ? `Document submitted successfully! Unique ID: ${uniqueId}\nMissing: ${missingRequirements.join(
+              ', ',
+            )}`
+          : `Document submitted successfully! Unique ID: ${uniqueId}`,
+      );
 
       setFormData(initialFormData);
 

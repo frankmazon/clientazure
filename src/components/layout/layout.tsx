@@ -4,6 +4,7 @@ import {
   FaBars,
   FaBell,
   FaCheckCircle,
+  FaExclamationTriangle,
   FaFileAlt,
   FaUserPlus,
 } from 'react-icons/fa';
@@ -20,9 +21,11 @@ type NotificationItem = {
   title: string;
   message: string;
   time: string;
-  type?: string;
+  type?: 'submission' | 'complete' | 'incomplete' | 'file';
   unread: boolean;
   clientId?: number;
+  uniqueId?: string;
+  clientName?: string;
   documentType?: string;
   source?: string;
   redirectTo?: string;
@@ -40,19 +43,99 @@ export default function DashboardLayout({
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   useEffect(() => {
-    const savedNotifications = JSON.parse(
-      localStorage.getItem('notifications') || '[]',
-    );
+    const loadNotifications = () => {
+      const savedNotifications = JSON.parse(
+        localStorage.getItem('notifications') || '[]',
+      );
 
-    setNotifications(savedNotifications);
+      setNotifications(savedNotifications);
+    };
+
+    loadNotifications();
+
+    window.addEventListener('storage', loadNotifications);
+
+    return () => {
+      window.removeEventListener('storage', loadNotifications);
+    };
   }, []);
 
   const unreadCount = notifications.filter((item) => item.unread).length;
 
   const getNotificationIcon = (type?: string) => {
-    if (type === 'submission') return <FaUserPlus />;
-    if (type === 'file') return <FaFileAlt />;
-    return <FaCheckCircle />;
+    switch (type) {
+      case 'submission':
+        return <FaUserPlus />;
+
+      case 'file':
+        return <FaFileAlt />;
+
+      case 'complete':
+        return <FaCheckCircle />;
+
+      case 'incomplete':
+        return <FaExclamationTriangle />;
+
+      default:
+        return <FaBell />;
+    }
+  };
+
+  const getNotificationIconStyle = (type?: string) => {
+    switch (type) {
+      case 'complete':
+        return 'bg-green-100 text-green-600';
+
+      case 'incomplete':
+        return 'bg-red-100 text-red-600';
+
+      case 'submission':
+        return 'bg-blue-100 text-blue-600';
+
+      case 'file':
+        return 'bg-orange-100 text-orange-600';
+
+      default:
+        return 'bg-slate-100 text-slate-600';
+    }
+  };
+
+  const getNotificationBadge = (type?: string) => {
+    switch (type) {
+      case 'complete':
+        return 'bg-green-100 text-green-700';
+
+      case 'incomplete':
+        return 'bg-red-100 text-red-700';
+
+      case 'submission':
+        return 'bg-blue-100 text-blue-700';
+
+      case 'file':
+        return 'bg-orange-100 text-orange-700';
+
+      default:
+        return 'bg-slate-100 text-slate-700';
+    }
+  };
+
+  const getNotificationLabel = (type?: string) => {
+    switch (type) {
+      case 'complete':
+        return 'COMPLETE';
+
+      case 'incomplete':
+        return 'INCOMPLETE';
+
+      case 'submission':
+        return 'SUBMISSION';
+
+      case 'file':
+        return 'FILE';
+
+      default:
+        return 'NOTICE';
+    }
   };
 
   const handleMarkAllAsRead = () => {
@@ -66,7 +149,17 @@ export default function DashboardLayout({
   };
 
   const getNotificationRedirect = (item: NotificationItem) => {
-    if (item.redirectTo) return item.redirectTo;
+    if (item.redirectTo) {
+      return item.redirectTo;
+    }
+
+    if (item.type === 'incomplete') {
+      return '/dashboard';
+    }
+
+    if (item.type === 'complete') {
+      return '/dashboard/clients';
+    }
 
     if (item.source === 'Client Portal' || item.type === 'file') {
       return '/dashboard/client-portal-uploads';
@@ -153,7 +246,7 @@ export default function DashboardLayout({
                     </h3>
                     <p className="text-xs text-slate-500">
                       {unreadCount} unread notification
-                      {unreadCount > 1 ? 's' : ''}
+                      {unreadCount !== 1 ? 's' : ''}
                     </p>
                   </div>
 
@@ -177,22 +270,50 @@ export default function DashboardLayout({
                         onClick={() => handleNotificationClick(item)}
                         className="flex w-full gap-4 border-b border-slate-100 px-5 py-4 text-left transition hover:bg-slate-50"
                       >
-                        <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600">
+                        <div
+                          className={`mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${getNotificationIconStyle(
+                            item.type,
+                          )}`}
+                        >
                           {getNotificationIcon(item.type)}
                         </div>
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-3">
-                            <p className="font-semibold text-slate-900">
-                              {item.title}
-                            </p>
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="font-semibold text-slate-900">
+                                  {item.title}
+                                </p>
+
+                                <span
+                                  className={`rounded-full px-2 py-1 text-[10px] font-bold ${getNotificationBadge(
+                                    item.type,
+                                  )}`}
+                                >
+                                  {getNotificationLabel(item.type)}
+                                </span>
+                              </div>
+
+                              {item.clientName && (
+                                <p className="mt-1 text-xs font-semibold text-slate-700">
+                                  {item.clientName}
+                                </p>
+                              )}
+
+                              {item.uniqueId && (
+                                <p className="text-xs text-slate-400">
+                                  {item.uniqueId}
+                                </p>
+                              )}
+                            </div>
 
                             {item.unread && (
-                              <span className="mt-1 h-2 w-2 rounded-full bg-red-500" />
+                              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-red-500" />
                             )}
                           </div>
 
-                          <p className="mt-1 text-sm text-slate-500">
+                          <p className="mt-2 text-sm text-slate-500">
                             {item.message}
                           </p>
 

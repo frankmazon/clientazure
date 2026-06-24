@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  FaCheckCircle,
   FaDownload,
+  FaExclamationTriangle,
   FaEye,
   FaFileAlt,
   FaIdCard,
@@ -12,8 +14,25 @@ import DashboardLayout from '../components/layout/layout';
 
 const CLIENTS_API_URL = 'https://docsuploadpythonapi.azurewebsites.net/api/clients';
 
+const requiredDocuments = [
+  'id',
+  'property-documents',
+  'credit-history',
+  'income-documents',
+  'other',
+];
+
+const documentLabels: Record<string, string> = {
+  id: 'ID',
+  'property-documents': 'Property Documents',
+  'credit-history': 'Credit History',
+  'income-documents': 'Income Documents',
+  other: 'Other',
+};
+
 type Submission = {
   id: number;
+  clientId?: number;
   uniqueId?: string;
   firstName?: string;
   middleName?: string;
@@ -24,6 +43,15 @@ type Submission = {
   fileName?: string;
   fileUrl?: string;
   submittedAt?: string;
+};
+
+type ClientGroup = {
+  key: string;
+  client: Submission;
+  files: Submission[];
+  uploadedDocuments: string[];
+  missingDocuments: string[];
+  isComplete: boolean;
 };
 
 export default function Dashboard() {
@@ -67,10 +95,58 @@ export default function Dashboard() {
       .trim();
 
   const formatDocumentType = (type?: string) =>
+    documentLabels[type || ''] ||
     (type || 'document')
       .split('-')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+
+  const clientGroups = useMemo<ClientGroup[]>(() => {
+    const grouped = submissions.reduce<Record<string, Submission[]>>((acc, item) => {
+      const key = item.uniqueId || String(item.clientId || item.id);
+
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+
+      acc[key].push(item);
+
+      return acc;
+    }, {});
+
+    return Object.entries(grouped).map(([key, files]) => {
+      const uploadedDocuments = Array.from(
+        new Set(
+          files
+            .map((file) => file.documentType?.toLowerCase())
+            .filter(Boolean) as string[],
+        ),
+      );
+
+      const missingDocuments = requiredDocuments.filter(
+        (doc) => !uploadedDocuments.includes(doc),
+      );
+
+      return {
+        key,
+        client: files[0],
+        files,
+        uploadedDocuments,
+        missingDocuments,
+        isComplete: missingDocuments.length === 0,
+      };
+    });
+  }, [submissions]);
+
+  const incompleteClients = useMemo(
+    () => clientGroups.filter((group) => !group.isComplete),
+    [clientGroups],
+  );
+
+  const completeClients = useMemo(
+    () => clientGroups.filter((group) => group.isComplete),
+    [clientGroups],
+  );
 
   const filteredSubmissions = useMemo(() => {
     const keyword = search.toLowerCase();
@@ -106,14 +182,34 @@ export default function Dashboard() {
       subtitle="Monitor submitted client documents from Azure SQL."
     >
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8 grid gap-5 md:grid-cols-3">
+        <div className="mb-8 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
             <p className="text-sm font-medium text-slate-500">Total Clients</p>
             <div className="mt-2 flex items-center justify-between">
               <h2 className="text-3xl font-extrabold text-slate-900">
-                {submissions.length}
+                {clientGroups.length}
               </h2>
               <FaUsers className="text-3xl text-orange-500" />
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+            <p className="text-sm font-medium text-slate-500">Complete</p>
+            <div className="mt-2 flex items-center justify-between">
+              <h2 className="text-3xl font-extrabold text-green-600">
+                {completeClients.length}
+              </h2>
+              <FaCheckCircle className="text-3xl text-green-500" />
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+            <p className="text-sm font-medium text-slate-500">Incomplete</p>
+            <div className="mt-2 flex items-center justify-between">
+              <h2 className="text-3xl font-extrabold text-red-600">
+                {incompleteClients.length}
+              </h2>
+              <FaExclamationTriangle className="text-3xl text-red-500" />
             </div>
           </div>
 
@@ -137,6 +233,88 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+
+        {!loading && !error && (
+          <div className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+            <div className="border-b border-slate-200 px-6 py-4">
+              <h2 className="text-lg font-extrabold text-slate-900">
+                Incomplete Client Documents
+              </h2>
+              <p className="text-sm text-slate-500">
+                Clients missing one or more required document types.
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-[900px] w-full text-left text-sm">
+                <thead className="bg-red-50 text-xs uppercase text-red-700">
+                  <tr>
+                    <th className="px-5 py-4">Unique ID</th>
+                    <th className="px-5 py-4">Client</th>
+                    <th className="px-5 py-4">Email</th>
+                    <th className="px-5 py-4">Uploaded</th>
+                    <th className="px-5 py-4">Missing Documents</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {incompleteClients.map((group) => (
+                    <tr key={group.key} className="hover:bg-slate-50">
+                      <td className="px-5 py-4 font-bold text-slate-900">
+                        {group.client.uniqueId || group.key}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        {getFullName(group.client) || '-'}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        {group.client.email || '-'}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          {group.uploadedDocuments.map((doc) => (
+                            <span
+                              key={doc}
+                              className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700"
+                            >
+                              {formatDocumentType(doc)}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          {group.missingDocuments.map((doc) => (
+                            <span
+                              key={doc}
+                              className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700"
+                            >
+                              {formatDocumentType(doc)}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {incompleteClients.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="px-5 py-10 text-center text-slate-500"
+                      >
+                        All clients have complete documents.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="mb-6 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <div className="relative">
@@ -165,6 +343,16 @@ export default function Dashboard() {
 
         {!loading && !error && (
           <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+            <div className="border-b border-slate-200 px-6 py-4">
+              <h2 className="text-lg font-extrabold text-slate-900">
+                All Submitted Files
+              </h2>
+              <p className="text-sm text-slate-500">
+                {filteredSubmissions.length} file
+                {filteredSubmissions.length !== 1 ? 's' : ''} found.
+              </p>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
@@ -181,7 +369,10 @@ export default function Dashboard() {
 
                 <tbody className="divide-y divide-slate-100">
                   {filteredSubmissions.map((item) => (
-                    <tr key={`${item.id}-${item.fileName}`} className="hover:bg-slate-50">
+                    <tr
+                      key={`${item.id}-${item.fileName}`}
+                      className="hover:bg-slate-50"
+                    >
                       <td className="px-5 py-4 font-bold text-slate-900">
                         {item.uniqueId || '-'}
                       </td>
@@ -215,7 +406,10 @@ export default function Dashboard() {
 
                   {filteredSubmissions.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
+                      <td
+                        colSpan={7}
+                        className="px-5 py-10 text-center text-slate-500"
+                      >
                         No clients found.
                       </td>
                     </tr>
