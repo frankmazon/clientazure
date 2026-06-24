@@ -19,6 +19,9 @@ import DashboardLayout from '../components/layout/layout';
 const CLIENTS_API =
   'https://docsuploadpythonapi.azurewebsites.net/api/clients';
 
+const FILE_URL_API =
+  'https://docsuploadpythonapi.azurewebsites.net/api/file-url';
+
 const requiredDocuments = [
   'id',
   'property-documents',
@@ -54,9 +57,29 @@ export default function ClientDocumentSearch() {
   const [search, setSearch] = useState('');
   const [clients, setClients] = useState<Client[]>([]);
   const [previewFile, setPreviewFile] = useState<Client | null>(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [selectedType, setSelectedType] = useState<string>('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const getSecureFileUrl = async (fileUrl?: string) => {
+    if (!fileUrl) {
+      throw new Error('No file URL available.');
+    }
+
+    const response = await fetch(
+      `${FILE_URL_API}?blobUrl=${encodeURIComponent(fileUrl)}`,
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || 'Failed to generate secure file URL.');
+    }
+
+    return result.url as string;
+  };
 
   const loadClients = async (keyword = '') => {
     try {
@@ -177,13 +200,34 @@ export default function ClientDocumentSearch() {
     loadClients(search);
   };
 
-  const handleDownload = (file: Client) => {
-    if (!file.fileUrl) {
-      alert('No file available.');
-      return;
-    }
+  const handlePreview = async (file: Client) => {
+    try {
+      setPreviewFile(file);
+      setPreviewUrl('');
+      setPreviewLoading(true);
 
-    window.open(file.fileUrl, '_blank');
+      const secureUrl = await getSecureFileUrl(file.fileUrl);
+      setPreviewUrl(secureUrl);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to open file.');
+      setPreviewFile(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleDownload = async (file: Client) => {
+    try {
+      const secureUrl = await getSecureFileUrl(file.fileUrl);
+      window.open(secureUrl, '_blank');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to download file.');
+    }
+  };
+
+  const handleClosePreview = () => {
+    setPreviewFile(null);
+    setPreviewUrl('');
   };
 
   const handleUnsupportedAction = (action: string) => {
@@ -191,8 +235,9 @@ export default function ClientDocumentSearch() {
   };
 
   const isImageFile =
-    previewFile?.fileName?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/) ||
-    previewFile?.fileUrl?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)/);
+    previewFile?.fileName?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/);
+
+  const isPdfFile = previewFile?.fileName?.toLowerCase().endsWith('.pdf');
 
   return (
     <DashboardLayout
@@ -435,7 +480,7 @@ export default function ClientDocumentSearch() {
                         <div className="mt-4 grid grid-cols-2 gap-2">
                           <button
                             type="button"
-                            onClick={() => setPreviewFile(file)}
+                            onClick={() => handlePreview(file)}
                             className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
                           >
                             <FaEye />
@@ -503,7 +548,7 @@ export default function ClientDocumentSearch() {
 
               <button
                 type="button"
-                onClick={() => setPreviewFile(null)}
+                onClick={handleClosePreview}
                 className="rounded-xl bg-slate-100 p-3 text-slate-600 hover:bg-slate-200"
               >
                 <FaTimes />
@@ -511,21 +556,49 @@ export default function ClientDocumentSearch() {
             </div>
 
             <div className="bg-slate-100 p-4">
-              {previewFile.fileUrl ? (
-                isImageFile ? (
-                  <img
-                    src={previewFile.fileUrl}
-                    alt={previewFile.fileName || 'Preview'}
-                    className="mx-auto max-h-[70vh] rounded-2xl bg-white object-contain"
-                  />
-                ) : (
-                  <iframe
-                    src={previewFile.fileUrl}
-                    title={previewFile.fileName}
-                    className="h-[70vh] w-full rounded-2xl bg-white"
-                  />
-                )
-              ) : (
+              {previewLoading && (
+                <div className="flex h-[70vh] items-center justify-center rounded-2xl bg-white text-slate-500">
+                  Loading secure preview...
+                </div>
+              )}
+
+              {!previewLoading && previewUrl && isImageFile && (
+                <img
+                  src={previewUrl}
+                  alt={previewFile.fileName || 'Preview'}
+                  className="mx-auto max-h-[70vh] rounded-2xl bg-white object-contain"
+                />
+              )}
+
+              {!previewLoading && previewUrl && isPdfFile && (
+                <iframe
+                  src={previewUrl}
+                  title={previewFile.fileName}
+                  className="h-[70vh] w-full rounded-2xl bg-white"
+                />
+              )}
+
+              {!previewLoading && previewUrl && !isImageFile && !isPdfFile && (
+                <div className="flex h-[70vh] flex-col items-center justify-center rounded-2xl bg-white text-center text-slate-500">
+                  <FaFileAlt className="mb-4 text-5xl text-slate-300" />
+                  <p className="font-bold text-slate-700">
+                    Preview not available for this file type.
+                  </p>
+                  <p className="mt-1 text-sm">
+                    Please download the file to view it.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => window.open(previewUrl, '_blank')}
+                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-green-500 px-5 py-3 text-sm font-bold text-white hover:bg-green-600"
+                  >
+                    <FaDownload />
+                    Open / Download
+                  </button>
+                </div>
+              )}
+
+              {!previewLoading && !previewUrl && (
                 <div className="flex h-[70vh] items-center justify-center rounded-2xl bg-white text-slate-500">
                   No preview available.
                 </div>

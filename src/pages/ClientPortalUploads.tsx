@@ -10,8 +10,8 @@ import {
 } from 'react-icons/fa';
 import DashboardLayout from '../components/layout/layout';
 
-const CLIENTS_API =
-  'https://docsuploadpythonapi.azurewebsites.net/api/clients';
+const CLIENTS_API = 'https://docsuploadpythonapi.azurewebsites.net/api/clients';
+const FILE_URL_API = 'https://docsuploadpythonapi.azurewebsites.net/api/file-url';
 
 const requiredDocuments = [
   'id',
@@ -57,8 +57,26 @@ export default function Clients() {
   const [search, setSearch] = useState('');
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const getSecureFileUrl = async (fileUrl?: string) => {
+    if (!fileUrl) throw new Error('No file URL available.');
+
+    const response = await fetch(
+      `${FILE_URL_API}?blobUrl=${encodeURIComponent(fileUrl)}`,
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || 'Failed to generate secure file URL.');
+    }
+
+    return result.url as string;
+  };
 
   useEffect(() => {
     const loadClients = async () => {
@@ -104,11 +122,7 @@ export default function Clients() {
 
     clients.forEach((client) => {
       const key = client.uniqueId || String(client.clientId || client.id);
-
-      if (!map.has(key)) {
-        map.set(key, []);
-      }
-
+      if (!map.has(key)) map.set(key, []);
       map.get(key)?.push(client);
     });
 
@@ -154,14 +168,40 @@ export default function Clients() {
     });
   }, [clientGroups, search]);
 
-  const handleDownload = (client: Client) => {
-    if (!client.fileUrl) {
-      alert('No file available to download.');
-      return;
-    }
+  const handlePreview = async (client: Client) => {
+    try {
+      setSelectedClient(client);
+      setPreviewUrl('');
+      setPreviewLoading(true);
 
-    window.open(client.fileUrl, '_blank');
+      const secureUrl = await getSecureFileUrl(client.fileUrl);
+      setPreviewUrl(secureUrl);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to open file.');
+      setSelectedClient(null);
+    } finally {
+      setPreviewLoading(false);
+    }
   };
+
+  const handleDownload = async (client: Client) => {
+    try {
+      const secureUrl = await getSecureFileUrl(client.fileUrl);
+      window.open(secureUrl, '_blank');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to download file.');
+    }
+  };
+
+  const handleClosePreview = () => {
+    setSelectedClient(null);
+    setPreviewUrl('');
+  };
+
+  const isImageFile =
+    selectedClient?.fileName?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/);
+
+  const isPdfFile = selectedClient?.fileName?.toLowerCase().endsWith('.pdf');
 
   return (
     <DashboardLayout
@@ -172,7 +212,6 @@ export default function Clients() {
         <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <div className="relative">
             <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-
             <input
               type="text"
               value={search}
@@ -218,113 +257,6 @@ export default function Clients() {
                   {clientGroups.filter((group) => !group.isComplete).length}
                 </p>
               </div>
-            </div>
-
-            <div className="space-y-4 lg:hidden">
-              {filteredGroups.map((group) => (
-                <div
-                  key={group.key}
-                  className={`rounded-2xl bg-white p-5 shadow-sm ring-1 ${
-                    group.isComplete ? 'ring-green-200' : 'ring-red-200'
-                  }`}
-                >
-                  <div className="mb-4 flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h3 className="truncate text-lg font-extrabold text-slate-900">
-                        {getFullName(group.client) || '-'}
-                      </h3>
-                      <p className="truncate text-sm text-slate-500">
-                        {group.client.email || 'No email'}
-                      </p>
-                    </div>
-
-                    <span
-                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
-                        group.isComplete
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}
-                    >
-                      {group.isComplete ? 'Complete' : 'Incomplete'}
-                    </span>
-                  </div>
-
-                  <div className="grid gap-3 text-sm">
-                    <div className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-xs font-bold uppercase text-slate-400">
-                        Unique ID
-                      </p>
-                      <p className="mt-1 font-semibold text-slate-800">
-                        {group.client.uniqueId || '-'}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-xs font-bold uppercase text-slate-400">
-                        Uploaded
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {group.uploadedDocuments.map((doc) => (
-                          <span
-                            key={doc}
-                            className="rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-700"
-                          >
-                            {formatDocumentType(doc)}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-xs font-bold uppercase text-slate-400">
-                        Missing
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {group.missingDocuments.length > 0 ? (
-                          group.missingDocuments.map((doc) => (
-                            <span
-                              key={doc}
-                              className="rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700"
-                            >
-                              {formatDocumentType(doc)}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-700">
-                            None
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    {group.files.slice(0, 1).map((file) => (
-                      <>
-                        <button
-                          key={`${file.id}-view`}
-                          type="button"
-                          onClick={() => setSelectedClient(file)}
-                          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-500 text-sm font-bold text-white hover:bg-blue-600"
-                        >
-                          <FaEye />
-                          View
-                        </button>
-
-                        <button
-                          key={`${file.id}-download`}
-                          type="button"
-                          onClick={() => handleDownload(file)}
-                          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 text-sm font-bold text-white hover:bg-orange-600"
-                        >
-                          <FaDownload />
-                          Download
-                        </button>
-                      </>
-                    ))}
-                  </div>
-                </div>
-              ))}
             </div>
 
             <div className="hidden overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 lg:block">
@@ -441,11 +373,13 @@ export default function Clients() {
                         <td className="px-6 py-4">
                           <div className="flex justify-center gap-2">
                             {group.files.slice(0, 1).map((file) => (
-                              <>
+                              <div
+                                key={`${file.id}-${file.fileName}`}
+                                className="contents"
+                              >
                                 <button
-                                  key={`${file.id}-view`}
                                   type="button"
-                                  onClick={() => setSelectedClient(file)}
+                                  onClick={() => handlePreview(file)}
                                   className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
                                 >
                                   <FaEye />
@@ -453,7 +387,6 @@ export default function Clients() {
                                 </button>
 
                                 <button
-                                  key={`${file.id}-download`}
                                   type="button"
                                   onClick={() => handleDownload(file)}
                                   className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
@@ -461,7 +394,7 @@ export default function Clients() {
                                   <FaDownload />
                                   Download
                                 </button>
-                              </>
+                              </div>
                             ))}
                           </div>
                         </td>
@@ -501,7 +434,7 @@ export default function Clients() {
 
               <button
                 type="button"
-                onClick={() => setSelectedClient(null)}
+                onClick={handleClosePreview}
                 className="rounded-xl bg-slate-100 p-3 text-slate-600 hover:bg-slate-200"
               >
                 <FaTimes />
@@ -557,13 +490,49 @@ export default function Clients() {
                   </button>
                 </div>
 
-                {selectedClient.fileUrl ? (
+                {previewLoading && (
+                  <div className="flex h-[500px] items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500">
+                    Loading secure preview...
+                  </div>
+                )}
+
+                {!previewLoading && previewUrl && isImageFile && (
+                  <img
+                    src={previewUrl}
+                    alt={selectedClient.fileName || 'Preview'}
+                    className="mx-auto max-h-[500px] rounded-xl border border-slate-200 bg-white object-contain"
+                  />
+                )}
+
+                {!previewLoading && previewUrl && isPdfFile && (
                   <iframe
-                    src={selectedClient.fileUrl}
+                    src={previewUrl}
                     title="Client File Preview"
                     className="h-[500px] w-full rounded-xl border border-slate-200"
                   />
-                ) : (
+                )}
+
+                {!previewLoading && previewUrl && !isImageFile && !isPdfFile && (
+                  <div className="flex h-[500px] flex-col items-center justify-center rounded-xl border border-slate-200 bg-white text-center text-slate-500">
+                    <FaFileAlt className="mb-4 text-5xl text-slate-300" />
+                    <p className="font-bold text-slate-700">
+                      Preview not available for this file type.
+                    </p>
+                    <p className="mt-1 text-sm">
+                      Please download the file to view it.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => window.open(previewUrl, '_blank')}
+                      className="mt-5 inline-flex items-center gap-2 rounded-xl bg-green-500 px-5 py-3 text-sm font-bold text-white hover:bg-green-600"
+                    >
+                      <FaDownload />
+                      Open / Download
+                    </button>
+                  </div>
+                )}
+
+                {!previewLoading && !previewUrl && (
                   <div className="rounded-xl bg-slate-100 p-6 text-center text-sm text-slate-500">
                     No preview available. Filename: {selectedClient.fileName}
                   </div>

@@ -1,12 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FaDownload, FaFileCsv } from 'react-icons/fa';
 import DashboardLayout from '../components/layout/layout';
 
 const CLIENTS_API =
   'https://docsuploadpythonapi.azurewebsites.net/api/clients';
 
+const requiredDocuments = [
+  'id',
+  'property-documents',
+  'credit-history',
+  'income-documents',
+  'other',
+];
+
+const documentLabels: Record<string, string> = {
+  id: 'ID',
+  'property-documents': 'Property Documents',
+  'credit-history': 'Credit History',
+  'income-documents': 'Income Documents',
+  other: 'Other',
+};
+
 type Client = {
   id: number;
+  clientId?: number;
   uniqueId?: string;
   name?: string;
   firstName?: string;
@@ -31,6 +48,55 @@ export default function ExportClients() {
     )
       .replace(/\s+/g, ' ')
       .trim();
+
+  const formatDocumentType = (type?: string) =>
+    documentLabels[type || ''] ||
+    (type || 'document')
+      .split('-')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+
+  const clientGroups = useMemo(() => {
+    const map = new Map<string, Client[]>();
+
+    clients.forEach((client) => {
+      const key = client.uniqueId || String(client.clientId || client.id);
+
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+
+      map.get(key)?.push(client);
+    });
+
+    return Array.from(map.entries()).map(([key, files]) => {
+      const client = files[0];
+
+      const uploadedDocuments = Array.from(
+        new Set(
+          files
+            .map((file) => file.documentType?.toLowerCase())
+            .filter(Boolean) as string[],
+        ),
+      );
+
+      const missingDocuments = requiredDocuments.filter(
+        (doc) => !uploadedDocuments.includes(doc),
+      );
+
+      return {
+        key,
+        client,
+        files,
+        uploadedDocuments,
+        missingDocuments,
+        isComplete: missingDocuments.length === 0,
+      };
+    });
+  }, [clients]);
+
+  const completeCount = clientGroups.filter((group) => group.isComplete).length;
+  const incompleteCount = clientGroups.filter((group) => !group.isComplete).length;
 
   const loadClients = async () => {
     try {
@@ -67,8 +133,31 @@ export default function ExportClients() {
       return;
     }
 
-    const headers = [
-      'ID',
+    const clientSummaryHeaders = [
+      'Unique ID',
+      'Full Name',
+      'Email',
+      'Completion Status',
+      'Uploaded Documents',
+      'Missing Documents',
+      'Total Files',
+    ];
+
+    const clientSummaryRows = clientGroups.map((group) => [
+      group.client.uniqueId || group.key,
+      getFullName(group.client),
+      group.client.email || '',
+      group.isComplete ? 'Complete' : 'Incomplete',
+      group.uploadedDocuments.map(formatDocumentType).join(', '),
+      group.missingDocuments.length > 0
+        ? group.missingDocuments.map(formatDocumentType).join(', ')
+        : 'None',
+      group.files.length,
+    ]);
+
+    const fileDetailHeaders = [
+      'Document ID',
+      'Client ID',
       'Unique ID',
       'Full Name',
       'First Name',
@@ -77,27 +166,33 @@ export default function ExportClients() {
       'Email',
       'Document Type',
       'File Name',
-      'File URL',
+      'Private Blob URL',
       'Submitted Date',
     ];
 
-    const rows = clients.map((client) => [
+    const fileDetailRows = clients.map((client) => [
       client.id,
+      client.clientId || '',
       client.uniqueId || '',
       getFullName(client),
       client.firstName || '',
       client.middleName || '',
       client.lastName || '',
       client.email || '',
-      client.documentType || '',
+      formatDocumentType(client.documentType),
       client.fileName || '',
       client.fileUrl || '',
       client.submittedAt || '',
     ]);
 
     const csvContent = [
-      headers.map(escapeCsv).join(','),
-      ...rows.map((row) => row.map(escapeCsv).join(',')),
+      'CLIENT COMPLETION SUMMARY',
+      clientSummaryHeaders.map(escapeCsv).join(','),
+      ...clientSummaryRows.map((row) => row.map(escapeCsv).join(',')),
+      '',
+      'FILE DETAILS',
+      fileDetailHeaders.map(escapeCsv).join(','),
+      ...fileDetailRows.map((row) => row.map(escapeCsv).join(',')),
     ].join('\n');
 
     const blob = new Blob([csvContent], {
@@ -136,8 +231,8 @@ export default function ExportClients() {
                 Export Client Records
               </h2>
               <p className="text-sm text-slate-500">
-                Generate a CSV file containing all submitted client records from
-                Azure SQL.
+                Generate a CSV file containing client completion summary and file
+                details from Azure SQL.
               </p>
             </div>
           </div>
@@ -155,9 +250,33 @@ export default function ExportClients() {
           )}
 
           {!loading && !error && (
-            <div className="mb-4 rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">
-              {clients.length} record{clients.length !== 1 ? 's' : ''} ready
-              for export.
+            <div className="mb-4 grid gap-3 rounded-xl bg-slate-50 p-4 text-sm font-semibold text-slate-600 sm:grid-cols-3">
+              <div>
+                <p className="text-xs uppercase text-slate-400">
+                  Total File Records
+                </p>
+                <p className="mt-1 text-lg font-extrabold text-slate-900">
+                  {clients.length}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs uppercase text-slate-400">
+                  Complete Clients
+                </p>
+                <p className="mt-1 text-lg font-extrabold text-green-600">
+                  {completeCount}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs uppercase text-slate-400">
+                  Incomplete Clients
+                </p>
+                <p className="mt-1 text-lg font-extrabold text-red-600">
+                  {incompleteCount}
+                </p>
+              </div>
             </div>
           )}
 
@@ -189,12 +308,16 @@ export default function ExportClients() {
           </h3>
 
           <ul className="space-y-3 text-sm text-slate-600">
+            <li>Completion status</li>
+            <li>Missing documents</li>
+            <li>Uploaded documents</li>
+            <li>Total file count per client</li>
             <li>Unique ID</li>
             <li>Client full name</li>
             <li>Email address</li>
             <li>Document type</li>
             <li>File name</li>
-            <li>Blob file URL</li>
+            <li>Private Blob URL</li>
             <li>Submitted date</li>
           </ul>
         </div>

@@ -26,11 +26,9 @@ type Submission = {
   submittedAt?: string;
 };
 
-const CLIENTS_API =
-  'https://docsuploadpythonapi.azurewebsites.net/api/clients';
+const CLIENTS_API = 'https://docsuploadpythonapi.azurewebsites.net/api/clients';
 
-const UPLOAD_API =
-  'https://docsuploadpythonapi.azurewebsites.net/api/uploadclient';
+const UPLOAD_API = 'https://docsuploadpythonapi.azurewebsites.net/api/uploadclient';
 
 const documentTypes = [
   { label: 'ID', value: 'id' },
@@ -52,10 +50,7 @@ export default function ClientDashboard() {
   const selectedClient = clientFiles[0];
 
   const getFullName = (client: Submission) =>
-    (
-      client.name ||
-      `${client.firstName || ''} ${client.middleName || ''} ${client.lastName || ''}`
-    )
+    (client.name || `${client.firstName || ''} ${client.middleName || ''} ${client.lastName || ''}`)
       .replace(/\s+/g, ' ')
       .trim();
 
@@ -74,9 +69,7 @@ export default function ClientDashboard() {
     try {
       setLoading(true);
 
-      const response = await fetch(
-        `${CLIENTS_API}?uniqueId=${encodeURIComponent(idValue.trim())}`,
-      );
+      const response = await fetch(`${CLIENTS_API}?uniqueId=${encodeURIComponent(idValue.trim())}`);
 
       const result = await response.json();
 
@@ -190,15 +183,11 @@ export default function ClientDashboard() {
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-cyan-50 px-4 py-8 font-sans">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 rounded-3xl bg-gradient-to-r from-blue-700 via-sky-500 to-cyan-400 p-8 text-white shadow-xl">
-          <p className="mb-2 text-sm font-bold uppercase tracking-[0.4em]">
-            Client Portal
-          </p>
+          <p className="mb-2 text-sm font-bold uppercase tracking-[0.4em]">Client Portal</p>
 
           <h1 className="text-4xl font-extrabold">Document Dashboard</h1>
 
-          <p className="mt-4 text-blue-50">
-            Use your Unique ID to view your submitted files.
-          </p>
+          <p className="mt-4 text-blue-50">Use your Unique ID to view your submitted files.</p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
@@ -210,20 +199,14 @@ export default function ClientDashboard() {
                 </div>
 
                 <div>
-                  <h2 className="text-xl font-extrabold text-slate-900">
-                    Find Your Files
-                  </h2>
-                  <p className="text-sm text-slate-500">
-                    Enter the Unique ID sent to your email.
-                  </p>
+                  <h2 className="text-xl font-extrabold text-slate-900">Find Your Files</h2>
+                  <p className="text-sm text-slate-500">Enter the Unique ID sent to your email.</p>
                 </div>
               </div>
 
               <div className="grid gap-4">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
-                    Unique ID
-                  </label>
+                  <label className="mb-2 block text-sm font-bold text-slate-700">Unique ID</label>
 
                   <div className="relative">
                     <FaIdBadge className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -264,9 +247,7 @@ export default function ClientDashboard() {
                       Unique ID: {selectedClient.uniqueId || 'N/A'}
                     </p>
 
-                    <p className="text-sm text-slate-500">
-                      Email: {selectedClient.email || 'N/A'}
-                    </p>
+                    <p className="text-sm text-slate-500">Email: {selectedClient.email || 'N/A'}</p>
                   </div>
                 </div>
               </section>
@@ -274,9 +255,7 @@ export default function ClientDashboard() {
 
             {clientFiles.length > 0 && (
               <section className="rounded-3xl bg-white p-6 shadow-lg">
-                <label className="mb-2 block text-sm font-bold text-slate-700">
-                  Search Files
-                </label>
+                <label className="mb-2 block text-sm font-bold text-slate-700">Search Files</label>
 
                 <div className="relative">
                   <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -308,9 +287,7 @@ export default function ClientDashboard() {
                   </div>
 
                   <div>
-                    <h2 className="text-xl font-extrabold text-slate-900">
-                      My Files
-                    </h2>
+                    <h2 className="text-xl font-extrabold text-slate-900">My Files</h2>
                     <p className="text-sm text-slate-500">
                       {filteredFiles.length} file
                       {filteredFiles.length !== 1 ? 's' : ''} found.
@@ -354,9 +331,7 @@ export default function ClientDashboard() {
                               <p className="font-bold text-slate-900">
                                 {file.fileName || 'No file name'}
                               </p>
-                              <p className="text-xs text-slate-500">
-                                ID: {file.uniqueId}
-                              </p>
+                              <p className="text-xs text-slate-500">ID: {file.uniqueId}</p>
                             </div>
                           </div>
                         </td>
@@ -397,12 +372,8 @@ export default function ClientDashboard() {
 
                     {filteredFiles.length === 0 && (
                       <tr>
-                        <td
-                          colSpan={4}
-                          className="px-6 py-12 text-center text-sm text-slate-500"
-                        >
-                          No files loaded yet. Enter your Unique ID and click Load
-                          My Files.
+                        <td colSpan={4} className="px-6 py-12 text-center text-sm text-slate-500">
+                          No files loaded yet. Enter your Unique ID and click Load My Files.
                         </td>
                       </tr>
                     )}
@@ -419,9 +390,7 @@ export default function ClientDashboard() {
               </div>
 
               <div>
-                <h2 className="text-xl font-extrabold text-slate-900">
-                  Upload Files
-                </h2>
+                <h2 className="text-xl font-extrabold text-slate-900">Upload Files</h2>
                 <p className="text-sm text-slate-500">
                   Upload additional files under this Unique ID.
                 </p>
@@ -429,9 +398,7 @@ export default function ClientDashboard() {
             </div>
 
             <div className="mb-4">
-              <label className="mb-2 block text-sm font-bold text-slate-700">
-                Document Type
-              </label>
+              <label className="mb-2 block text-sm font-bold text-slate-700">Document Type</label>
 
               <select
                 value={documentType}
@@ -451,9 +418,7 @@ export default function ClientDashboard() {
               <FaCloudUploadAlt className="mb-3 text-4xl text-blue-500" />
 
               <span className="font-bold text-slate-800">Choose files</span>
-              <span className="mt-1 text-sm text-slate-500">
-                PDF, JPG, PNG, DOCX
-              </span>
+              <span className="mt-1 text-sm text-slate-500">PDF, JPG, PNG, DOCX</span>
 
               <input
                 type="file"
@@ -465,9 +430,7 @@ export default function ClientDashboard() {
 
             {newFiles && newFiles.length > 0 && (
               <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                <p className="mb-2 text-sm font-bold text-slate-700">
-                  Selected Files
-                </p>
+                <p className="mb-2 text-sm font-bold text-slate-700">Selected Files</p>
 
                 <div className="space-y-2">
                   {Array.from(newFiles).map((file) => (
