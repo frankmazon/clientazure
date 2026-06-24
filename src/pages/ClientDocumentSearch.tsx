@@ -1,479 +1,481 @@
-import { useState } from 'react';
-import emailjs from '@emailjs/browser';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  FaDownload,
+  FaEdit,
+  FaEye,
+  FaFileAlt,
+  FaFolder,
+  FaIdBadge,
+  FaSearch,
+  FaSyncAlt,
+  FaTimes,
+  FaTrash,
+  FaUser,
+} from 'react-icons/fa';
+import DashboardLayout from '../components/layout/layout';
 
-const SERVICE_ID = 'service_4d8mjir';
-const TEMPLATE_ID = 'template_5iexv1b';
-const PUBLIC_KEY = 'Z-lJJhTln-512oNez';
+const CLIENTS_API =
+  'https://docsuploadpythonapi.azurewebsites.net/api/clients';
 
-const API_URL = 'https://docsuploadpythonapi.azurewebsites.net/api/uploadclient';
-
-const documentOptions = [
-  { label: 'ID', value: 'id' },
-  { label: 'Property Documents', value: 'property-documents' },
-  { label: 'Credit History', value: 'credit-history' },
-  { label: 'Income Documents', value: 'income-documents' },
-  { label: 'Other', value: 'other' },
-];
-
-const initialFormData = {
-  firstName: '',
-  middleName: '',
-  lastName: '',
-  email: '',
-  documentTypes: [] as string[],
-  documentFiles: {} as Record<string, File | null>,
-  sssNumber: '',
-  hdmfNumber: '',
-  philhealthNumber: '',
-  tinNumber: '',
-  licenseNumber: '',
+type Client = {
+  id: number;
+  uniqueId?: string;
+  name?: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  email?: string;
+  documentType?: string;
+  fileName?: string;
+  fileUrl?: string;
+  submittedAt?: string;
+  sssNumber?: string;
+  hdmfNumber?: string;
+  philhealthNumber?: string;
+  tinNumber?: string;
+  licenseNumber?: string;
 };
 
-export default function HomePage() {
-  const [formData, setFormData] = useState(initialFormData);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+const documentTypeLabels: Record<string, string> = {
+  id: 'ID',
+  ID: 'ID',
+  'property-documents': 'Property Documents',
+  'credit-history': 'Credit History',
+  'income-documents': 'Income Documents',
+  other: 'Other',
+};
 
-  const handleChange = (
-    event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => {
-    const { name, value } = event.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+export default function ClientDocumentSearch() {
+  const [search, setSearch] = useState('');
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [previewFile, setPreviewFile] = useState<Client | null>(null);
+  const [selectedType, setSelectedType] = useState<string>('all');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleDocumentTypeToggle = (type: string) => {
-    setFormData((prev) => {
-      const isSelected = prev.documentTypes.includes(type);
-      const updatedFiles = { ...prev.documentFiles };
-
-      if (isSelected) delete updatedFiles[type];
-      else updatedFiles[type] = null;
-
-      return {
-        ...prev,
-        documentTypes: isSelected
-          ? prev.documentTypes.filter((item) => item !== type)
-          : [...prev.documentTypes, type],
-        documentFiles: updatedFiles,
-      };
-    });
-  };
-
-  const handleDocumentFileChange = (
-    type: string,
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.target.files?.[0] || null;
-
-    setFormData((prev) => ({
-      ...prev,
-      documentFiles: {
-        ...prev.documentFiles,
-        [type]: file,
-      },
-    }));
-  };
-
-  const formatDocumentType = (type: string) =>
-    type
-      .split('-')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-
-  const getMissingIdFields = (data: typeof initialFormData) => {
-    const missingFields: string[] = [];
-
-    if (!data.sssNumber.trim()) missingFields.push('SSS Number');
-    if (!data.hdmfNumber.trim()) missingFields.push('HDMF / Pag-IBIG Number');
-    if (!data.philhealthNumber.trim()) missingFields.push('PhilHealth Number');
-    if (!data.tinNumber.trim()) missingFields.push('TIN Number');
-    if (!data.licenseNumber.trim()) missingFields.push('License Number');
-
-    return missingFields;
-  };
-
-  const scheduleIncompleteReminder = (clientData: {
-    uniqueId: string;
-    fullName: string;
-    email: string;
-    missingFields: string[];
-  }) => {
-    setTimeout(async () => {
-      const existingNotifications = JSON.parse(
-        localStorage.getItem('notifications') || '[]',
-      );
-
-      const reminderNotification = {
-        id: Date.now(),
-        title: 'Incomplete Client Submission',
-        message: `${clientData.fullName} is missing: ${clientData.missingFields.join(
-          ', ',
-        )}.`,
-        time: new Date().toLocaleString(),
-        unread: true,
-        type: 'incomplete',
-        redirectTo: `/dashboard/client-search?uid=${clientData.uniqueId}`,
-      };
-
-      localStorage.setItem(
-        'notifications',
-        JSON.stringify([reminderNotification, ...existingNotifications]),
-      );
-
-      try {
-        await emailjs.send(
-          SERVICE_ID,
-          TEMPLATE_ID,
-          {
-            unique_id: clientData.uniqueId,
-            full_name: clientData.fullName,
-            email: clientData.email,
-            document_type: 'Incomplete ID Information',
-            file_name: 'N/A',
-            submitted_at: new Date().toLocaleString(),
-            missing_fields: clientData.missingFields.join(', '),
-            dashboard_link: 'https://icy-river-055fcb80f.7.azurestaticapps.net/client-dashboard',
-          },
-          { publicKey: PUBLIC_KEY },
-        );
-      } catch (error) {
-        console.error('Reminder email failed:', error);
-      }
-    }, 5 * 60 * 1000);
-  };
-
-  const uploadToAzure = async (
-    selectedDocumentType: string,
-    file: File,
-  ) => {
-    const azureFormData = new FormData();
-
-    azureFormData.append('firstName', formData.firstName);
-    azureFormData.append('middleName', formData.middleName);
-    azureFormData.append('lastName', formData.lastName);
-    azureFormData.append('email', formData.email);
-    azureFormData.append('documentType', selectedDocumentType);
-    azureFormData.append('file', file);
-
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      body: azureFormData,
-    });
-
-    const result = await response.json();
-
-    if (!response.ok || !result.success) {
-      throw new Error(result.message || 'Azure upload failed.');
-    }
-
-    return result as {
-      success: boolean;
-      message: string;
-      clientId: number;
-      uniqueId: string;
-      blobUrl: string;
-    };
-  };
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (formData.documentTypes.length === 0) {
-      alert('Please select at least one document type.');
-      return;
-    }
-
-    const missingFiles = formData.documentTypes.filter(
-      (type) => !formData.documentFiles[type],
-    );
-
-    if (missingFiles.length > 0) {
-      alert('Please upload a file for each selected document type.');
-      return;
-    }
-
+  const loadClients = async (keyword = '') => {
     try {
-      setIsSubmitting(true);
+      setLoading(true);
+      setError('');
 
-      const existingNotifications = JSON.parse(
-        localStorage.getItem('notifications') || '[]',
-      );
+      const url = keyword.trim()
+        ? `${CLIENTS_API}?search=${encodeURIComponent(keyword.trim())}`
+        : CLIENTS_API;
 
-      const fullName = `${formData.firstName} ${formData.middleName} ${formData.lastName}`
-        .replace(/\s+/g, ' ')
-        .trim();
+      const response = await fetch(url);
+      const result = await response.json();
 
-      const submittedAt = new Date().toLocaleString();
-
-      const uploadResults = [];
-
-      for (const selectedDocumentType of formData.documentTypes) {
-        const file = formData.documentFiles[selectedDocumentType];
-
-        if (!file) continue;
-
-        const result = await uploadToAzure(selectedDocumentType, file);
-        uploadResults.push({
-          ...result,
-          documentType: selectedDocumentType,
-          fileName: file.name,
-        });
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Failed to load clients.');
       }
 
-      const uniqueId = uploadResults[0]?.uniqueId;
-
-      if (!uniqueId) {
-        throw new Error('No upload result returned from Azure.');
-      }
-
-      const selectedDocumentLabels = formData.documentTypes
-        .map(formatDocumentType)
-        .join(', ');
-
-      const newNotification = {
-        id: Date.now(),
-        clientId: uploadResults[0]?.clientId,
-        title: 'New Document Submission',
-        message: `${fullName} submitted ${selectedDocumentLabels}.`,
-        time: submittedAt,
-        unread: true,
-        type: 'submission',
-        documentType: formData.documentTypes[0],
-        redirectTo: `/dashboard/documents/${formData.documentTypes[0]}`,
-      };
-
-      localStorage.setItem(
-        'notifications',
-        JSON.stringify([newNotification, ...existingNotifications]),
-      );
-
-      await emailjs.send(
-        SERVICE_ID,
-        TEMPLATE_ID,
-        {
-          unique_id: uniqueId,
-          full_name: fullName,
-          email: formData.email,
-          document_type: selectedDocumentLabels,
-          file_name: uploadResults.map((item) => item.fileName).join(', '),
-          submitted_at: submittedAt,
-          sss_number: formData.sssNumber || 'N/A',
-          hdmf_number: formData.hdmfNumber || 'N/A',
-          philhealth_number: formData.philhealthNumber || 'N/A',
-          tin_number: formData.tinNumber || 'N/A',
-          license_number: formData.licenseNumber || 'N/A',
-          dashboard_link:
-            'https://icy-river-055fcb80f.7.azurestaticapps.net/client-dashboard',
-        },
-        { publicKey: PUBLIC_KEY },
-      );
-
-      if (formData.documentTypes.includes('id')) {
-        const missingIdFields = getMissingIdFields(formData);
-
-        if (missingIdFields.length > 0) {
-          scheduleIncompleteReminder({
-            uniqueId,
-            fullName,
-            email: formData.email,
-            missingFields: missingIdFields,
-          });
-        }
-      }
-
-      alert(`Document submitted successfully! Unique ID: ${uniqueId}`);
-
-      setFormData(initialFormData);
-
-      document
-        .querySelectorAll<HTMLInputElement>('input[type="file"]')
-        .forEach((input) => {
-          input.value = '';
-        });
-    } catch (error) {
-      console.error('Submit error:', error);
-      alert(
-        error instanceof Error
-          ? error.message
-          : 'Document submission failed.',
-      );
+      setClients(result.clients || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load clients.');
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
-  const isIdDocument = formData.documentTypes.includes('id');
+  useEffect(() => {
+    loadClients();
+  }, []);
+
+  const getFullName = (client: Client) =>
+    (
+      client.name ||
+      `${client.firstName || ''} ${client.middleName || ''} ${client.lastName || ''}`
+    )
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const formatDocumentType = (type?: string) => {
+    if (!type) return 'Document';
+    return (
+      documentTypeLabels[type] ||
+      type
+        .split('-')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ')
+    );
+  };
+
+  const groupedClients = useMemo(() => {
+    const keyword = search.toLowerCase().trim();
+
+    return clients.filter((client) => {
+      const fullName = getFullName(client).toLowerCase();
+
+      const matchesSearch =
+        !keyword ||
+        fullName.includes(keyword) ||
+        (client.uniqueId || '').toLowerCase().includes(keyword) ||
+        (client.email || '').toLowerCase().includes(keyword) ||
+        (client.fileName || '').toLowerCase().includes(keyword) ||
+        (client.documentType || '').toLowerCase().includes(keyword);
+
+      const matchesType =
+        selectedType === 'all' || client.documentType === selectedType;
+
+      return matchesSearch && matchesType;
+    });
+  }, [clients, search, selectedType]);
+
+  const documentTypes = useMemo(() => {
+    const types = Array.from(
+      new Set(clients.map((client) => client.documentType).filter(Boolean)),
+    ) as string[];
+
+    return types;
+  }, [clients]);
+
+  const clientFolders = useMemo(() => {
+    const map = new Map<string, Client[]>();
+
+    groupedClients.forEach((client) => {
+      const key = client.uniqueId || String(client.id);
+
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+
+      map.get(key)?.push(client);
+    });
+
+    return Array.from(map.entries()).map(([uniqueId, files]) => ({
+      uniqueId,
+      client: files[0],
+      files,
+    }));
+  }, [groupedClients]);
+
+  const handleSearch = () => {
+    loadClients(search);
+  };
+
+  const handleDownload = (file: Client) => {
+    if (!file.fileUrl) {
+      alert('No file available.');
+      return;
+    }
+
+    window.open(file.fileUrl, '_blank');
+  };
+
+  const handleUnsupportedAction = (action: string) => {
+    alert(
+      `${action} is not available yet. The UI is kept, but backend edit/delete APIs still need to be added.`,
+    );
+  };
+
+  const isImageFile =
+    previewFile?.fileName?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/) ||
+    previewFile?.fileUrl?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)/);
 
   return (
-    <div className="min-h-screen bg-slate-100 font-sans">
-      <main className="flex min-h-screen items-center justify-center px-4 py-10">
-        <div className="w-full max-w-3xl rounded-3xl bg-white p-6 shadow-xl sm:p-8">
-          <div className="mb-8 text-center">
-            <h1 className="text-3xl font-extrabold text-slate-900 sm:text-4xl">
-              Secure Document Submission
-            </h1>
+    <DashboardLayout
+      title="Client Document Search"
+      subtitle="Search and view client files from Azure SQL and Blob Storage."
+    >
+      <div className="space-y-6">
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-xl font-extrabold text-slate-900">
+                Search Client Documents
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Search by Unique ID, name, email, document type, or file name.
+              </p>
+            </div>
 
-            <p className="mt-2 text-sm text-slate-500">
-              Fill out the form and upload your required document.
+            <button
+              type="button"
+              onClick={() => loadClients()}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 text-sm font-bold text-slate-700 hover:bg-slate-200"
+            >
+              <FaSyncAlt />
+              Refresh
+            </button>
+          </div>
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_260px_auto]">
+            <div className="relative">
+              <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') handleSearch();
+                }}
+                placeholder="Search Unique ID, name, email, or file..."
+                className="h-12 w-full rounded-xl border border-slate-300 pl-12 pr-4 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+              />
+            </div>
+
+            <select
+              value={selectedType}
+              onChange={(event) => setSelectedType(event.target.value)}
+              className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+            >
+              <option value="all">All Document Types</option>
+              {documentTypes.map((type) => (
+                <option key={type} value={type}>
+                  {formatDocumentType(type)}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={handleSearch}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-orange-500 px-6 text-sm font-bold text-white shadow-sm hover:bg-orange-600"
+            >
+              <FaSearch />
+              Search
+            </button>
+          </div>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-bold text-slate-500">Total Records</p>
+            <p className="mt-2 text-3xl font-extrabold text-slate-900">
+              {clients.length}
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid gap-5 md:grid-cols-3">
-              <input
-                type="text"
-                name="firstName"
-                value={formData.firstName}
-                onChange={handleChange}
-                placeholder="First Name"
-                className="h-12 rounded-xl border border-slate-300 px-4 text-sm outline-none focus:border-orange-500"
-                required
-              />
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-bold text-slate-500">Client Folders</p>
+            <p className="mt-2 text-3xl font-extrabold text-slate-900">
+              {clientFolders.length}
+            </p>
+          </div>
 
-              <input
-                type="text"
-                name="middleName"
-                value={formData.middleName}
-                onChange={handleChange}
-                placeholder="Middle Name"
-                className="h-12 rounded-xl border border-slate-300 px-4 text-sm outline-none focus:border-orange-500"
-              />
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-bold text-slate-500">Document Types</p>
+            <p className="mt-2 text-3xl font-extrabold text-slate-900">
+              {documentTypes.length}
+            </p>
+          </div>
+        </section>
 
-              <input
-                type="text"
-                name="lastName"
-                value={formData.lastName}
-                onChange={handleChange}
-                placeholder="Last Name"
-                className="h-12 rounded-xl border border-slate-300 px-4 text-sm outline-none focus:border-orange-500"
-                required
-              />
-            </div>
+        {loading && (
+          <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-sm font-bold text-slate-500 shadow-sm">
+            Loading client documents from Azure...
+          </div>
+        )}
 
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="Email Address"
-              className="h-12 w-full rounded-xl border border-slate-300 px-4 text-sm outline-none focus:border-orange-500"
-              required
-            />
+        {error && (
+          <div className="rounded-3xl border border-red-200 bg-red-50 p-5 text-sm font-bold text-red-700">
+            {error}
+          </div>
+        )}
 
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                Document Type
-              </label>
+        {!loading && !error && (
+          <div className="space-y-4">
+            {clientFolders.map(({ uniqueId, client, files }) => (
+              <div
+                key={uniqueId}
+                className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+              >
+                <div className="flex flex-col gap-4 border-b border-slate-100 p-5 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex min-w-0 items-center gap-4">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-orange-600">
+                      <FaFolder className="text-2xl" />
+                    </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                {documentOptions.map((type) => {
-                  const isSelected = formData.documentTypes.includes(type.value);
+                    <div className="min-w-0">
+                      <h3 className="truncate text-lg font-extrabold text-slate-900">
+                        {getFullName(client) || 'Unnamed Client'}
+                      </h3>
 
-                  return (
-                    <button
-                      key={type.value}
-                      type="button"
-                      onClick={() => handleDocumentTypeToggle(type.value)}
-                      className={`rounded-2xl border p-4 text-left transition ${
-                        isSelected
-                          ? 'border-orange-500 bg-orange-50 ring-2 ring-orange-100'
-                          : 'border-slate-300 bg-white hover:border-orange-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`flex h-5 w-5 items-center justify-center rounded border ${
-                            isSelected
-                              ? 'border-orange-500 bg-orange-500'
-                              : 'border-slate-300 bg-white'
-                          }`}
-                        >
-                          {isSelected && (
-                            <span className="h-2 w-2 rounded-full bg-white" />
-                          )}
+                      <div className="mt-1 flex flex-wrap gap-3 text-sm text-slate-500">
+                        <span className="inline-flex items-center gap-2">
+                          <FaIdBadge className="text-xs" />
+                          {client.uniqueId || uniqueId}
                         </span>
 
-                        <span className="text-sm font-bold text-slate-800">
-                          {type.label}
+                        <span className="inline-flex items-center gap-2">
+                          <FaUser className="text-xs" />
+                          {client.email || 'No email'}
                         </span>
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                    </div>
+                  </div>
 
-            {isIdDocument && (
-              <div className="rounded-2xl border border-orange-200 bg-orange-50 p-5">
-                <h3 className="mb-4 text-lg font-bold text-slate-900">
-                  ID Information
-                </h3>
+                  <span className="rounded-full bg-orange-50 px-4 py-2 text-sm font-bold text-orange-700">
+                    {files.length} file{files.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  {[
-                    ['sssNumber', 'SSS Number'],
-                    ['hdmfNumber', 'HDMF / Pag-IBIG Number'],
-                    ['philhealthNumber', 'PhilHealth Number'],
-                    ['tinNumber', 'TIN Number'],
-                    ['licenseNumber', 'License Number'],
-                  ].map(([name, label]) => (
-                    <input
-                      key={name}
-                      type="text"
-                      name={name}
-                      value={formData[name as keyof typeof formData] as string}
-                      onChange={handleChange}
-                      placeholder={label}
-                      className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
-                    />
+                <div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
+                  {files.map((file) => (
+                    <div
+                      key={`${file.id}-${file.fileName}`}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white">
+                          <FaFileAlt />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold uppercase tracking-wide text-orange-600">
+                            {formatDocumentType(file.documentType)}
+                          </p>
+
+                          <h4 className="mt-1 truncate text-sm font-extrabold text-slate-900">
+                            {file.fileName || 'No file name'}
+                          </h4>
+
+                          <p className="mt-1 text-xs text-slate-500">
+                            Submitted: {file.submittedAt || 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewFile(file)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
+                        >
+                          <FaEye />
+                          View
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDownload(file)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-500 px-3 py-2 text-xs font-bold text-white hover:bg-green-600"
+                        >
+                          <FaDownload />
+                          Download
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleUnsupportedAction('Edit')}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-500 px-3 py-2 text-xs font-bold text-white hover:bg-slate-600"
+                        >
+                          <FaEdit />
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleUnsupportedAction('Delete')}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-500 px-3 py-2 text-xs font-bold text-white hover:bg-red-600"
+                        >
+                          <FaTrash />
+                          Delete
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
-            )}
+            ))}
 
-            {formData.documentTypes.length > 0 && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-bold text-slate-900">
-                  Upload Documents
+            {clientFolders.length === 0 && (
+              <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center">
+                <FaFolder className="mx-auto text-5xl text-slate-300" />
+
+                <h3 className="mt-4 text-lg font-bold text-slate-900">
+                  No client documents found
                 </h3>
 
-                {formData.documentTypes.map((type) => (
-                  <div
-                    key={type}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                  >
-                    <label className="mb-2 block text-sm font-bold text-slate-700">
-                      {formatDocumentType(type)} File
-                    </label>
-
-                    <input
-                      type="file"
-                      onChange={(event) =>
-                        handleDocumentFileChange(type, event)
-                      }
-                      className="block w-full rounded-xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-orange-500 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-orange-600"
-                      required
-                    />
-
-                    {formData.documentFiles[type] && (
-                      <p className="mt-2 text-sm text-slate-500">
-                        Selected: {formData.documentFiles[type]?.name}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                <p className="mt-1 text-sm text-slate-500">
+                  Try searching another Unique ID, name, or document type.
+                </p>
               </div>
             )}
+          </div>
+        )}
+      </div>
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="h-12 w-full rounded-xl bg-orange-500 text-sm font-bold text-white shadow-md transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-orange-300"
-            >
-              {isSubmitting ? 'Submitting...' : 'Submit Document'}
-            </button>
-          </form>
+      {selectedClient && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-extrabold text-slate-900">
+                Client Details
+              </h2>
+
+              <button
+                type="button"
+                onClick={() => setSelectedClient(null)}
+                className="rounded-xl bg-slate-100 p-3 text-slate-600 hover:bg-slate-200"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-3 text-sm text-slate-700 sm:grid-cols-2">
+              <p>
+                <span className="font-bold text-slate-900">Unique ID:</span>{' '}
+                {selectedClient.uniqueId || 'N/A'}
+              </p>
+              <p>
+                <span className="font-bold text-slate-900">Name:</span>{' '}
+                {getFullName(selectedClient) || 'N/A'}
+              </p>
+              <p>
+                <span className="font-bold text-slate-900">Email:</span>{' '}
+                {selectedClient.email || 'N/A'}
+              </p>
+              <p>
+                <span className="font-bold text-slate-900">Submitted:</span>{' '}
+                {selectedClient.submittedAt || 'N/A'}
+              </p>
+            </div>
+          </div>
         </div>
-      </main>
-    </div>
+      )}
+
+      {previewFile && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4">
+          <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 p-5">
+              <h2 className="text-xl font-extrabold text-slate-900">
+                {previewFile.fileName || 'File Preview'}
+              </h2>
+
+              <button
+                type="button"
+                onClick={() => setPreviewFile(null)}
+                className="rounded-xl bg-slate-100 p-3 text-slate-600 hover:bg-slate-200"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="bg-slate-100 p-4">
+              {previewFile.fileUrl ? (
+                isImageFile ? (
+                  <img
+                    src={previewFile.fileUrl}
+                    alt={previewFile.fileName || 'Preview'}
+                    className="mx-auto max-h-[70vh] rounded-2xl bg-white object-contain"
+                  />
+                ) : (
+                  <iframe
+                    src={previewFile.fileUrl}
+                    title={previewFile.fileName}
+                    className="h-[70vh] w-full rounded-2xl bg-white"
+                  />
+                )
+              ) : (
+                <div className="flex h-[70vh] items-center justify-center rounded-2xl bg-white text-slate-500">
+                  No preview available.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </DashboardLayout>
   );
 }

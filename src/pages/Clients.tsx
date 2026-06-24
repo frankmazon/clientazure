@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FaDownload,
   FaEye,
@@ -8,6 +8,9 @@ import {
 } from 'react-icons/fa';
 import DashboardLayout from '../components/layout/layout';
 
+const CLIENTS_API =
+  'https://docsuploadpythonapi.azurewebsites.net/api/clients';
+
 type Client = {
   id: number;
   uniqueId?: string;
@@ -16,18 +19,41 @@ type Client = {
   lastName?: string;
   name?: string;
   email?: string;
-  documentType: string;
-  fileName: string;
+  documentType?: string;
+  fileName?: string;
   fileUrl?: string;
-  submittedAt: string;
+  submittedAt?: string;
 };
 
 export default function Clients() {
   const [search, setSearch] = useState('');
+  const [clients, setClients] = useState<Client[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const clients = useMemo<Client[]>(() => {
-    return JSON.parse(localStorage.getItem('clients') || '[]');
+  useEffect(() => {
+    const loadClients = async () => {
+      try {
+        setLoading(true);
+        setError('');
+
+        const response = await fetch(CLIENTS_API);
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || 'Failed to load clients.');
+        }
+
+        setClients(result.clients || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load clients.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadClients();
   }, []);
 
   const getFullName = (client: Client) => {
@@ -39,24 +65,27 @@ export default function Clients() {
     );
   };
 
-  const formatDocumentType = (type: string) => {
-    return type
+  const formatDocumentType = (type?: string) => {
+    return (type || 'document')
       .split('-')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   };
 
-  const filteredClients = clients.filter((client) => {
-    const fullName = getFullName(client).toLowerCase();
+  const filteredClients = useMemo(() => {
     const searchValue = search.toLowerCase();
 
-    return (
-      fullName.includes(searchValue) ||
-      (client.email || '').toLowerCase().includes(searchValue) ||
-      (client.uniqueId || '').toLowerCase().includes(searchValue) ||
-      (client.fileName || '').toLowerCase().includes(searchValue)
-    );
-  });
+    return clients.filter((client) => {
+      const fullName = getFullName(client).toLowerCase();
+
+      return (
+        fullName.includes(searchValue) ||
+        (client.email || '').toLowerCase().includes(searchValue) ||
+        (client.uniqueId || '').toLowerCase().includes(searchValue) ||
+        (client.fileName || '').toLowerCase().includes(searchValue)
+      );
+    });
+  }, [clients, search]);
 
   const handleDownload = (client: Client) => {
     if (!client.fileUrl) {
@@ -64,16 +93,13 @@ export default function Clients() {
       return;
     }
 
-    const link = document.createElement('a');
-    link.href = client.fileUrl;
-    link.download = client.fileName || 'document';
-    link.click();
+    window.open(client.fileUrl, '_blank');
   };
 
   return (
     <DashboardLayout
       title="Clients"
-      subtitle="View and manage all submitted clients."
+      subtitle="View and manage all submitted clients from Azure SQL."
     >
       <div className="mx-auto max-w-7xl space-y-5">
         <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
@@ -90,202 +116,221 @@ export default function Clients() {
           </div>
         </div>
 
-        {/* Mobile Cards */}
-        <div className="space-y-4 lg:hidden">
-          {filteredClients.map((client) => (
-            <div
-              key={client.id}
-              className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"
-            >
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h3 className="truncate text-lg font-extrabold text-slate-900">
-                    {getFullName(client) || '-'}
-                  </h3>
-                  <p className="truncate text-sm text-slate-500">
-                    {client.email || 'No email'}
-                  </p>
-                </div>
-
-                <span className="shrink-0 rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
-                  {formatDocumentType(client.documentType)}
-                </span>
-              </div>
-
-              <div className="grid gap-3 text-sm">
-                <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-xs font-bold uppercase text-slate-400">
-                    Unique ID
-                  </p>
-                  <p className="mt-1 font-semibold text-slate-800">
-                    {client.uniqueId || '-'}
-                  </p>
-                </div>
-
-                <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-xs font-bold uppercase text-slate-400">
-                    File
-                  </p>
-                  <p className="mt-1 break-all font-semibold text-slate-800">
-                    {client.fileName || '-'}
-                  </p>
-                </div>
-
-                <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-xs font-bold uppercase text-slate-400">
-                    Submitted
-                  </p>
-                  <p className="mt-1 font-semibold text-slate-800">
-                    {client.submittedAt || '-'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setSelectedClient(client)}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-500 text-sm font-bold text-white hover:bg-blue-600"
-                >
-                  <FaEye />
-                  View
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleDownload(client)}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 text-sm font-bold text-white hover:bg-orange-600"
-                >
-                  <FaDownload />
-                  Download
-                </button>
-              </div>
-            </div>
-          ))}
-
-          {filteredClients.length === 0 && (
-            <div className="rounded-2xl bg-white p-10 text-center shadow-sm ring-1 ring-slate-200">
-              <FaFileAlt className="mx-auto mb-3 text-3xl text-slate-300" />
-              <p className="font-bold text-slate-700">No clients found</p>
-              <p className="mt-1 text-sm text-slate-500">
-                Try adjusting your search.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Desktop Table */}
-        <div className="hidden overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 lg:block">
-          <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                Client List
-              </h2>
-              <p className="text-sm text-slate-500">
-                {filteredClients.length} submitted file
-                {filteredClients.length !== 1 ? 's' : ''}
-              </p>
-            </div>
-
-            <FaFileAlt className="text-2xl text-orange-500" />
+        {loading && (
+          <div className="rounded-2xl bg-white p-10 text-center font-bold text-slate-500 shadow-sm ring-1 ring-slate-200">
+            Loading clients from Azure...
           </div>
+        )}
 
-          <div className="overflow-x-auto">
-            <table className="min-w-[1000px]">
-              <thead className="bg-slate-50">
-                <tr>
-                  {[
-                    'Unique ID',
-                    'Name',
-                    'Email',
-                    'Document Type',
-                    'File',
-                    'Submitted',
-                    'Action',
-                  ].map((header) => (
-                    <th
-                      key={header}
-                      className={`px-6 py-4 text-sm font-extrabold uppercase tracking-wide text-slate-600 ${
-                        header === 'Action' ? 'text-center' : 'text-left'
-                      }`}
-                    >
-                      {header}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
+        {error && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-bold text-red-700">
+            {error}
+          </div>
+        )}
 
-              <tbody className="divide-y divide-slate-200">
-                {filteredClients.map((client) => (
-                  <tr key={client.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-700">
-                      {client.uniqueId || '-'}
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <p className="font-bold text-slate-900">
+        {!loading && !error && (
+          <>
+            {/* Mobile Cards */}
+            <div className="space-y-4 lg:hidden">
+              {filteredClients.map((client) => (
+                <div
+                  key={`${client.id}-${client.fileName}`}
+                  className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"
+                >
+                  <div className="mb-4 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="truncate text-lg font-extrabold text-slate-900">
                         {getFullName(client) || '-'}
+                      </h3>
+                      <p className="truncate text-sm text-slate-500">
+                        {client.email || 'No email'}
                       </p>
-                    </td>
+                    </div>
 
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {client.email || '-'}
-                    </td>
+                    <span className="shrink-0 rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+                      {formatDocumentType(client.documentType)}
+                    </span>
+                  </div>
 
-                    <td className="px-6 py-4">
-                      <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
-                        {formatDocumentType(client.documentType)}
-                      </span>
-                    </td>
+                  <div className="grid gap-3 text-sm">
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-xs font-bold uppercase text-slate-400">
+                        Unique ID
+                      </p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {client.uniqueId || '-'}
+                      </p>
+                    </div>
 
-                    <td className="max-w-[260px] px-6 py-4">
-                      <p className="truncate text-sm font-semibold text-slate-800">
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-xs font-bold uppercase text-slate-400">
+                        File
+                      </p>
+                      <p className="mt-1 break-all font-semibold text-slate-800">
                         {client.fileName || '-'}
                       </p>
-                    </td>
+                    </div>
 
-                    <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
-                      {client.submittedAt || '-'}
-                    </td>
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-xs font-bold uppercase text-slate-400">
+                        Submitted
+                      </p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {client.submittedAt || '-'}
+                      </p>
+                    </div>
+                  </div>
 
-                    <td className="px-6 py-4">
-                      <div className="flex justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedClient(client)}
-                          className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
-                        >
-                          <FaEye />
-                          View
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDownload(client)}
-                          className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
-                        >
-                          <FaDownload />
-                          Download
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-
-                {filteredClients.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="px-6 py-12 text-center text-sm text-slate-500"
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedClient(client)}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-500 text-sm font-bold text-white hover:bg-blue-600"
                     >
-                      No submitted files yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                      <FaEye />
+                      View
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(client)}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 text-sm font-bold text-white hover:bg-orange-600"
+                    >
+                      <FaDownload />
+                      Download
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {filteredClients.length === 0 && (
+                <div className="rounded-2xl bg-white p-10 text-center shadow-sm ring-1 ring-slate-200">
+                  <FaFileAlt className="mx-auto mb-3 text-3xl text-slate-300" />
+                  <p className="font-bold text-slate-700">No clients found</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Try adjusting your search.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Desktop Table */}
+            <div className="hidden overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 lg:block">
+              <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    Client List
+                  </h2>
+                  <p className="text-sm text-slate-500">
+                    {filteredClients.length} submitted file
+                    {filteredClients.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+
+                <FaFileAlt className="text-2xl text-orange-500" />
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-[1000px]">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      {[
+                        'Unique ID',
+                        'Name',
+                        'Email',
+                        'Document Type',
+                        'File',
+                        'Submitted',
+                        'Action',
+                      ].map((header) => (
+                        <th
+                          key={header}
+                          className={`px-6 py-4 text-sm font-extrabold uppercase tracking-wide text-slate-600 ${
+                            header === 'Action' ? 'text-center' : 'text-left'
+                          }`}
+                        >
+                          {header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-200">
+                    {filteredClients.map((client) => (
+                      <tr
+                        key={`${client.id}-${client.fileName}`}
+                        className="hover:bg-slate-50"
+                      >
+                        <td className="px-6 py-4 text-sm font-semibold text-slate-700">
+                          {client.uniqueId || '-'}
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <p className="font-bold text-slate-900">
+                            {getFullName(client) || '-'}
+                          </p>
+                        </td>
+
+                        <td className="px-6 py-4 text-sm text-slate-600">
+                          {client.email || '-'}
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+                            {formatDocumentType(client.documentType)}
+                          </span>
+                        </td>
+
+                        <td className="max-w-[260px] px-6 py-4">
+                          <p className="truncate text-sm font-semibold text-slate-800">
+                            {client.fileName || '-'}
+                          </p>
+                        </td>
+
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
+                          {client.submittedAt || '-'}
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <div className="flex justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedClient(client)}
+                              className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
+                            >
+                              <FaEye />
+                              View
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDownload(client)}
+                              className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
+                            >
+                              <FaDownload />
+                              Download
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {filteredClients.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="px-6 py-12 text-center text-sm text-slate-500"
+                        >
+                          No submitted files yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {selectedClient && (

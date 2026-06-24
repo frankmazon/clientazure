@@ -1,22 +1,50 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+const LOGIN_API = 'https://docsuploadpythonapi.azurewebsites.net/api/login';
+
 export default function Login() {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (username === 'admin' && password === 'admin') {
-      localStorage.setItem('isAdminLoggedIn', 'true');
-      navigate('/dashboard');
-      return;
-    }
+    try {
+      setLoading(true);
+      setError('');
 
-    setError('Invalid username or password');
+      const response = await fetch(LOGIN_API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username,
+          password,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Invalid username or password');
+      }
+
+      localStorage.setItem('isAdminLoggedIn', 'true');
+      localStorage.setItem('user', JSON.stringify(result.user));
+
+      navigate('/dashboard');
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : 'Unable to connect to server.',
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -42,6 +70,7 @@ export default function Login() {
               placeholder="Enter username"
               className="h-12 w-full rounded-xl border border-slate-300 px-4 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
               required
+              disabled={loading}
             />
           </div>
 
@@ -56,6 +85,7 @@ export default function Login() {
               placeholder="Enter password"
               className="h-12 w-full rounded-xl border border-slate-300 px-4 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
               required
+              disabled={loading}
             />
           </div>
 
@@ -67,9 +97,10 @@ export default function Login() {
 
           <button
             type="submit"
-            className="h-12 w-full rounded-xl bg-orange-500 font-bold text-white hover:bg-orange-600"
+            disabled={loading}
+            className="h-12 w-full rounded-xl bg-orange-500 font-bold text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-orange-300"
           >
-            Login
+            {loading ? 'Signing in...' : 'Login'}
           </button>
         </form>
       </div>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   FaCloudUploadAlt,
   FaDownload,
@@ -25,6 +25,12 @@ type Submission = {
   submittedAt?: string;
 };
 
+const CLIENTS_API =
+  'https://docsuploadpythonapi.azurewebsites.net/api/clients';
+
+const UPLOAD_API =
+  'https://docsuploadpythonapi.azurewebsites.net/api/uploadclient';
+
 const documentTypes = [
   { label: 'ID', value: 'id' },
   { label: 'Property Documents', value: 'property-documents' },
@@ -33,16 +39,6 @@ const documentTypes = [
   { label: 'Other', value: 'other' },
 ];
 
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-};
-
 export default function ClientDashboard() {
   const [uniqueId, setUniqueId] = useState('');
   const [fileSearch, setFileSearch] = useState('');
@@ -50,11 +46,7 @@ export default function ClientDashboard() {
   const [newFiles, setNewFiles] = useState<FileList | null>(null);
   const [clientFiles, setClientFiles] = useState<Submission[]>([]);
   const [previewFile, setPreviewFile] = useState<Submission | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  const allSubmissions = useMemo<Submission[]>(() => {
-    return JSON.parse(localStorage.getItem('clients') || '[]');
-  }, [refreshKey]);
+  const [loading, setLoading] = useState(false);
 
   const getFullName = (client: Submission) => {
     return (
@@ -72,21 +64,36 @@ export default function ClientDashboard() {
       .join(' ');
   };
 
-  const handleLoadFiles = () => {
-    if (!uniqueId.trim()) {
+  const loadClientFiles = async (idValue = uniqueId) => {
+    if (!idValue.trim()) {
       alert('Please enter your Unique ID.');
       return;
     }
 
-    const filtered = allSubmissions.filter((item) => {
-      return (
-        String(item.uniqueId || '').trim().toLowerCase() ===
-        uniqueId.trim().toLowerCase()
-      );
-    });
+    try {
+      setLoading(true);
 
-    setClientFiles(filtered);
-    setFileSearch('');
+      const response = await fetch(
+        `${CLIENTS_API}?uniqueId=${encodeURIComponent(idValue.trim())}`,
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Failed to load files.');
+      }
+
+      setClientFiles(result.clients || []);
+      setFileSearch('');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to load files.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLoadFiles = () => {
+    loadClientFiles();
   };
 
   const filteredFiles = clientFiles.filter((file) => {
@@ -116,40 +123,52 @@ export default function ClientDashboard() {
       return;
     }
 
-    const existingClients = JSON.parse(localStorage.getItem('clients') || '[]');
-    const submittedAt = new Date().toLocaleString();
     const selectedClient = clientFiles[0];
 
-    const uploadedFiles = await Promise.all(
-      Array.from(newFiles).map(async (file) => ({
-        id: Date.now() + Math.random(),
-        uniqueId: uniqueId.trim(),
-        firstName: selectedClient?.firstName || '',
-        middleName: selectedClient?.middleName || '',
-        lastName: selectedClient?.lastName || '',
-        name: selectedClient ? getFullName(selectedClient) : '',
-        email: selectedClient?.email || '',
-        documentType,
-        fileName: file.name,
-        fileUrl: await fileToBase64(file),
-        submittedAt,
-      })),
-    );
+    if (!selectedClient) {
+      alert('Please load the client files first before uploading.');
+      return;
+    }
 
-    localStorage.setItem(
-      'clients',
-      JSON.stringify([...uploadedFiles, ...existingClients]),
-    );
+    try {
+      setLoading(true);
 
-    setClientFiles((prev) => [...uploadedFiles, ...prev]);
-    setNewFiles(null);
-    setDocumentType('');
-    setRefreshKey((prev) => prev + 1);
+      for (const file of Array.from(newFiles)) {
+        const formData = new FormData();
 
-    const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
-    if (fileInput) fileInput.value = '';
+        formData.append('firstName', selectedClient.firstName || '');
+        formData.append('middleName', selectedClient.middleName || '');
+        formData.append('lastName', selectedClient.lastName || '');
+        formData.append('email', selectedClient.email || '');
+        formData.append('documentType', documentType);
+        formData.append('file', file);
 
-    alert('File uploaded successfully.');
+        const response = await fetch(UPLOAD_API, {
+          method: 'POST',
+          body: formData,
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || 'Upload failed.');
+        }
+      }
+
+      setNewFiles(null);
+      setDocumentType('');
+
+      const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
+      if (fileInput) fileInput.value = '';
+
+      await loadClientFiles(uniqueId);
+
+      alert('File uploaded successfully to Azure.');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Upload failed.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDownload = (file: Submission) => {
@@ -158,14 +177,14 @@ export default function ClientDashboard() {
       return;
     }
 
-    const link = document.createElement('a');
-    link.href = file.fileUrl;
-    link.download = file.fileName || 'document';
-    link.click();
+    window.open(file.fileUrl, '_blank');
   };
 
   const selectedClient = clientFiles[0];
-  const isImageFile = previewFile?.fileUrl?.startsWith('data:image');
+
+  const isImageFile =
+    previewFile?.fileName?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/) ||
+    previewFile?.fileUrl?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)/);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-cyan-50 px-4 py-8 font-sans">
@@ -220,10 +239,11 @@ export default function ClientDashboard() {
                 <button
                   type="button"
                   onClick={handleLoadFiles}
-                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 font-bold text-white shadow-md hover:bg-blue-700 md:w-fit"
+                  disabled={loading}
+                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 font-bold text-white shadow-md hover:bg-blue-700 disabled:bg-blue-300 md:w-fit"
                 >
                   <FaFolderOpen />
-                  Load My Files
+                  {loading ? 'Loading...' : 'Load My Files'}
                 </button>
               </div>
             </section>
@@ -321,7 +341,7 @@ export default function ClientDashboard() {
                   <tbody>
                     {filteredFiles.map((file) => (
                       <tr
-                        key={file.id}
+                        key={`${file.id}-${file.fileName}`}
                         className="border-t border-slate-200 hover:bg-slate-50"
                       >
                         <td className="px-6 py-4">
@@ -465,10 +485,11 @@ export default function ClientDashboard() {
             <button
               type="button"
               onClick={handleUpload}
-              className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 font-bold text-white shadow-md hover:bg-blue-700"
+              disabled={loading}
+              className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 font-bold text-white shadow-md hover:bg-blue-700 disabled:bg-blue-300"
             >
               <FaCloudUploadAlt />
-              Upload Documents
+              {loading ? 'Uploading...' : 'Upload Documents'}
             </button>
           </aside>
         </div>
