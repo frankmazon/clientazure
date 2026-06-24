@@ -27,8 +27,8 @@ type Submission = {
 };
 
 const CLIENTS_API = 'https://docsuploadpythonapi.azurewebsites.net/api/clients';
-
 const UPLOAD_API = 'https://docsuploadpythonapi.azurewebsites.net/api/uploadclient';
+const FILE_URL_API = 'https://docsuploadpythonapi.azurewebsites.net/api/file-url';
 
 const documentTypes = [
   { label: 'ID', value: 'id' },
@@ -45,12 +45,33 @@ export default function ClientDashboard() {
   const [newFiles, setNewFiles] = useState<FileList | null>(null);
   const [clientFiles, setClientFiles] = useState<Submission[]>([]);
   const [previewFile, setPreviewFile] = useState<Submission | null>(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const selectedClient = clientFiles[0];
 
+  const getSecureFileUrl = async (fileUrl?: string) => {
+    if (!fileUrl) throw new Error('No file URL available.');
+
+    const response = await fetch(
+      `${FILE_URL_API}?blobUrl=${encodeURIComponent(fileUrl)}`,
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || 'Failed to generate secure file URL.');
+    }
+
+    return result.url as string;
+  };
+
   const getFullName = (client: Submission) =>
-    (client.name || `${client.firstName || ''} ${client.middleName || ''} ${client.lastName || ''}`)
+    (
+      client.name ||
+      `${client.firstName || ''} ${client.middleName || ''} ${client.lastName || ''}`
+    )
       .replace(/\s+/g, ' ')
       .trim();
 
@@ -69,7 +90,9 @@ export default function ClientDashboard() {
     try {
       setLoading(true);
 
-      const response = await fetch(`${CLIENTS_API}?uniqueId=${encodeURIComponent(idValue.trim())}`);
+      const response = await fetch(
+        `${CLIENTS_API}?uniqueId=${encodeURIComponent(idValue.trim())}`,
+      );
 
       const result = await response.json();
 
@@ -85,21 +108,6 @@ export default function ClientDashboard() {
       setLoading(false);
     }
   };
-
-  const handleLoadFiles = () => {
-    loadClientFiles();
-  };
-
-  const filteredFiles = clientFiles.filter((file) => {
-    const keyword = fileSearch.toLowerCase().trim();
-
-    if (!keyword) return true;
-
-    return (
-      file.fileName?.toLowerCase().includes(keyword) ||
-      file.documentType?.toLowerCase().includes(keyword)
-    );
-  });
 
   const handleUpload = async () => {
     const cleanUniqueId = uniqueId.trim();
@@ -166,28 +174,65 @@ export default function ClientDashboard() {
     }
   };
 
-  const handleDownload = (file: Submission) => {
-    if (!file.fileUrl) {
-      alert('No file available.');
-      return;
-    }
+  const handlePreview = async (file: Submission) => {
+    try {
+      setPreviewFile(file);
+      setPreviewUrl('');
+      setPreviewLoading(true);
 
-    window.open(file.fileUrl, '_blank');
+      const secureUrl = await getSecureFileUrl(file.fileUrl);
+      setPreviewUrl(secureUrl);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to open file.');
+      setPreviewFile(null);
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
+  const handleDownload = async (file: Submission) => {
+    try {
+      const secureUrl = await getSecureFileUrl(file.fileUrl);
+      window.open(secureUrl, '_blank');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to download file.');
+    }
+  };
+
+  const handleClosePreview = () => {
+    setPreviewFile(null);
+    setPreviewUrl('');
+  };
+
+  const filteredFiles = clientFiles.filter((file) => {
+    const keyword = fileSearch.toLowerCase().trim();
+
+    if (!keyword) return true;
+
+    return (
+      file.fileName?.toLowerCase().includes(keyword) ||
+      file.documentType?.toLowerCase().includes(keyword)
+    );
+  });
+
   const isImageFile =
-    previewFile?.fileName?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/) ||
-    previewFile?.fileUrl?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)/);
+    previewFile?.fileName?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/);
+
+  const isPdfFile = previewFile?.fileName?.toLowerCase().endsWith('.pdf');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-cyan-50 px-4 py-8 font-sans">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 rounded-3xl bg-gradient-to-r from-blue-700 via-sky-500 to-cyan-400 p-8 text-white shadow-xl">
-          <p className="mb-2 text-sm font-bold uppercase tracking-[0.4em]">Client Portal</p>
+          <p className="mb-2 text-sm font-bold uppercase tracking-[0.4em]">
+            Client Portal
+          </p>
 
           <h1 className="text-4xl font-extrabold">Document Dashboard</h1>
 
-          <p className="mt-4 text-blue-50">Use your Unique ID to view your submitted files.</p>
+          <p className="mt-4 text-blue-50">
+            Use your Unique ID to view your submitted files.
+          </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
@@ -199,14 +244,20 @@ export default function ClientDashboard() {
                 </div>
 
                 <div>
-                  <h2 className="text-xl font-extrabold text-slate-900">Find Your Files</h2>
-                  <p className="text-sm text-slate-500">Enter the Unique ID sent to your email.</p>
+                  <h2 className="text-xl font-extrabold text-slate-900">
+                    Find Your Files
+                  </h2>
+                  <p className="text-sm text-slate-500">
+                    Enter the Unique ID sent to your email.
+                  </p>
                 </div>
               </div>
 
               <div className="grid gap-4">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">Unique ID</label>
+                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                    Unique ID
+                  </label>
 
                   <div className="relative">
                     <FaIdBadge className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -221,7 +272,7 @@ export default function ClientDashboard() {
 
                 <button
                   type="button"
-                  onClick={handleLoadFiles}
+                  onClick={() => loadClientFiles()}
                   disabled={loading}
                   className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 font-bold text-white shadow-md hover:bg-blue-700 disabled:bg-blue-300 md:w-fit"
                 >
@@ -247,7 +298,9 @@ export default function ClientDashboard() {
                       Unique ID: {selectedClient.uniqueId || 'N/A'}
                     </p>
 
-                    <p className="text-sm text-slate-500">Email: {selectedClient.email || 'N/A'}</p>
+                    <p className="text-sm text-slate-500">
+                      Email: {selectedClient.email || 'N/A'}
+                    </p>
                   </div>
                 </div>
               </section>
@@ -255,7 +308,9 @@ export default function ClientDashboard() {
 
             {clientFiles.length > 0 && (
               <section className="rounded-3xl bg-white p-6 shadow-lg">
-                <label className="mb-2 block text-sm font-bold text-slate-700">Search Files</label>
+                <label className="mb-2 block text-sm font-bold text-slate-700">
+                  Search Files
+                </label>
 
                 <div className="relative">
                   <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -287,7 +342,9 @@ export default function ClientDashboard() {
                   </div>
 
                   <div>
-                    <h2 className="text-xl font-extrabold text-slate-900">My Files</h2>
+                    <h2 className="text-xl font-extrabold text-slate-900">
+                      My Files
+                    </h2>
                     <p className="text-sm text-slate-500">
                       {filteredFiles.length} file
                       {filteredFiles.length !== 1 ? 's' : ''} found.
@@ -331,7 +388,9 @@ export default function ClientDashboard() {
                               <p className="font-bold text-slate-900">
                                 {file.fileName || 'No file name'}
                               </p>
-                              <p className="text-xs text-slate-500">ID: {file.uniqueId}</p>
+                              <p className="text-xs text-slate-500">
+                                ID: {file.uniqueId}
+                              </p>
                             </div>
                           </div>
                         </td>
@@ -350,7 +409,7 @@ export default function ClientDashboard() {
                           <div className="flex justify-center gap-2">
                             <button
                               type="button"
-                              onClick={() => setPreviewFile(file)}
+                              onClick={() => handlePreview(file)}
                               className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
                             >
                               <FaEye />
@@ -372,8 +431,12 @@ export default function ClientDashboard() {
 
                     {filteredFiles.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-6 py-12 text-center text-sm text-slate-500">
-                          No files loaded yet. Enter your Unique ID and click Load My Files.
+                        <td
+                          colSpan={4}
+                          className="px-6 py-12 text-center text-sm text-slate-500"
+                        >
+                          No files loaded yet. Enter your Unique ID and click Load
+                          My Files.
                         </td>
                       </tr>
                     )}
@@ -390,7 +453,9 @@ export default function ClientDashboard() {
               </div>
 
               <div>
-                <h2 className="text-xl font-extrabold text-slate-900">Upload Files</h2>
+                <h2 className="text-xl font-extrabold text-slate-900">
+                  Upload Files
+                </h2>
                 <p className="text-sm text-slate-500">
                   Upload additional files under this Unique ID.
                 </p>
@@ -398,7 +463,9 @@ export default function ClientDashboard() {
             </div>
 
             <div className="mb-4">
-              <label className="mb-2 block text-sm font-bold text-slate-700">Document Type</label>
+              <label className="mb-2 block text-sm font-bold text-slate-700">
+                Document Type
+              </label>
 
               <select
                 value={documentType}
@@ -418,7 +485,9 @@ export default function ClientDashboard() {
               <FaCloudUploadAlt className="mb-3 text-4xl text-blue-500" />
 
               <span className="font-bold text-slate-800">Choose files</span>
-              <span className="mt-1 text-sm text-slate-500">PDF, JPG, PNG, DOCX</span>
+              <span className="mt-1 text-sm text-slate-500">
+                PDF, JPG, PNG, DOCX
+              </span>
 
               <input
                 type="file"
@@ -430,7 +499,9 @@ export default function ClientDashboard() {
 
             {newFiles && newFiles.length > 0 && (
               <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                <p className="mb-2 text-sm font-bold text-slate-700">Selected Files</p>
+                <p className="mb-2 text-sm font-bold text-slate-700">
+                  Selected Files
+                </p>
 
                 <div className="space-y-2">
                   {Array.from(newFiles).map((file) => (
@@ -468,7 +539,7 @@ export default function ClientDashboard() {
 
               <button
                 type="button"
-                onClick={() => setPreviewFile(null)}
+                onClick={handleClosePreview}
                 className="rounded-xl bg-slate-100 p-3 text-slate-600 hover:bg-slate-200"
               >
                 <FaTimes />
@@ -476,21 +547,49 @@ export default function ClientDashboard() {
             </div>
 
             <div className="bg-slate-100 p-4">
-              {previewFile.fileUrl ? (
-                isImageFile ? (
-                  <img
-                    src={previewFile.fileUrl}
-                    alt={previewFile.fileName || 'Preview'}
-                    className="mx-auto max-h-[70vh] rounded-2xl bg-white object-contain"
-                  />
-                ) : (
-                  <iframe
-                    src={previewFile.fileUrl}
-                    title={previewFile.fileName}
-                    className="h-[70vh] w-full rounded-2xl bg-white"
-                  />
-                )
-              ) : (
+              {previewLoading && (
+                <div className="flex h-[70vh] items-center justify-center rounded-2xl bg-white text-slate-500">
+                  Loading secure preview...
+                </div>
+              )}
+
+              {!previewLoading && previewUrl && isImageFile && (
+                <img
+                  src={previewUrl}
+                  alt={previewFile.fileName || 'Preview'}
+                  className="mx-auto max-h-[70vh] rounded-2xl bg-white object-contain"
+                />
+              )}
+
+              {!previewLoading && previewUrl && isPdfFile && (
+                <iframe
+                  src={previewUrl}
+                  title={previewFile.fileName}
+                  className="h-[70vh] w-full rounded-2xl bg-white"
+                />
+              )}
+
+              {!previewLoading && previewUrl && !isImageFile && !isPdfFile && (
+                <div className="flex h-[70vh] flex-col items-center justify-center rounded-2xl bg-white text-center text-slate-500">
+                  <FaFileAlt className="mb-4 text-5xl text-slate-300" />
+                  <p className="font-bold text-slate-700">
+                    Preview not available for this file type.
+                  </p>
+                  <p className="mt-1 text-sm">
+                    Please download the file to view it.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => window.open(previewUrl, '_blank')}
+                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-green-500 px-5 py-3 text-sm font-bold text-white hover:bg-green-600"
+                  >
+                    <FaDownload />
+                    Open / Download
+                  </button>
+                </div>
+              )}
+
+              {!previewLoading && !previewUrl && (
                 <div className="flex h-[70vh] items-center justify-center rounded-2xl bg-white text-slate-500">
                   No preview available.
                 </div>
