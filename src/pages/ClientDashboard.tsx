@@ -6,7 +6,9 @@ import {
   FaFileAlt,
   FaFolderOpen,
   FaIdBadge,
+  FaLock,
   FaSearch,
+  FaSignOutAlt,
   FaTimes,
   FaUser,
 } from 'react-icons/fa';
@@ -26,9 +28,21 @@ type Submission = {
   submittedAt?: string;
 };
 
+type ClientLoginUser = {
+  id: number;
+  uniqueId: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  name?: string;
+  email?: string;
+};
+
 const CLIENTS_API = 'https://docsuploadpythonapi.azurewebsites.net/api/clients';
 const UPLOAD_API = 'https://docsuploadpythonapi.azurewebsites.net/api/uploadclient';
 const FILE_URL_API = 'https://docsuploadpythonapi.azurewebsites.net/api/file-url';
+const CLIENT_LOGIN_API =
+  'https://docsuploadpythonapi.azurewebsites.net/api/client-login';
 
 const documentTypes = [
   { label: 'ID', value: 'id' },
@@ -39,6 +53,12 @@ const documentTypes = [
 ];
 
 export default function ClientDashboard() {
+  const [loginUniqueId, setLoginUniqueId] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loggedClient, setLoggedClient] = useState<ClientLoginUser | null>(
+    null,
+  );
+
   const [uniqueId, setUniqueId] = useState('');
   const [fileSearch, setFileSearch] = useState('');
   const [documentType, setDocumentType] = useState('');
@@ -67,7 +87,7 @@ export default function ClientDashboard() {
     return result.url as string;
   };
 
-  const getFullName = (client: Submission) =>
+  const getFullName = (client: Submission | ClientLoginUser) =>
     (
       client.name ||
       `${client.firstName || ''} ${client.middleName || ''} ${client.lastName || ''}`
@@ -83,7 +103,7 @@ export default function ClientDashboard() {
 
   const loadClientFiles = async (idValue = uniqueId) => {
     if (!idValue.trim()) {
-      alert('Please enter your Unique ID.');
+      alert('Please enter your Client ID.');
       return;
     }
 
@@ -109,11 +129,72 @@ export default function ClientDashboard() {
     }
   };
 
+  const handleClientLogin = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!loginUniqueId.trim()) {
+      alert('Please enter your Client ID.');
+      return;
+    }
+
+    if (!loginPassword.trim()) {
+      alert('Please enter your password.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const response = await fetch(CLIENT_LOGIN_API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          uniqueId: loginUniqueId.trim(),
+          password: loginPassword.trim(),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Invalid Client ID or password.');
+      }
+
+      setLoggedClient(result.client);
+      setUniqueId(result.client.uniqueId);
+      await loadClientFiles(result.client.uniqueId);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Client login failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setLoggedClient(null);
+    setLoginUniqueId('');
+    setLoginPassword('');
+    setUniqueId('');
+    setFileSearch('');
+    setDocumentType('');
+    setNewFiles(null);
+    setClientFiles([]);
+    setPreviewFile(null);
+    setPreviewUrl('');
+  };
+
   const handleUpload = async () => {
     const cleanUniqueId = uniqueId.trim();
 
+    if (!loggedClient) {
+      alert('Please login first.');
+      return;
+    }
+
     if (!cleanUniqueId) {
-      alert('Please enter Unique ID first.');
+      alert('Client ID is missing.');
       return;
     }
 
@@ -127,7 +208,7 @@ export default function ClientDashboard() {
       return;
     }
 
-    if (!selectedClient) {
+    if (!selectedClient && !loggedClient) {
       alert('Please load the client files first before uploading.');
       return;
     }
@@ -139,10 +220,22 @@ export default function ClientDashboard() {
         const formData = new FormData();
 
         formData.append('uniqueId', cleanUniqueId);
-        formData.append('firstName', selectedClient.firstName || '');
-        formData.append('middleName', selectedClient.middleName || '');
-        formData.append('lastName', selectedClient.lastName || '');
-        formData.append('email', selectedClient.email || '');
+        formData.append(
+          'firstName',
+          selectedClient?.firstName || loggedClient.firstName || '',
+        );
+        formData.append(
+          'middleName',
+          selectedClient?.middleName || loggedClient.middleName || '',
+        );
+        formData.append(
+          'lastName',
+          selectedClient?.lastName || loggedClient.lastName || '',
+        );
+        formData.append(
+          'email',
+          selectedClient?.email || loggedClient.email || '',
+        );
         formData.append('documentType', documentType);
         formData.append('file', file);
 
@@ -161,7 +254,9 @@ export default function ClientDashboard() {
       setNewFiles(null);
       setDocumentType('');
 
-      const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
+      const fileInput = document.querySelector<HTMLInputElement>(
+        'input[type="file"]',
+      );
       if (fileInput) fileInput.value = '';
 
       await loadClientFiles(cleanUniqueId);
@@ -220,19 +315,103 @@ export default function ClientDashboard() {
 
   const isPdfFile = previewFile?.fileName?.toLowerCase().endsWith('.pdf');
 
+  if (!loggedClient) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-cyan-50 px-4 py-8 font-sans">
+        <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
+              <FaLock className="text-2xl" />
+            </div>
+
+            <h1 className="text-3xl font-extrabold text-slate-900">
+              Client Portal Login
+            </h1>
+
+            <p className="mt-2 text-sm text-slate-500">
+              Use your Client ID as username and your last name as password.
+            </p>
+          </div>
+
+          <form onSubmit={handleClientLogin} className="space-y-5">
+            <div>
+              <label className="mb-2 block text-sm font-bold text-slate-700">
+                Client ID
+              </label>
+
+              <div className="relative">
+                <FaIdBadge className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+
+                <input
+                  value={loginUniqueId}
+                  onChange={(event) => setLoginUniqueId(event.target.value)}
+                  placeholder="Example: CL-81BE533A"
+                  className="h-12 w-full rounded-xl border border-slate-300 pl-12 pr-4 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-bold text-slate-700">
+                Password
+              </label>
+
+              <div className="relative">
+                <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+
+                <input
+                  type="password"
+                  value={loginPassword}
+                  onChange={(event) => setLoginPassword(event.target.value)}
+                  placeholder="Enter your last name"
+                  className="h-12 w-full rounded-xl border border-slate-300 pl-12 pr-4 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="h-12 w-full rounded-xl bg-blue-600 font-bold text-white shadow-md hover:bg-blue-700 disabled:bg-blue-300"
+            >
+              {loading ? 'Signing in...' : 'Login'}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-xs text-slate-400">
+            Example password: client last name only.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-cyan-50 px-4 py-8 font-sans">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 rounded-3xl bg-gradient-to-r from-blue-700 via-sky-500 to-cyan-400 p-8 text-white shadow-xl">
-          <p className="mb-2 text-sm font-bold uppercase tracking-[0.4em]">
-            Client Portal
-          </p>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="mb-2 text-sm font-bold uppercase tracking-[0.4em]">
+                Client Portal
+              </p>
 
-          <h1 className="text-4xl font-extrabold">Document Dashboard</h1>
+              <h1 className="text-4xl font-extrabold">Document Dashboard</h1>
 
-          <p className="mt-4 text-blue-50">
-            Use your Unique ID to view your submitted files.
-          </p>
+              <p className="mt-4 text-blue-50">
+                You are logged in as {getFullName(loggedClient) || uniqueId}.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white/20 px-5 text-sm font-bold text-white hover:bg-white/30"
+            >
+              <FaSignOutAlt />
+              Logout
+            </button>
+          </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
@@ -248,7 +427,7 @@ export default function ClientDashboard() {
                     Find Your Files
                   </h2>
                   <p className="text-sm text-slate-500">
-                    Enter the Unique ID sent to your email.
+                    Your files are loaded using your verified Client ID.
                   </p>
                 </div>
               </div>
@@ -256,16 +435,15 @@ export default function ClientDashboard() {
               <div className="grid gap-4">
                 <div>
                   <label className="mb-2 block text-sm font-bold text-slate-700">
-                    Unique ID
+                    Client ID
                   </label>
 
                   <div className="relative">
                     <FaIdBadge className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       value={uniqueId}
-                      onChange={(event) => setUniqueId(event.target.value)}
-                      placeholder="Enter unique ID"
-                      className="h-12 w-full rounded-xl border border-slate-300 pl-12 pr-4 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      readOnly
+                      className="h-12 w-full rounded-xl border border-slate-300 bg-slate-50 pl-12 pr-4 font-semibold text-slate-700 outline-none"
                     />
                   </div>
                 </div>
@@ -277,7 +455,7 @@ export default function ClientDashboard() {
                   className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 font-bold text-white shadow-md hover:bg-blue-700 disabled:bg-blue-300 md:w-fit"
                 >
                   <FaFolderOpen />
-                  {loading ? 'Loading...' : 'Load My Files'}
+                  {loading ? 'Loading...' : 'Refresh My Files'}
                 </button>
               </div>
             </section>
@@ -295,7 +473,7 @@ export default function ClientDashboard() {
                     </h2>
 
                     <p className="mt-1 text-sm text-slate-500">
-                      Unique ID: {selectedClient.uniqueId || 'N/A'}
+                      Client ID: {selectedClient.uniqueId || 'N/A'}
                     </p>
 
                     <p className="text-sm text-slate-500">
@@ -435,8 +613,7 @@ export default function ClientDashboard() {
                           colSpan={4}
                           className="px-6 py-12 text-center text-sm text-slate-500"
                         >
-                          No files loaded yet. Enter your Unique ID and click Load
-                          My Files.
+                          No files found for this Client ID.
                         </td>
                       </tr>
                     )}
@@ -457,7 +634,7 @@ export default function ClientDashboard() {
                   Upload Files
                 </h2>
                 <p className="text-sm text-slate-500">
-                  Upload additional files under this Unique ID.
+                  Upload additional files under your Client ID.
                 </p>
               </div>
             </div>
