@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
+  FaBriefcase,
+  FaCheckCircle,
   FaCloudUploadAlt,
   FaDownload,
+  FaExclamationTriangle,
   FaEye,
   FaFileAlt,
   FaFolderOpen,
@@ -11,6 +14,7 @@ import {
   FaSignOutAlt,
   FaTimes,
   FaUser,
+  FaUserFriends,
 } from 'react-icons/fa';
 
 type Submission = {
@@ -22,6 +26,9 @@ type Submission = {
   lastName?: string;
   name?: string;
   email?: string;
+  phone?: string;
+  leadType?: string;
+  status?: string;
   documentType?: string;
   fileName?: string;
   fileUrl?: string;
@@ -36,6 +43,9 @@ type ClientLoginUser = {
   lastName?: string;
   name?: string;
   email?: string;
+  phone?: string;
+  leadType?: string;
+  status?: string;
 };
 
 const CLIENTS_API = 'https://docsuploadpythonapi.azurewebsites.net/api/clients';
@@ -55,9 +65,7 @@ const documentTypes = [
 export default function ClientDashboard() {
   const [loginUniqueId, setLoginUniqueId] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  const [loggedClient, setLoggedClient] = useState<ClientLoginUser | null>(
-    null,
-  );
+  const [loggedClient, setLoggedClient] = useState<ClientLoginUser | null>(null);
 
   const [uniqueId, setUniqueId] = useState('');
   const [fileSearch, setFileSearch] = useState('');
@@ -96,10 +104,47 @@ export default function ClientDashboard() {
       .trim();
 
   const formatDocumentType = (type?: string) =>
+    documentTypes.find((item) => item.value === type)?.label ||
     (type || 'document')
       .split('-')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+
+  const formatLeadType = (type?: string) => {
+    const cleanType = (type || 'business_owner').toLowerCase();
+
+    if (cleanType === 'referrer') return 'Referrer';
+    return 'Business Owner';
+  };
+
+  const getClientStatus = () =>
+    selectedClient?.status || loggedClient?.status || 'Pending Team Call';
+
+  const uploadedDocumentTypes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          clientFiles
+            .map((file) => file.documentType?.toLowerCase())
+            .filter(Boolean) as string[],
+        ),
+      ),
+    [clientFiles],
+  );
+
+  const missingDocumentTypes = useMemo(
+    () =>
+      documentTypes
+        .map((item) => item.value)
+        .filter((type) => !uploadedDocumentTypes.includes(type)),
+    [uploadedDocumentTypes],
+  );
+
+  const documentProgress = Math.round(
+    (uploadedDocumentTypes.length / documentTypes.length) * 100,
+  );
+
+  const isComplete = missingDocumentTypes.length === 0;
 
   const loadClientFiles = async (idValue = uniqueId) => {
     if (!idValue.trim()) {
@@ -147,9 +192,7 @@ export default function ClientDashboard() {
 
       const response = await fetch(CLIENT_LOGIN_API, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           uniqueId: loginUniqueId.trim(),
           password: loginPassword.trim(),
@@ -208,11 +251,6 @@ export default function ClientDashboard() {
       return;
     }
 
-    if (!selectedClient && !loggedClient) {
-      alert('Please load the client files first before uploading.');
-      return;
-    }
-
     try {
       setLoading(true);
 
@@ -220,22 +258,12 @@ export default function ClientDashboard() {
         const formData = new FormData();
 
         formData.append('uniqueId', cleanUniqueId);
-        formData.append(
-          'firstName',
-          selectedClient?.firstName || loggedClient.firstName || '',
-        );
-        formData.append(
-          'middleName',
-          selectedClient?.middleName || loggedClient.middleName || '',
-        );
-        formData.append(
-          'lastName',
-          selectedClient?.lastName || loggedClient.lastName || '',
-        );
-        formData.append(
-          'email',
-          selectedClient?.email || loggedClient.email || '',
-        );
+        formData.append('leadType', loggedClient.leadType || selectedClient?.leadType || 'business_owner');
+        formData.append('phone', loggedClient.phone || selectedClient?.phone || '');
+        formData.append('firstName', selectedClient?.firstName || loggedClient.firstName || '');
+        formData.append('middleName', selectedClient?.middleName || loggedClient.middleName || '');
+        formData.append('lastName', selectedClient?.lastName || loggedClient.lastName || '');
+        formData.append('email', selectedClient?.email || loggedClient.email || '');
         formData.append('documentType', documentType);
         formData.append('file', file);
 
@@ -254,9 +282,7 @@ export default function ClientDashboard() {
       setNewFiles(null);
       setDocumentType('');
 
-      const fileInput = document.querySelector<HTMLInputElement>(
-        'input[type="file"]',
-      );
+      const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
       if (fileInput) fileInput.value = '';
 
       await loadClientFiles(cleanUniqueId);
@@ -414,6 +440,41 @@ export default function ClientDashboard() {
           </div>
         </div>
 
+        <div className="mb-6 grid gap-4 md:grid-cols-4">
+          <div className="rounded-2xl bg-white p-5 shadow-lg">
+            <p className="text-xs font-bold uppercase text-slate-400">Lead Type</p>
+            <div className="mt-3 flex items-center gap-2 text-lg font-extrabold text-slate-900">
+              {formatLeadType(selectedClient?.leadType || loggedClient.leadType) === 'Referrer' ? (
+                <FaUserFriends className="text-purple-600" />
+              ) : (
+                <FaBriefcase className="text-blue-600" />
+              )}
+              {formatLeadType(selectedClient?.leadType || loggedClient.leadType)}
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow-lg">
+            <p className="text-xs font-bold uppercase text-slate-400">Status</p>
+            <p className="mt-3 rounded-full bg-orange-100 px-3 py-1 text-sm font-extrabold text-orange-700">
+              {getClientStatus()}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow-lg">
+            <p className="text-xs font-bold uppercase text-slate-400">Documents</p>
+            <p className="mt-3 text-2xl font-extrabold text-slate-900">
+              {uploadedDocumentTypes.length}/{documentTypes.length}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow-lg">
+            <p className="text-xs font-bold uppercase text-slate-400">Progress</p>
+            <p className="mt-3 text-2xl font-extrabold text-slate-900">
+              {documentProgress}%
+            </p>
+          </div>
+        </div>
+
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
           <div className="space-y-6">
             <section className="rounded-3xl bg-white p-6 shadow-lg">
@@ -460,29 +521,105 @@ export default function ClientDashboard() {
               </div>
             </section>
 
-            {selectedClient && (
-              <section className="rounded-3xl bg-white p-6 shadow-lg">
-                <div className="flex items-center gap-5">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-blue-700">
-                    <FaUser />
-                  </div>
+            <section className="rounded-3xl bg-white p-6 shadow-lg">
+              <div className="flex items-center gap-5">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+                  <FaUser />
+                </div>
 
-                  <div>
-                    <h2 className="text-xl font-extrabold text-slate-900">
-                      {getFullName(selectedClient)}
-                    </h2>
+                <div>
+                  <h2 className="text-xl font-extrabold text-slate-900">
+                    {getFullName(selectedClient || loggedClient)}
+                  </h2>
 
-                    <p className="mt-1 text-sm text-slate-500">
-                      Client ID: {selectedClient.uniqueId || 'N/A'}
-                    </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Client ID: {selectedClient?.uniqueId || loggedClient.uniqueId}
+                  </p>
 
-                    <p className="text-sm text-slate-500">
-                      Email: {selectedClient.email || 'N/A'}
-                    </p>
+                  <p className="text-sm text-slate-500">
+                    Email: {selectedClient?.email || loggedClient.email || 'N/A'}
+                  </p>
+
+                  <p className="text-sm text-slate-500">
+                    Phone: {selectedClient?.phone || loggedClient.phone || 'N/A'}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-3xl bg-white p-6 shadow-lg">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-extrabold text-slate-900">
+                    Document Checklist
+                  </h2>
+                  <p className="text-sm text-slate-500">
+                    Outstanding and submitted documents for your portal.
+                  </p>
+                </div>
+
+                <span
+                  className={`rounded-full px-4 py-2 text-xs font-extrabold ${
+                    isComplete
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-red-100 text-red-700'
+                  }`}
+                >
+                  {isComplete ? 'Complete' : 'Incomplete'}
+                </span>
+              </div>
+
+              <div className="mb-5 h-3 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-blue-600"
+                  style={{ width: `${documentProgress}%` }}
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+                  <h3 className="mb-3 flex items-center gap-2 font-extrabold text-red-700">
+                    <FaExclamationTriangle />
+                    Outstanding Documents
+                  </h3>
+
+                  <div className="space-y-2">
+                    {missingDocumentTypes.length > 0 ? (
+                      missingDocumentTypes.map((type) => (
+                        <p key={type} className="rounded-xl bg-white px-4 py-3 text-sm font-bold text-red-700">
+                          {formatDocumentType(type)}
+                        </p>
+                      ))
+                    ) : (
+                      <p className="rounded-xl bg-white px-4 py-3 text-sm font-bold text-green-700">
+                        No outstanding documents.
+                      </p>
+                    )}
                   </div>
                 </div>
-              </section>
-            )}
+
+                <div className="rounded-2xl border border-green-200 bg-green-50 p-4">
+                  <h3 className="mb-3 flex items-center gap-2 font-extrabold text-green-700">
+                    <FaCheckCircle />
+                    Submitted Documents
+                  </h3>
+
+                  <div className="space-y-2">
+                    {uploadedDocumentTypes.length > 0 ? (
+                      uploadedDocumentTypes.map((type) => (
+                        <p key={type} className="rounded-xl bg-white px-4 py-3 text-sm font-bold text-green-700">
+                          {formatDocumentType(type)}
+                        </p>
+                      ))
+                    ) : (
+                      <p className="rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-500">
+                        No documents submitted yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
 
             {clientFiles.length > 0 && (
               <section className="rounded-3xl bg-white p-6 shadow-lg">
@@ -524,8 +661,7 @@ export default function ClientDashboard() {
                       My Files
                     </h2>
                     <p className="text-sm text-slate-500">
-                      {filteredFiles.length} file
-                      {filteredFiles.length !== 1 ? 's' : ''} found.
+                      {filteredFiles.length} file{filteredFiles.length !== 1 ? 's' : ''} found.
                     </p>
                   </div>
                 </div>
@@ -535,27 +671,16 @@ export default function ClientDashboard() {
                 <table className="min-w-[780px] w-full">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">
-                        File Name
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">
-                        Document Type
-                      </th>
-                      <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">
-                        Submitted
-                      </th>
-                      <th className="px-6 py-4 text-center text-sm font-bold text-slate-700">
-                        Action
-                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">File Name</th>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Document Type</th>
+                      <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Submitted</th>
+                      <th className="px-6 py-4 text-center text-sm font-bold text-slate-700">Action</th>
                     </tr>
                   </thead>
 
                   <tbody>
                     {filteredFiles.map((file) => (
-                      <tr
-                        key={`${file.id}-${file.fileName}`}
-                        className="border-t border-slate-200 hover:bg-slate-50"
-                      >
+                      <tr key={`${file.id}-${file.fileName}`} className="border-t border-slate-200 hover:bg-slate-50">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="rounded-xl bg-slate-100 p-3 text-slate-600">
@@ -609,10 +734,7 @@ export default function ClientDashboard() {
 
                     {filteredFiles.length === 0 && (
                       <tr>
-                        <td
-                          colSpan={4}
-                          className="px-6 py-12 text-center text-sm text-slate-500"
-                        >
+                        <td colSpan={4} className="px-6 py-12 text-center text-sm text-slate-500">
                           No files found for this Client ID.
                         </td>
                       </tr>
@@ -682,10 +804,7 @@ export default function ClientDashboard() {
 
                 <div className="space-y-2">
                   {Array.from(newFiles).map((file) => (
-                    <p
-                      key={file.name}
-                      className="truncate rounded-lg bg-white px-3 py-2 text-sm text-slate-600"
-                    >
+                    <p key={file.name} className="truncate rounded-lg bg-white px-3 py-2 text-sm text-slate-600">
                       {file.name}
                     </p>
                   ))}

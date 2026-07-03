@@ -17,11 +17,18 @@ const documentOptions = [
   { label: 'Other', value: 'other' },
 ];
 
+const leadTypeOptions = [
+  { label: 'Business Owner', value: 'business_owner' },
+  { label: 'Referrer', value: 'referrer' },
+];
+
 const initialFormData = {
+  leadType: 'business_owner',
   firstName: '',
   middleName: '',
   lastName: '',
   email: '',
+  phone: '',
   documentTypes: [] as string[],
   documentFiles: {} as Record<string, File | null>,
   sssNumber: '',
@@ -82,6 +89,10 @@ export default function HomePage() {
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
 
+  const formatLeadType = (type: string) =>
+    leadTypeOptions.find((item) => item.value === type)?.label ||
+    'Business Owner';
+
   const getMissingRequirements = (data: typeof initialFormData) => {
     const missing: string[] = [];
 
@@ -105,10 +116,12 @@ export default function HomePage() {
       azureFormData.append('uniqueId', existingUniqueId);
     }
 
+    azureFormData.append('leadType', formData.leadType);
     azureFormData.append('firstName', formData.firstName);
     azureFormData.append('middleName', formData.middleName);
     azureFormData.append('lastName', formData.lastName);
     azureFormData.append('email', formData.email);
+    azureFormData.append('phone', formData.phone);
     azureFormData.append('documentType', documentType);
     azureFormData.append('file', file);
 
@@ -118,6 +131,8 @@ export default function HomePage() {
     });
 
     const result = await response.json();
+
+    console.log('Azure upload result:', result);
 
     if (!response.ok || !result.success) {
       throw new Error(result.message || 'Azure upload failed.');
@@ -129,6 +144,9 @@ export default function HomePage() {
       clientId: number;
       uniqueId: string;
       blobUrl: string;
+      leadType?: string;
+      status?: string;
+      ghlSync?: unknown;
     };
   };
 
@@ -256,6 +274,7 @@ export default function HomePage() {
 
       const missingRequirements = getMissingRequirements(formData);
       const isIncomplete = missingRequirements.length > 0;
+      const leadTypeLabel = formatLeadType(formData.leadType);
 
       const newNotification = {
         id: Date.now(),
@@ -271,6 +290,8 @@ export default function HomePage() {
         time: submittedAt,
         unread: true,
         type: isIncomplete ? 'incomplete' : 'submission',
+        leadType: leadTypeLabel,
+        status: 'Pending Team Call',
         documentType: formData.documentTypes[0],
         redirectTo: '/dashboard',
       };
@@ -291,6 +312,9 @@ export default function HomePage() {
             : 'New Document Submission',
           unique_id: uniqueId,
           full_name: fullName,
+          phone: formData.phone || 'N/A',
+          lead_type: leadTypeLabel,
+          status: 'Pending Team Call',
           document_type: selectedDocumentLabels,
           file_name: uploadedFileNames,
           submitted_at: submittedAt,
@@ -321,10 +345,10 @@ export default function HomePage() {
 
       alert(
         isIncomplete
-          ? `Document submitted successfully! Unique ID: ${uniqueId}\nMissing: ${missingRequirements.join(
+          ? `Document submitted successfully!\nUnique ID: ${uniqueId}\nLead Type: ${leadTypeLabel}\nStatus: Pending Team Call\nMissing: ${missingRequirements.join(
               ', ',
             )}`
-          : `Document submitted successfully! Unique ID: ${uniqueId}`,
+          : `Document submitted successfully!\nUnique ID: ${uniqueId}\nLead Type: ${leadTypeLabel}\nStatus: Pending Team Call`,
       );
 
       setFormData(initialFormData);
@@ -359,6 +383,40 @@ export default function HomePage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Lead Type
+              </label>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {leadTypeOptions.map((type) => {
+                  const isSelected = formData.leadType === type.value;
+
+                  return (
+                    <button
+                      key={type.value}
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          leadType: type.value,
+                        }))
+                      }
+                      className={`rounded-2xl border p-4 text-left transition ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100'
+                          : 'border-slate-300 bg-white hover:border-blue-300'
+                      }`}
+                    >
+                      <span className="text-sm font-bold text-slate-800">
+                        {type.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="grid gap-5 md:grid-cols-3">
               <input
                 type="text"
@@ -396,6 +454,16 @@ export default function HomePage() {
               value={formData.email}
               onChange={handleChange}
               placeholder="Email Address"
+              className="h-12 w-full rounded-xl border border-slate-300 px-4 text-sm outline-none focus:border-orange-500"
+              required
+            />
+
+            <input
+              type="tel"
+              name="phone"
+              value={formData.phone}
+              onChange={handleChange}
+              placeholder="Phone Number"
               className="h-12 w-full rounded-xl border border-slate-300 px-4 text-sm outline-none focus:border-orange-500"
               required
             />

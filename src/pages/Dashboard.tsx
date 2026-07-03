@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  FaBriefcase,
   FaCheckCircle,
   FaDownload,
   FaExclamationTriangle,
   FaEye,
   FaFileAlt,
-  FaIdCard,
+  FaPhone,
   FaSearch,
   FaTimes,
-  FaUsers,
+  FaUserFriends,
 } from 'react-icons/fa';
 import DashboardLayout from '../components/layout/layout';
 
-const CLIENTS_API_URL = 'https://docsuploadpythonapi.azurewebsites.net/api/clients';
+const CLIENTS_API = 'https://docsuploadpythonapi.azurewebsites.net/api/clients';
 const FILE_URL_API = 'https://docsuploadpythonapi.azurewebsites.net/api/file-url';
 
 const requiredDocuments = [
@@ -31,7 +32,7 @@ const documentLabels: Record<string, string> = {
   other: 'Other',
 };
 
-type Submission = {
+type Client = {
   id: number;
   clientId?: number;
   uniqueId?: string;
@@ -40,6 +41,9 @@ type Submission = {
   lastName?: string;
   name?: string;
   email?: string;
+  phone?: string;
+  leadType?: string;
+  status?: string;
   documentType?: string;
   fileName?: string;
   fileUrl?: string;
@@ -48,18 +52,18 @@ type Submission = {
 
 type ClientGroup = {
   key: string;
-  client: Submission;
-  files: Submission[];
+  client: Client;
+  files: Client[];
   uploadedDocuments: string[];
   missingDocuments: string[];
   isComplete: boolean;
+  progress: number;
 };
 
-export default function Dashboard() {
+export default function Clients() {
   const [search, setSearch] = useState('');
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [selectedSubmission, setSelectedSubmission] =
-    useState<Submission | null>(null);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -81,34 +85,34 @@ export default function Dashboard() {
     return result.url as string;
   };
 
-  useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        setLoading(true);
-        setError('');
+  const loadClients = async () => {
+    try {
+      setLoading(true);
+      setError('');
 
-        const response = await fetch(CLIENTS_API_URL);
-        const result = await response.json();
+      const response = await fetch(CLIENTS_API);
+      const result = await response.json();
 
-        if (!response.ok || !result.success) {
-          throw new Error(result.message || 'Failed to fetch clients.');
-        }
-
-        setSubmissions(result.clients || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load clients.');
-      } finally {
-        setLoading(false);
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Failed to load clients.');
       }
-    };
 
-    fetchClients();
+      setClients(result.clients || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load clients.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadClients();
   }, []);
 
-  const getFullName = (item: Submission) =>
+  const getFullName = (client: Client) =>
     (
-      item.name ||
-      `${item.firstName || ''} ${item.middleName || ''} ${item.lastName || ''}`
+      client.name ||
+      `${client.firstName || ''} ${client.middleName || ''} ${client.lastName || ''}`
     )
       .replace(/\s+/g, ' ')
       .trim();
@@ -120,18 +124,30 @@ export default function Dashboard() {
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
 
+  const formatLeadType = (type?: string) => {
+    const value = (type || 'business_owner').toLowerCase();
+
+    if (value === 'referrer') return 'Referrer';
+
+    return 'Business Owner';
+  };
+
+  const getStatus = (client: Client) => client.status || 'Pending Team Call';
+
   const clientGroups = useMemo<ClientGroup[]>(() => {
-    const grouped = submissions.reduce<Record<string, Submission[]>>((acc, item) => {
-      const key = item.uniqueId || String(item.clientId || item.id);
+    const map = new Map<string, Client[]>();
 
-      if (!acc[key]) acc[key] = [];
+    clients.forEach((client) => {
+      const key = client.uniqueId || String(client.clientId || client.id);
 
-      acc[key].push(item);
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
 
-      return acc;
-    }, {});
+      map.get(key)?.push(client);
+    });
 
-    return Object.entries(grouped).map(([key, files]) => {
+    return Array.from(map.entries()).map(([key, files]) => {
       const uploadedDocuments = Array.from(
         new Set(
           files
@@ -151,58 +167,64 @@ export default function Dashboard() {
         uploadedDocuments,
         missingDocuments,
         isComplete: missingDocuments.length === 0,
+        progress: Math.round(
+          (uploadedDocuments.length / requiredDocuments.length) * 100,
+        ),
       };
     });
-  }, [submissions]);
+  }, [clients]);
 
-  const incompleteClients = useMemo(
-    () => clientGroups.filter((group) => !group.isComplete),
-    [clientGroups],
-  );
+  const filteredGroups = useMemo(() => {
+    const searchValue = search.toLowerCase().trim();
 
-  const completeClients = useMemo(
-    () => clientGroups.filter((group) => group.isComplete),
-    [clientGroups],
-  );
-
-  const filteredSubmissions = useMemo(() => {
-    const keyword = search.toLowerCase();
-
-    return submissions.filter((item) => {
-      const fullName = getFullName(item);
+    return clientGroups.filter((group) => {
+      const fullName = getFullName(group.client).toLowerCase();
+      const leadType = formatLeadType(group.client.leadType).toLowerCase();
+      const status = getStatus(group.client).toLowerCase();
 
       return (
-        fullName.toLowerCase().includes(keyword) ||
-        (item.uniqueId || '').toLowerCase().includes(keyword) ||
-        (item.email || '').toLowerCase().includes(keyword) ||
-        (item.fileName || '').toLowerCase().includes(keyword)
+        !searchValue ||
+        fullName.includes(searchValue) ||
+        (group.client.email || '').toLowerCase().includes(searchValue) ||
+        (group.client.phone || '').toLowerCase().includes(searchValue) ||
+        (group.client.uniqueId || '').toLowerCase().includes(searchValue) ||
+        leadType.includes(searchValue) ||
+        status.includes(searchValue) ||
+        group.files.some((file) =>
+          (file.fileName || '').toLowerCase().includes(searchValue),
+        )
       );
     });
-  }, [search, submissions]);
+  }, [clientGroups, search]);
 
-  const idCount = submissions.filter(
-    (item) => item.documentType?.toLowerCase() === 'id',
+  const completeCount = clientGroups.filter((group) => group.isComplete).length;
+  const incompleteCount = clientGroups.filter((group) => !group.isComplete).length;
+  const businessOwnerCount = clientGroups.filter(
+    (group) => formatLeadType(group.client.leadType) === 'Business Owner',
+  ).length;
+  const referrerCount = clientGroups.filter(
+    (group) => formatLeadType(group.client.leadType) === 'Referrer',
   ).length;
 
-  const handlePreview = async (item: Submission) => {
+  const handlePreview = async (client: Client) => {
     try {
-      setSelectedSubmission(item);
+      setSelectedClient(client);
       setPreviewUrl('');
       setPreviewLoading(true);
 
-      const secureUrl = await getSecureFileUrl(item.fileUrl);
+      const secureUrl = await getSecureFileUrl(client.fileUrl);
       setPreviewUrl(secureUrl);
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to open file.');
-      setSelectedSubmission(null);
+      setSelectedClient(null);
     } finally {
       setPreviewLoading(false);
     }
   };
 
-  const handleDownload = async (item: Submission) => {
+  const handleDownload = async (client: Client) => {
     try {
-      const secureUrl = await getSecureFileUrl(item.fileUrl);
+      const secureUrl = await getSecureFileUrl(client.fileUrl);
       window.open(secureUrl, '_blank');
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to download file.');
@@ -210,172 +232,37 @@ export default function Dashboard() {
   };
 
   const handleClosePreview = () => {
-    setSelectedSubmission(null);
+    setSelectedClient(null);
     setPreviewUrl('');
   };
 
   const isImageFile =
-    selectedSubmission?.fileName
-      ?.toLowerCase()
-      .match(/\.(jpg|jpeg|png|gif|webp)$/);
+    selectedClient?.fileName?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/);
 
-  const isPdfFile = selectedSubmission?.fileName?.toLowerCase().endsWith('.pdf');
+  const isPdfFile = selectedClient?.fileName?.toLowerCase().endsWith('.pdf');
 
   return (
     <DashboardLayout
-      title="Client Summary"
-      subtitle="Monitor submitted client documents from Azure SQL."
+      title="Clients"
+      subtitle="View submitted clients, lead type, team call status, and document completion."
     >
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-8 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
-          <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-            <p className="text-sm font-medium text-slate-500">Total Clients</p>
-            <div className="mt-2 flex items-center justify-between">
-              <h2 className="text-3xl font-extrabold text-slate-900">
-                {clientGroups.length}
-              </h2>
-              <FaUsers className="text-3xl text-orange-500" />
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-            <p className="text-sm font-medium text-slate-500">Complete</p>
-            <div className="mt-2 flex items-center justify-between">
-              <h2 className="text-3xl font-extrabold text-green-600">
-                {completeClients.length}
-              </h2>
-              <FaCheckCircle className="text-3xl text-green-500" />
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-            <p className="text-sm font-medium text-slate-500">Incomplete</p>
-            <div className="mt-2 flex items-center justify-between">
-              <h2 className="text-3xl font-extrabold text-red-600">
-                {incompleteClients.length}
-              </h2>
-              <FaExclamationTriangle className="text-3xl text-red-500" />
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-            <p className="text-sm font-medium text-slate-500">ID Documents</p>
-            <div className="mt-2 flex items-center justify-between">
-              <h2 className="text-3xl font-extrabold text-slate-900">
-                {idCount}
-              </h2>
-              <FaIdCard className="text-3xl text-blue-500" />
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-            <p className="text-sm font-medium text-slate-500">Total Files</p>
-            <div className="mt-2 flex items-center justify-between">
-              <h2 className="text-3xl font-extrabold text-slate-900">
-                {submissions.length}
-              </h2>
-              <FaFileAlt className="text-3xl text-green-500" />
-            </div>
-          </div>
-        </div>
-
-        {!loading && !error && (
-          <div className="mb-8 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-            <div className="border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-extrabold text-slate-900">
-                Incomplete Client Documents
-              </h2>
-              <p className="text-sm text-slate-500">
-                Clients missing one or more required document types.
-              </p>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-[900px] w-full text-left text-sm">
-                <thead className="bg-red-50 text-xs uppercase text-red-700">
-                  <tr>
-                    <th className="px-5 py-4">Unique ID</th>
-                    <th className="px-5 py-4">Client</th>
-                    <th className="px-5 py-4">Email</th>
-                    <th className="px-5 py-4">Uploaded</th>
-                    <th className="px-5 py-4">Missing Documents</th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-slate-100">
-                  {incompleteClients.map((group) => (
-                    <tr key={group.key} className="hover:bg-slate-50">
-                      <td className="px-5 py-4 font-bold text-slate-900">
-                        {group.client.uniqueId || group.key}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        {getFullName(group.client) || '-'}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        {group.client.email || '-'}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="flex flex-wrap gap-2">
-                          {group.uploadedDocuments.map((doc) => (
-                            <span
-                              key={doc}
-                              className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700"
-                            >
-                              {formatDocumentType(doc)}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="flex flex-wrap gap-2">
-                          {group.missingDocuments.map((doc) => (
-                            <span
-                              key={doc}
-                              className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700"
-                            >
-                              {formatDocumentType(doc)}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-
-                  {incompleteClients.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="px-5 py-10 text-center text-slate-500"
-                      >
-                        All clients have complete documents.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        <div className="mb-6 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <div className="mx-auto max-w-7xl space-y-5">
+        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <div className="relative">
             <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+
             <input
               type="text"
-              placeholder="Search unique ID, name, email, or file..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search unique ID, name, email, phone, lead type, status, or file..."
               className="h-12 w-full rounded-xl border border-slate-300 pl-12 pr-4 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
             />
           </div>
         </div>
 
         {loading && (
-          <div className="rounded-2xl bg-white p-10 text-center font-bold text-slate-500 shadow-sm">
+          <div className="rounded-2xl bg-white p-10 text-center font-bold text-slate-500 shadow-sm ring-1 ring-slate-200">
             Loading clients from Azure...
           </div>
         )}
@@ -387,149 +274,539 @@ export default function Dashboard() {
         )}
 
         {!loading && !error && (
-          <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-            <div className="border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-extrabold text-slate-900">
-                All Submitted Files
-              </h2>
-              <p className="text-sm text-slate-500">
-                {filteredSubmissions.length} file
-                {filteredSubmissions.length !== 1 ? 's' : ''} found.
-              </p>
+          <>
+            <div className="grid gap-4 md:grid-cols-5">
+              <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+                <p className="text-sm font-bold text-slate-500">Clients</p>
+                <p className="mt-2 text-3xl font-extrabold text-slate-900">
+                  {clientGroups.length}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+                <p className="text-sm font-bold text-blue-700">Business Owners</p>
+                <p className="mt-2 text-3xl font-extrabold text-blue-700">
+                  {businessOwnerCount}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-purple-200 bg-purple-50 p-5 shadow-sm">
+                <p className="text-sm font-bold text-purple-700">Referrers</p>
+                <p className="mt-2 text-3xl font-extrabold text-purple-700">
+                  {referrerCount}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm">
+                <p className="text-sm font-bold text-green-700">Complete</p>
+                <p className="mt-2 text-3xl font-extrabold text-green-700">
+                  {completeCount}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm">
+                <p className="text-sm font-bold text-red-700">Incomplete</p>
+                <p className="mt-2 text-3xl font-extrabold text-red-700">
+                  {incompleteCount}
+                </p>
+              </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                  <tr>
-                    <th className="px-5 py-4">Unique ID</th>
-                    <th className="px-5 py-4">Client</th>
-                    <th className="px-5 py-4">Email</th>
-                    <th className="px-5 py-4">Type</th>
-                    <th className="px-5 py-4">File</th>
-                    <th className="px-5 py-4">Submitted</th>
-                    <th className="px-5 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
+            <div className="space-y-4 lg:hidden">
+              {filteredGroups.map((group) => {
+                const leadTypeLabel = formatLeadType(group.client.leadType);
 
-                <tbody className="divide-y divide-slate-100">
-                  {filteredSubmissions.map((item) => (
-                    <tr
-                      key={`${item.id}-${item.fileName}`}
-                      className="hover:bg-slate-50"
-                    >
-                      <td className="px-5 py-4 font-bold text-slate-900">
-                        {item.uniqueId || '-'}
-                      </td>
-                      <td className="px-5 py-4">{getFullName(item) || '-'}</td>
-                      <td className="px-5 py-4">{item.email || '-'}</td>
-                      <td className="px-5 py-4">
-                        {formatDocumentType(item.documentType)}
-                      </td>
-                      <td className="px-5 py-4">{item.fileName || '-'}</td>
-                      <td className="px-5 py-4">{item.submittedAt || '-'}</td>
-                      <td className="px-5 py-4">
-                        <div className="flex justify-end gap-2">
+                return (
+                  <div
+                    key={group.key}
+                    className={`rounded-2xl bg-white p-5 shadow-sm ring-1 ${
+                      group.isComplete ? 'ring-green-200' : 'ring-red-200'
+                    }`}
+                  >
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-lg font-extrabold text-slate-900">
+                          {getFullName(group.client) || '-'}
+                        </h3>
+
+                        <p className="truncate text-sm text-slate-500">
+                          {group.client.email || 'No email'}
+                        </p>
+
+                        <p className="mt-1 flex items-center gap-2 truncate text-xs text-slate-400">
+                          <FaPhone />
+                          {group.client.phone || 'No phone'}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
+                          group.isComplete
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}
+                      >
+                        {group.isComplete ? 'Complete' : 'Incomplete'}
+                      </span>
+                    </div>
+
+                    <div className="mb-4 flex flex-wrap gap-2">
+                      <span
+                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ${
+                          leadTypeLabel === 'Referrer'
+                            ? 'bg-purple-100 text-purple-700'
+                            : 'bg-blue-100 text-blue-700'
+                        }`}
+                      >
+                        {leadTypeLabel === 'Referrer' ? (
+                          <FaUserFriends />
+                        ) : (
+                          <FaBriefcase />
+                        )}
+                        {leadTypeLabel}
+                      </span>
+
+                      <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+                        {getStatus(group.client)}
+                      </span>
+
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                        {group.files.length} file{group.files.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+
+                    <div className="mb-4">
+                      <div className="mb-2 flex justify-between text-xs font-bold text-slate-500">
+                        <span>Document Progress</span>
+                        <span>{group.progress}%</span>
+                      </div>
+                      <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className={`h-full rounded-full ${
+                            group.isComplete ? 'bg-green-500' : 'bg-orange-500'
+                          }`}
+                          style={{ width: `${group.progress}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 text-sm">
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <p className="text-xs font-bold uppercase text-slate-400">
+                          Unique ID
+                        </p>
+                        <p className="mt-1 font-semibold text-slate-800">
+                          {group.client.uniqueId || '-'}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <p className="text-xs font-bold uppercase text-slate-400">
+                          Uploaded
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {group.uploadedDocuments.length > 0 ? (
+                            group.uploadedDocuments.map((doc) => (
+                              <span
+                                key={doc}
+                                className="rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-700"
+                              >
+                                {formatDocumentType(doc)}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500">
+                              None
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <p className="text-xs font-bold uppercase text-slate-400">
+                          Missing
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {group.missingDocuments.length > 0 ? (
+                            group.missingDocuments.map((doc) => (
+                              <span
+                                key={doc}
+                                className="rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700"
+                              >
+                                {formatDocumentType(doc)}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-700">
+                              None
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      {group.files.slice(0, 1).map((file) => (
+                        <div key={`${file.id}-${file.fileName}`} className="contents">
                           <button
                             type="button"
-                            onClick={() => handlePreview(item)}
-                            className="rounded-lg bg-blue-500 px-3 py-2 text-white hover:bg-blue-600"
+                            onClick={() => handlePreview(file)}
+                            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-500 text-sm font-bold text-white hover:bg-blue-600"
                           >
                             <FaEye />
+                            View
                           </button>
+
                           <button
                             type="button"
-                            onClick={() => handleDownload(item)}
-                            className="rounded-lg bg-orange-500 px-3 py-2 text-white hover:bg-orange-600"
+                            onClick={() => handleDownload(file)}
+                            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 text-sm font-bold text-white hover:bg-orange-600"
                           >
                             <FaDownload />
+                            Download
                           </button>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-
-                  {filteredSubmissions.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        className="px-5 py-10 text-center text-slate-500"
-                      >
-                        No clients found.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
+
+            <div className="hidden overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 lg:block">
+              <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    Client List
+                  </h2>
+                  <p className="text-sm text-slate-500">
+                    {filteredGroups.length} client
+                    {filteredGroups.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+
+                <FaFileAlt className="text-2xl text-orange-500" />
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-[1450px]">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      {[
+                        'Unique ID',
+                        'Lead Type',
+                        'Name',
+                        'Email / Phone',
+                        'Team Status',
+                        'Docs Status',
+                        'Progress',
+                        'Uploaded',
+                        'Missing',
+                        'Files',
+                        'Action',
+                      ].map((header) => (
+                        <th
+                          key={header}
+                          className={`px-6 py-4 text-sm font-extrabold uppercase tracking-wide text-slate-600 ${
+                            header === 'Action' ? 'text-center' : 'text-left'
+                          }`}
+                        >
+                          {header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-200">
+                    {filteredGroups.map((group) => {
+                      const leadTypeLabel = formatLeadType(group.client.leadType);
+
+                      return (
+                        <tr key={group.key} className="hover:bg-slate-50">
+                          <td className="px-6 py-4 text-sm font-semibold text-slate-700">
+                            {group.client.uniqueId || '-'}
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <span
+                              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ${
+                                leadTypeLabel === 'Referrer'
+                                  ? 'bg-purple-100 text-purple-700'
+                                  : 'bg-blue-100 text-blue-700'
+                              }`}
+                            >
+                              {leadTypeLabel === 'Referrer' ? (
+                                <FaUserFriends />
+                              ) : (
+                                <FaBriefcase />
+                              )}
+                              {leadTypeLabel}
+                            </span>
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <p className="font-bold text-slate-900">
+                              {getFullName(group.client) || '-'}
+                            </p>
+                          </td>
+
+                          <td className="px-6 py-4 text-sm text-slate-600">
+                            <p>{group.client.email || '-'}</p>
+                            <p className="mt-1 flex items-center gap-2 text-xs text-slate-400">
+                              <FaPhone />
+                              {group.client.phone || 'No phone'}
+                            </p>
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+                              {getStatus(group.client)}
+                            </span>
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <span
+                              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ${
+                                group.isComplete
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-red-100 text-red-700'
+                              }`}
+                            >
+                              {group.isComplete ? (
+                                <FaCheckCircle />
+                              ) : (
+                                <FaExclamationTriangle />
+                              )}
+                              {group.isComplete ? 'Complete' : 'Incomplete'}
+                            </span>
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <div className="w-32">
+                              <div className="mb-1 flex justify-between text-xs font-bold text-slate-500">
+                                <span>{group.progress}%</span>
+                              </div>
+                              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                  className={`h-full rounded-full ${
+                                    group.isComplete
+                                      ? 'bg-green-500'
+                                      : 'bg-orange-500'
+                                  }`}
+                                  style={{ width: `${group.progress}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <div className="flex flex-wrap gap-2">
+                              {group.uploadedDocuments.map((doc) => (
+                                <span
+                                  key={doc}
+                                  className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700"
+                                >
+                                  {formatDocumentType(doc)}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <div className="flex flex-wrap gap-2">
+                              {group.missingDocuments.length > 0 ? (
+                                group.missingDocuments.map((doc) => (
+                                  <span
+                                    key={doc}
+                                    className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700"
+                                  >
+                                    {formatDocumentType(doc)}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
+                                  None
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="px-6 py-4 text-sm font-semibold text-slate-700">
+                            {group.files.length}
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <div className="flex justify-center gap-2">
+                              {group.files.slice(0, 1).map((file) => (
+                                <div
+                                  key={`${file.id}-${file.fileName}`}
+                                  className="contents"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePreview(file)}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
+                                  >
+                                    <FaEye />
+                                    View
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownload(file)}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
+                                  >
+                                    <FaDownload />
+                                    Download
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                    {filteredGroups.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={11}
+                          className="px-6 py-12 text-center text-sm text-slate-500"
+                        >
+                          No clients found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
-      {selectedSubmission && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b p-5">
-              <h2 className="text-xl font-extrabold">
-                {selectedSubmission.fileName || 'File Preview'}
-              </h2>
+      {selectedClient && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-900">
+                  Client File Details
+                </h2>
+                <p className="text-sm text-slate-500">
+                  View submitted client information and uploaded file.
+                </p>
+              </div>
+
               <button
                 type="button"
                 onClick={handleClosePreview}
-                className="rounded-xl bg-slate-100 p-3 hover:bg-slate-200"
+                className="rounded-xl bg-slate-100 p-3 text-slate-600 hover:bg-slate-200"
               >
                 <FaTimes />
               </button>
             </div>
 
-            <div className="bg-slate-100 p-4">
-              {previewLoading && (
-                <div className="flex h-[70vh] items-center justify-center rounded-2xl bg-white text-slate-500">
-                  Loading secure preview...
-                </div>
-              )}
+            <div className="max-h-[calc(90vh-80px)] overflow-y-auto p-6">
+              <div className="mb-6 grid gap-4 md:grid-cols-2">
+                {[
+                  ['Unique ID', selectedClient.uniqueId || '-'],
+                  ['Lead Type', formatLeadType(selectedClient.leadType)],
+                  ['Team Status', getStatus(selectedClient)],
+                  ['Full Name', getFullName(selectedClient) || '-'],
+                  ['Email', selectedClient.email || '-'],
+                  ['Phone', selectedClient.phone || '-'],
+                  [
+                    'Document Type',
+                    formatDocumentType(selectedClient.documentType),
+                  ],
+                  ['File Name', selectedClient.fileName || '-'],
+                  ['Submitted', selectedClient.submittedAt || '-'],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-xs font-bold uppercase text-slate-400">
+                      {label}
+                    </p>
+                    <p className="mt-1 break-words font-semibold text-slate-900">
+                      {value}
+                    </p>
+                  </div>
+                ))}
+              </div>
 
-              {!previewLoading && previewUrl && isImageFile && (
-                <img
-                  src={previewUrl}
-                  alt={selectedSubmission.fileName || 'Preview'}
-                  className="mx-auto max-h-[70vh] rounded-2xl bg-white object-contain"
-                />
-              )}
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="mb-3 text-sm font-bold text-slate-700">
+                  File Preview
+                </p>
 
-              {!previewLoading && previewUrl && isPdfFile && (
-                <iframe
-                  src={previewUrl}
-                  title={selectedSubmission.fileName}
-                  className="h-[70vh] w-full rounded-2xl bg-white"
-                />
-              )}
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-4">
+                  <div>
+                    <p className="break-all font-semibold text-slate-900">
+                      {selectedClient.fileName || 'No file selected'}
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      Submitted client file
+                    </p>
+                  </div>
 
-              {!previewLoading && previewUrl && !isImageFile && !isPdfFile && (
-                <div className="flex h-[70vh] flex-col items-center justify-center rounded-2xl bg-white text-center text-slate-500">
-                  <FaFileAlt className="mb-4 text-5xl text-slate-300" />
-                  <p className="font-bold text-slate-700">
-                    Preview not available for this file type.
-                  </p>
-                  <p className="mt-1 text-sm">
-                    Please download the file to view it.
-                  </p>
                   <button
                     type="button"
-                    onClick={() => window.open(previewUrl, '_blank')}
-                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-green-500 px-5 py-3 text-sm font-bold text-white hover:bg-green-600"
+                    onClick={() => handleDownload(selectedClient)}
+                    className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
                   >
                     <FaDownload />
-                    Open / Download
+                    Download
                   </button>
                 </div>
-              )}
 
-              {!previewLoading && !previewUrl && (
-                <div className="flex h-[70vh] items-center justify-center bg-white text-slate-500">
-                  No preview available.
-                </div>
-              )}
+                {previewLoading && (
+                  <div className="flex h-[500px] items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500">
+                    Loading secure preview...
+                  </div>
+                )}
+
+                {!previewLoading && previewUrl && isImageFile && (
+                  <img
+                    src={previewUrl}
+                    alt={selectedClient.fileName || 'Preview'}
+                    className="mx-auto max-h-[500px] rounded-xl border border-slate-200 bg-white object-contain"
+                  />
+                )}
+
+                {!previewLoading && previewUrl && isPdfFile && (
+                  <iframe
+                    src={previewUrl}
+                    title="Client File Preview"
+                    className="h-[500px] w-full rounded-xl border border-slate-200"
+                  />
+                )}
+
+                {!previewLoading && previewUrl && !isImageFile && !isPdfFile && (
+                  <div className="flex h-[500px] flex-col items-center justify-center rounded-xl border border-slate-200 bg-white text-center text-slate-500">
+                    <FaFileAlt className="mb-4 text-5xl text-slate-300" />
+                    <p className="font-bold text-slate-700">
+                      Preview not available for this file type.
+                    </p>
+                    <p className="mt-1 text-sm">
+                      Please download the file to view it.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => window.open(previewUrl, '_blank')}
+                      className="mt-5 inline-flex items-center gap-2 rounded-xl bg-green-500 px-5 py-3 text-sm font-bold text-white hover:bg-green-600"
+                    >
+                      <FaDownload />
+                      Open / Download
+                    </button>
+                  </div>
+                )}
+
+                {!previewLoading && !previewUrl && (
+                  <div className="rounded-xl bg-slate-100 p-6 text-center text-sm text-slate-500">
+                    No preview available. Filename: {selectedClient.fileName}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  FaBriefcase,
   FaCheckCircle,
   FaDownload,
   FaExclamationTriangle,
   FaEye,
   FaFileAlt,
+  FaPhone,
   FaSearch,
   FaTimes,
+  FaUserFriends,
 } from 'react-icons/fa';
 import DashboardLayout from '../components/layout/layout';
 
@@ -38,6 +41,9 @@ type Client = {
   lastName?: string;
   name?: string;
   email?: string;
+  phone?: string;
+  leadType?: string;
+  status?: string;
   documentType?: string;
   fileName?: string;
   fileUrl?: string;
@@ -117,6 +123,16 @@ export default function Clients() {
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
 
+  const formatLeadType = (type?: string) => {
+    const value = (type || 'business_owner').toLowerCase();
+
+    if (value === 'referrer') return 'Referrer';
+
+    return 'Business Owner';
+  };
+
+  const getStatus = (client: Client) => client.status || 'Pending Team Call';
+
   const clientGroups = useMemo<ClientGroup[]>(() => {
     const map = new Map<string, Client[]>();
 
@@ -160,13 +176,24 @@ export default function Clients() {
         !searchValue ||
         fullName.includes(searchValue) ||
         (group.client.email || '').toLowerCase().includes(searchValue) ||
+        (group.client.phone || '').toLowerCase().includes(searchValue) ||
         (group.client.uniqueId || '').toLowerCase().includes(searchValue) ||
+        formatLeadType(group.client.leadType).toLowerCase().includes(searchValue) ||
+        getStatus(group.client).toLowerCase().includes(searchValue) ||
         group.files.some((file) =>
           (file.fileName || '').toLowerCase().includes(searchValue),
         )
       );
     });
   }, [clientGroups, search]);
+
+  const businessOwnerCount = clientGroups.filter(
+    (group) => formatLeadType(group.client.leadType) === 'Business Owner',
+  ).length;
+
+  const referrerCount = clientGroups.filter(
+    (group) => formatLeadType(group.client.leadType) === 'Referrer',
+  ).length;
 
   const handlePreview = async (client: Client) => {
     try {
@@ -206,7 +233,7 @@ export default function Clients() {
   return (
     <DashboardLayout
       title="Clients"
-      subtitle="View submitted clients and completion status from Azure SQL."
+      subtitle="View submitted clients, lead type, team call status, and document completion."
     >
       <div className="mx-auto max-w-7xl space-y-5">
         <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
@@ -216,7 +243,7 @@ export default function Clients() {
               type="text"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search unique ID, name, email, or file..."
+              placeholder="Search unique ID, name, email, phone, lead type, status, or file..."
               className="h-12 w-full rounded-xl border border-slate-300 pl-12 pr-4 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
             />
           </div>
@@ -236,11 +263,25 @@ export default function Clients() {
 
         {!loading && !error && (
           <>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-5">
               <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
                 <p className="text-sm font-bold text-slate-500">Clients</p>
                 <p className="mt-2 text-3xl font-extrabold text-slate-900">
                   {clientGroups.length}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+                <p className="text-sm font-bold text-blue-700">Business Owners</p>
+                <p className="mt-2 text-3xl font-extrabold text-blue-700">
+                  {businessOwnerCount}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-purple-200 bg-purple-50 p-5 shadow-sm">
+                <p className="text-sm font-bold text-purple-700">Referrers</p>
+                <p className="mt-2 text-3xl font-extrabold text-purple-700">
+                  {referrerCount}
                 </p>
               </div>
 
@@ -275,14 +316,16 @@ export default function Clients() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="min-w-[1200px]">
+                <table className="min-w-[1450px]">
                   <thead className="bg-slate-50">
                     <tr>
                       {[
                         'Unique ID',
+                        'Lead Type',
                         'Name',
-                        'Email',
-                        'Status',
+                        'Email / Phone',
+                        'Team Status',
+                        'Docs Status',
                         'Uploaded',
                         'Missing',
                         'Files',
@@ -301,110 +344,141 @@ export default function Clients() {
                   </thead>
 
                   <tbody className="divide-y divide-slate-200">
-                    {filteredGroups.map((group) => (
-                      <tr key={group.key} className="hover:bg-slate-50">
-                        <td className="px-6 py-4 text-sm font-semibold text-slate-700">
-                          {group.client.uniqueId || '-'}
-                        </td>
+                    {filteredGroups.map((group) => {
+                      const leadTypeLabel = formatLeadType(group.client.leadType);
 
-                        <td className="px-6 py-4">
-                          <p className="font-bold text-slate-900">
-                            {getFullName(group.client) || '-'}
-                          </p>
-                        </td>
+                      return (
+                        <tr key={group.key} className="hover:bg-slate-50">
+                          <td className="px-6 py-4 text-sm font-semibold text-slate-700">
+                            {group.client.uniqueId || '-'}
+                          </td>
 
-                        <td className="px-6 py-4 text-sm text-slate-600">
-                          {group.client.email || '-'}
-                        </td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ${
+                                leadTypeLabel === 'Referrer'
+                                  ? 'bg-purple-100 text-purple-700'
+                                  : 'bg-blue-100 text-blue-700'
+                              }`}
+                            >
+                              {leadTypeLabel === 'Referrer' ? (
+                                <FaUserFriends />
+                              ) : (
+                                <FaBriefcase />
+                              )}
+                              {leadTypeLabel}
+                            </span>
+                          </td>
 
-                        <td className="px-6 py-4">
-                          <span
-                            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ${
-                              group.isComplete
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-red-100 text-red-700'
-                            }`}
-                          >
-                            {group.isComplete ? (
-                              <FaCheckCircle />
-                            ) : (
-                              <FaExclamationTriangle />
-                            )}
-                            {group.isComplete ? 'Complete' : 'Incomplete'}
-                          </span>
-                        </td>
+                          <td className="px-6 py-4">
+                            <p className="font-bold text-slate-900">
+                              {getFullName(group.client) || '-'}
+                            </p>
+                          </td>
 
-                        <td className="px-6 py-4">
-                          <div className="flex flex-wrap gap-2">
-                            {group.uploadedDocuments.map((doc) => (
-                              <span
-                                key={doc}
-                                className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700"
-                              >
-                                {formatDocumentType(doc)}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
+                          <td className="px-6 py-4 text-sm text-slate-600">
+                            <p>{group.client.email || '-'}</p>
+                            <p className="mt-1 flex items-center gap-2 text-xs text-slate-400">
+                              <FaPhone />
+                              {group.client.phone || 'No phone'}
+                            </p>
+                          </td>
 
-                        <td className="px-6 py-4">
-                          <div className="flex flex-wrap gap-2">
-                            {group.missingDocuments.length > 0 ? (
-                              group.missingDocuments.map((doc) => (
+                          <td className="px-6 py-4">
+                            <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+                              {getStatus(group.client)}
+                            </span>
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <span
+                              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ${
+                                group.isComplete
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-red-100 text-red-700'
+                              }`}
+                            >
+                              {group.isComplete ? (
+                                <FaCheckCircle />
+                              ) : (
+                                <FaExclamationTriangle />
+                              )}
+                              {group.isComplete ? 'Complete' : 'Incomplete'}
+                            </span>
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <div className="flex flex-wrap gap-2">
+                              {group.uploadedDocuments.map((doc) => (
                                 <span
                                   key={doc}
-                                  className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700"
+                                  className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700"
                                 >
                                   {formatDocumentType(doc)}
                                 </span>
-                              ))
-                            ) : (
-                              <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
-                                None
-                              </span>
-                            )}
-                          </div>
-                        </td>
+                              ))}
+                            </div>
+                          </td>
 
-                        <td className="px-6 py-4 text-sm font-semibold text-slate-700">
-                          {group.files.length}
-                        </td>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-wrap gap-2">
+                              {group.missingDocuments.length > 0 ? (
+                                group.missingDocuments.map((doc) => (
+                                  <span
+                                    key={doc}
+                                    className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700"
+                                  >
+                                    {formatDocumentType(doc)}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
+                                  None
+                                </span>
+                              )}
+                            </div>
+                          </td>
 
-                        <td className="px-6 py-4">
-                          <div className="flex justify-center gap-2">
-                            {group.files.slice(0, 1).map((file) => (
-                              <div
-                                key={`${file.id}-${file.fileName}`}
-                                className="contents"
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => handlePreview(file)}
-                                  className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
+                          <td className="px-6 py-4 text-sm font-semibold text-slate-700">
+                            {group.files.length}
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <div className="flex justify-center gap-2">
+                              {group.files.slice(0, 1).map((file) => (
+                                <div
+                                  key={`${file.id}-${file.fileName}`}
+                                  className="contents"
                                 >
-                                  <FaEye />
-                                  View
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePreview(file)}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
+                                  >
+                                    <FaEye />
+                                    View
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => handleDownload(file)}
-                                  className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
-                                >
-                                  <FaDownload />
-                                  Download
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownload(file)}
+                                    className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
+                                  >
+                                    <FaDownload />
+                                    Download
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
 
                     {filteredGroups.length === 0 && (
                       <tr>
                         <td
-                          colSpan={8}
+                          colSpan={10}
                           className="px-6 py-12 text-center text-sm text-slate-500"
                         >
                           No clients found.
@@ -414,6 +488,139 @@ export default function Clients() {
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            <div className="space-y-4 lg:hidden">
+              {filteredGroups.map((group) => {
+                const leadTypeLabel = formatLeadType(group.client.leadType);
+
+                return (
+                  <div
+                    key={group.key}
+                    className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"
+                  >
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase text-slate-400">
+                          {group.client.uniqueId || '-'}
+                        </p>
+                        <h3 className="mt-1 text-lg font-extrabold text-slate-900">
+                          {getFullName(group.client) || '-'}
+                        </h3>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {group.client.email || '-'}
+                        </p>
+                        <p className="mt-1 flex items-center gap-2 text-xs text-slate-400">
+                          <FaPhone />
+                          {group.client.phone || 'No phone'}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ${
+                          leadTypeLabel === 'Referrer'
+                            ? 'bg-purple-100 text-purple-700'
+                            : 'bg-blue-100 text-blue-700'
+                        }`}
+                      >
+                        {leadTypeLabel}
+                      </span>
+                    </div>
+
+                    <div className="mb-4 flex flex-wrap gap-2">
+                      <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+                        {getStatus(group.client)}
+                      </span>
+
+                      <span
+                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ${
+                          group.isComplete
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}
+                      >
+                        {group.isComplete ? 'Complete' : 'Incomplete'}
+                      </span>
+
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                        {group.files.length} file
+                        {group.files.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+
+                    <div className="mb-4 grid gap-3">
+                      <div>
+                        <p className="mb-2 text-xs font-bold uppercase text-slate-400">
+                          Uploaded
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {group.uploadedDocuments.map((doc) => (
+                            <span
+                              key={doc}
+                              className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700"
+                            >
+                              {formatDocumentType(doc)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="mb-2 text-xs font-bold uppercase text-slate-400">
+                          Missing
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {group.missingDocuments.length > 0 ? (
+                            group.missingDocuments.map((doc) => (
+                              <span
+                                key={doc}
+                                className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700"
+                              >
+                                {formatDocumentType(doc)}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
+                              None
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {group.files.slice(0, 1).map((file) => (
+                      <div
+                        key={`${file.id}-${file.fileName}`}
+                        className="flex gap-2"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handlePreview(file)}
+                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
+                        >
+                          <FaEye />
+                          View
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDownload(file)}
+                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
+                        >
+                          <FaDownload />
+                          Download
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+
+              {filteredGroups.length === 0 && (
+                <div className="rounded-2xl bg-white p-10 text-center text-sm text-slate-500 shadow-sm ring-1 ring-slate-200">
+                  No clients found.
+                </div>
+              )}
             </div>
           </>
         )}
@@ -445,8 +652,11 @@ export default function Clients() {
               <div className="mb-6 grid gap-4 md:grid-cols-2">
                 {[
                   ['Unique ID', selectedClient.uniqueId || '-'],
+                  ['Lead Type', formatLeadType(selectedClient.leadType)],
+                  ['Team Status', getStatus(selectedClient)],
                   ['Full Name', getFullName(selectedClient) || '-'],
                   ['Email', selectedClient.email || '-'],
+                  ['Phone', selectedClient.phone || '-'],
                   [
                     'Document Type',
                     formatDocumentType(selectedClient.documentType),

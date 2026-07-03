@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  FaBriefcase,
   FaCheckCircle,
   FaDownload,
   FaEdit,
@@ -8,19 +9,18 @@ import {
   FaFileAlt,
   FaFolder,
   FaIdBadge,
+  FaPhone,
   FaSearch,
   FaSyncAlt,
   FaTimes,
   FaTrash,
   FaUser,
+  FaUserFriends,
 } from 'react-icons/fa';
 import DashboardLayout from '../components/layout/layout';
 
-const CLIENTS_API =
-  'https://docsuploadpythonapi.azurewebsites.net/api/clients';
-
-const FILE_URL_API =
-  'https://docsuploadpythonapi.azurewebsites.net/api/file-url';
+const CLIENTS_API = 'https://docsuploadpythonapi.azurewebsites.net/api/clients';
+const FILE_URL_API = 'https://docsuploadpythonapi.azurewebsites.net/api/file-url';
 
 const requiredDocuments = [
   'id',
@@ -32,12 +32,16 @@ const requiredDocuments = [
 
 type Client = {
   id: number;
+  clientId?: number;
   uniqueId?: string;
   name?: string;
   firstName?: string;
   middleName?: string;
   lastName?: string;
   email?: string;
+  phone?: string;
+  leadType?: string;
+  status?: string;
   documentType?: string;
   fileName?: string;
   fileUrl?: string;
@@ -60,13 +64,13 @@ export default function ClientDocumentSearch() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [selectedType, setSelectedType] = useState<string>('all');
+  const [selectedLeadType, setSelectedLeadType] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const getSecureFileUrl = async (fileUrl?: string) => {
-    if (!fileUrl) {
-      throw new Error('No file URL available.');
-    }
+    if (!fileUrl) throw new Error('No file URL available.');
 
     const response = await fetch(
       `${FILE_URL_API}?blobUrl=${encodeURIComponent(fileUrl)}`,
@@ -129,26 +133,46 @@ export default function ClientDocumentSearch() {
     );
   };
 
+  const formatLeadType = (type?: string) => {
+    const value = (type || 'business_owner').toLowerCase();
+
+    if (value === 'referrer') return 'Referrer';
+    return 'Business Owner';
+  };
+
+  const getStatus = (client: Client) => client.status || 'Pending Team Call';
+
   const filteredClients = useMemo(() => {
     const keyword = search.toLowerCase().trim();
 
     return clients.filter((client) => {
       const fullName = getFullName(client).toLowerCase();
+      const leadType = formatLeadType(client.leadType);
+      const status = getStatus(client);
 
       const matchesSearch =
         !keyword ||
         fullName.includes(keyword) ||
         (client.uniqueId || '').toLowerCase().includes(keyword) ||
         (client.email || '').toLowerCase().includes(keyword) ||
+        (client.phone || '').toLowerCase().includes(keyword) ||
+        leadType.toLowerCase().includes(keyword) ||
+        status.toLowerCase().includes(keyword) ||
         (client.fileName || '').toLowerCase().includes(keyword) ||
         (client.documentType || '').toLowerCase().includes(keyword);
 
       const matchesType =
         selectedType === 'all' || client.documentType === selectedType;
 
-      return matchesSearch && matchesType;
+      const matchesLeadType =
+        selectedLeadType === 'all' || leadType === selectedLeadType;
+
+      const matchesStatus =
+        selectedStatus === 'all' || status === selectedStatus;
+
+      return matchesSearch && matchesType && matchesLeadType && matchesStatus;
     });
-  }, [clients, search, selectedType]);
+  }, [clients, search, selectedType, selectedLeadType, selectedStatus]);
 
   const documentTypes = useMemo(() => {
     return Array.from(
@@ -156,16 +180,17 @@ export default function ClientDocumentSearch() {
     ) as string[];
   }, [clients]);
 
+  const statuses = useMemo(() => {
+    return Array.from(new Set(clients.map((client) => getStatus(client))));
+  }, [clients]);
+
   const clientFolders = useMemo(() => {
     const map = new Map<string, Client[]>();
 
     filteredClients.forEach((client) => {
-      const key = client.uniqueId || String(client.id);
+      const key = client.uniqueId || String(client.clientId || client.id);
 
-      if (!map.has(key)) {
-        map.set(key, []);
-      }
-
+      if (!map.has(key)) map.set(key, []);
       map.get(key)?.push(client);
     });
 
@@ -189,12 +214,21 @@ export default function ClientDocumentSearch() {
         uploadedDocuments,
         missingDocuments,
         isComplete: missingDocuments.length === 0,
+        progress: Math.round(
+          (uploadedDocuments.length / requiredDocuments.length) * 100,
+        ),
       };
     });
   }, [filteredClients]);
 
   const incompleteCount = clientFolders.filter((folder) => !folder.isComplete).length;
   const completeCount = clientFolders.filter((folder) => folder.isComplete).length;
+  const businessOwnerCount = clientFolders.filter(
+    (folder) => formatLeadType(folder.client.leadType) === 'Business Owner',
+  ).length;
+  const referrerCount = clientFolders.filter(
+    (folder) => formatLeadType(folder.client.leadType) === 'Referrer',
+  ).length;
 
   const handleSearch = () => {
     loadClients(search);
@@ -242,7 +276,7 @@ export default function ClientDocumentSearch() {
   return (
     <DashboardLayout
       title="Client Document Search"
-      subtitle="Search client files and check missing required documents."
+      subtitle="Search client files, lead type, phone number, team status, and missing documents."
     >
       <div className="space-y-6">
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -252,7 +286,7 @@ export default function ClientDocumentSearch() {
                 Search Client Documents
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Search by Unique ID, name, email, document type, or file name.
+                Search by Unique ID, name, email, phone, lead type, status, document type, or file name.
               </p>
             </div>
 
@@ -266,7 +300,7 @@ export default function ClientDocumentSearch() {
             </button>
           </div>
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_260px_auto]">
+          <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_220px_220px_220px_auto]">
             <div className="relative">
               <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -275,7 +309,7 @@ export default function ClientDocumentSearch() {
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') handleSearch();
                 }}
-                placeholder="Search Unique ID, name, email, or file..."
+                placeholder="Search Unique ID, name, email, phone, status, or file..."
                 className="h-12 w-full rounded-xl border border-slate-300 pl-12 pr-4 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
               />
             </div>
@@ -293,6 +327,29 @@ export default function ClientDocumentSearch() {
               ))}
             </select>
 
+            <select
+              value={selectedLeadType}
+              onChange={(event) => setSelectedLeadType(event.target.value)}
+              className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+            >
+              <option value="all">All Lead Types</option>
+              <option value="Business Owner">Business Owner</option>
+              <option value="Referrer">Referrer</option>
+            </select>
+
+            <select
+              value={selectedStatus}
+              onChange={(event) => setSelectedStatus(event.target.value)}
+              className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+            >
+              <option value="all">All Statuses</option>
+              {statuses.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+
             <button
               type="button"
               onClick={handleSearch}
@@ -304,7 +361,7 @@ export default function ClientDocumentSearch() {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-4">
+        <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm font-bold text-slate-500">Total Records</p>
             <p className="mt-2 text-3xl font-extrabold text-slate-900">
@@ -316,6 +373,20 @@ export default function ClientDocumentSearch() {
             <p className="text-sm font-bold text-slate-500">Client Folders</p>
             <p className="mt-2 text-3xl font-extrabold text-slate-900">
               {clientFolders.length}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+            <p className="text-sm font-bold text-blue-700">Business Owners</p>
+            <p className="mt-2 text-3xl font-extrabold text-blue-700">
+              {businessOwnerCount}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-purple-200 bg-purple-50 p-5 shadow-sm">
+            <p className="text-sm font-bold text-purple-700">Referrers</p>
+            <p className="mt-2 text-3xl font-extrabold text-purple-700">
+              {referrerCount}
             </p>
           </div>
 
@@ -356,169 +427,222 @@ export default function ClientDocumentSearch() {
                 uploadedDocuments,
                 missingDocuments,
                 isComplete,
-              }) => (
-                <div
-                  key={uniqueId}
-                  className={`overflow-hidden rounded-3xl border bg-white shadow-sm ${
-                    isComplete ? 'border-green-200' : 'border-red-200'
-                  }`}
-                >
-                  <div className="flex flex-col gap-4 border-b border-slate-100 p-5 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="flex min-w-0 items-center gap-4">
-                      <div
-                        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
-                          isComplete
-                            ? 'bg-green-100 text-green-600'
-                            : 'bg-red-100 text-red-600'
-                        }`}
-                      >
-                        {isComplete ? (
-                          <FaCheckCircle className="text-2xl" />
-                        ) : (
-                          <FaExclamationTriangle className="text-2xl" />
-                        )}
-                      </div>
+                progress,
+              }) => {
+                const leadTypeLabel = formatLeadType(client.leadType);
 
-                      <div className="min-w-0">
-                        <h3 className="truncate text-lg font-extrabold text-slate-900">
-                          {getFullName(client) || 'Unnamed Client'}
-                        </h3>
-
-                        <div className="mt-1 flex flex-wrap gap-3 text-sm text-slate-500">
-                          <span className="inline-flex items-center gap-2">
-                            <FaIdBadge className="text-xs" />
-                            {client.uniqueId || uniqueId}
-                          </span>
-
-                          <span className="inline-flex items-center gap-2">
-                            <FaUser className="text-xs" />
-                            {client.email || 'No email'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <span
-                      className={`rounded-full px-4 py-2 text-sm font-bold ${
-                        isComplete
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}
-                    >
-                      {isComplete ? 'Complete' : 'Incomplete'}
-                    </span>
-                  </div>
-
-                  <div className="border-b border-slate-100 bg-slate-50 p-5">
-                    <div className="grid gap-4 lg:grid-cols-2">
-                      <div>
-                        <p className="mb-2 text-xs font-bold uppercase text-slate-500">
-                          Uploaded Documents
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {uploadedDocuments.map((doc) => (
-                            <span
-                              key={doc}
-                              className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700"
-                            >
-                              {formatDocumentType(doc)}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="mb-2 text-xs font-bold uppercase text-slate-500">
-                          Missing Documents
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {missingDocuments.length > 0 ? (
-                            missingDocuments.map((doc) => (
-                              <span
-                                key={doc}
-                                className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700"
-                              >
-                                {formatDocumentType(doc)}
-                              </span>
-                            ))
+                return (
+                  <div
+                    key={uniqueId}
+                    className={`overflow-hidden rounded-3xl border bg-white shadow-sm ${
+                      isComplete ? 'border-green-200' : 'border-red-200'
+                    }`}
+                  >
+                    <div className="flex flex-col gap-4 border-b border-slate-100 p-5 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="flex min-w-0 items-center gap-4">
+                        <div
+                          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
+                            isComplete
+                              ? 'bg-green-100 text-green-600'
+                              : 'bg-red-100 text-red-600'
+                          }`}
+                        >
+                          {isComplete ? (
+                            <FaCheckCircle className="text-2xl" />
                           ) : (
-                            <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
-                              None
-                            </span>
+                            <FaExclamationTriangle className="text-2xl" />
                           )}
                         </div>
+
+                        <div className="min-w-0">
+                          <h3 className="truncate text-lg font-extrabold text-slate-900">
+                            {getFullName(client) || 'Unnamed Client'}
+                          </h3>
+
+                          <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-500">
+                            <span className="inline-flex items-center gap-2">
+                              <FaIdBadge className="text-xs" />
+                              {client.uniqueId || uniqueId}
+                            </span>
+
+                            <span className="inline-flex items-center gap-2">
+                              <FaUser className="text-xs" />
+                              {client.email || 'No email'}
+                            </span>
+
+                            <span className="inline-flex items-center gap-2">
+                              <FaPhone className="text-xs" />
+                              {client.phone || 'No phone'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <span
+                          className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold ${
+                            leadTypeLabel === 'Referrer'
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}
+                        >
+                          {leadTypeLabel === 'Referrer' ? (
+                            <FaUserFriends />
+                          ) : (
+                            <FaBriefcase />
+                          )}
+                          {leadTypeLabel}
+                        </span>
+
+                        <span className="rounded-full bg-orange-100 px-4 py-2 text-sm font-bold text-orange-700">
+                          {getStatus(client)}
+                        </span>
+
+                        <span
+                          className={`rounded-full px-4 py-2 text-sm font-bold ${
+                            isComplete
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-red-100 text-red-700'
+                          }`}
+                        >
+                          {isComplete ? 'Complete' : 'Incomplete'}
+                        </span>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
-                    {files.map((file) => (
-                      <div
-                        key={`${file.id}-${file.fileName}`}
-                        className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white">
-                            <FaFileAlt />
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold uppercase tracking-wide text-orange-600">
-                              {formatDocumentType(file.documentType)}
-                            </p>
-
-                            <h4 className="mt-1 truncate text-sm font-extrabold text-slate-900">
-                              {file.fileName || 'No file name'}
-                            </h4>
-
-                            <p className="mt-1 text-xs text-slate-500">
-                              Submitted: {file.submittedAt || 'N/A'}
-                            </p>
-                          </div>
+                    <div className="border-b border-slate-100 bg-slate-50 p-5">
+                      <div className="mb-5">
+                        <div className="mb-2 flex items-center justify-between text-sm font-bold text-slate-600">
+                          <span>Document Progress</span>
+                          <span>{progress}%</span>
                         </div>
 
-                        <div className="mt-4 grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handlePreview(file)}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
-                          >
-                            <FaEye />
-                            View
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleDownload(file)}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-500 px-3 py-2 text-xs font-bold text-white hover:bg-green-600"
-                          >
-                            <FaDownload />
-                            Download
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleUnsupportedAction('Edit')}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-500 px-3 py-2 text-xs font-bold text-white hover:bg-slate-600"
-                          >
-                            <FaEdit />
-                            Edit
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleUnsupportedAction('Delete')}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-500 px-3 py-2 text-xs font-bold text-white hover:bg-red-600"
-                          >
-                            <FaTrash />
-                            Delete
-                          </button>
+                        <div className="h-3 overflow-hidden rounded-full bg-white">
+                          <div
+                            className={`h-full rounded-full ${
+                              isComplete ? 'bg-green-500' : 'bg-orange-500'
+                            }`}
+                            style={{ width: `${progress}%` }}
+                          />
                         </div>
                       </div>
-                    ))}
+
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <div>
+                          <p className="mb-2 text-xs font-bold uppercase text-slate-500">
+                            Uploaded Documents
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {uploadedDocuments.length > 0 ? (
+                              uploadedDocuments.map((doc) => (
+                                <span
+                                  key={doc}
+                                  className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700"
+                                >
+                                  {formatDocumentType(doc)}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">
+                                None uploaded
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="mb-2 text-xs font-bold uppercase text-slate-500">
+                            Missing Documents
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {missingDocuments.length > 0 ? (
+                              missingDocuments.map((doc) => (
+                                <span
+                                  key={doc}
+                                  className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700"
+                                >
+                                  {formatDocumentType(doc)}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
+                                None
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
+                      {files.map((file) => (
+                        <div
+                          key={`${file.id}-${file.fileName}`}
+                          className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white">
+                              <FaFileAlt />
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold uppercase tracking-wide text-orange-600">
+                                {formatDocumentType(file.documentType)}
+                              </p>
+
+                              <h4 className="mt-1 truncate text-sm font-extrabold text-slate-900">
+                                {file.fileName || 'No file name'}
+                              </h4>
+
+                              <p className="mt-1 text-xs text-slate-500">
+                                Submitted: {file.submittedAt || 'N/A'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handlePreview(file)}
+                              className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
+                            >
+                              <FaEye />
+                              View
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDownload(file)}
+                              className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-500 px-3 py-2 text-xs font-bold text-white hover:bg-green-600"
+                            >
+                              <FaDownload />
+                              Download
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleUnsupportedAction('Edit')}
+                              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-500 px-3 py-2 text-xs font-bold text-white hover:bg-slate-600"
+                            >
+                              <FaEdit />
+                              Edit
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleUnsupportedAction('Delete')}
+                              className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-500 px-3 py-2 text-xs font-bold text-white hover:bg-red-600"
+                            >
+                              <FaTrash />
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ),
+                );
+              },
             )}
 
             {clientFolders.length === 0 && (
@@ -530,7 +654,7 @@ export default function ClientDocumentSearch() {
                 </h3>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Try searching another Unique ID, name, or document type.
+                  Try searching another Unique ID, name, phone, lead type, or document type.
                 </p>
               </div>
             )}

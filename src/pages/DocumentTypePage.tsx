@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
+  FaBriefcase,
+  FaCheckCircle,
   FaChevronDown,
   FaChevronRight,
   FaDownload,
   FaEnvelope,
+  FaExclamationTriangle,
   FaEye,
   FaFileAlt,
   FaFolder,
   FaFolderOpen,
+  FaPhone,
   FaTimes,
+  FaUserFriends,
 } from 'react-icons/fa';
 import DashboardLayout from '../components/layout/layout';
 
@@ -28,6 +33,9 @@ type Client = {
   middleName?: string;
   lastName?: string;
   email?: string;
+  phone?: string;
+  leadType?: string;
+  status?: string;
   documentType?: string;
   fileName?: string;
   fileUrl?: string;
@@ -73,9 +81,7 @@ export default function DocumentTypePage() {
     'Documents';
 
   const getSecureFileUrl = async (fileUrl?: string) => {
-    if (!fileUrl) {
-      throw new Error('No file URL available.');
-    }
+    if (!fileUrl) throw new Error('No file URL available.');
 
     const response = await fetch(
       `${FILE_URL_API}?blobUrl=${encodeURIComponent(fileUrl)}`,
@@ -128,16 +134,22 @@ export default function DocumentTypePage() {
       .replace(/\s+/g, ' ')
       .trim();
 
+  const formatLeadType = (type?: string) => {
+    const value = (type || 'business_owner').toLowerCase();
+
+    if (value === 'referrer') return 'Referrer';
+    return 'Business Owner';
+  };
+
+  const getStatus = (client: Client) => client.status || 'Pending Team Call';
+
   const clientFolders = useMemo<ClientFolder[]>(() => {
     const map = new Map<string, Client[]>();
 
     clients.forEach((client) => {
       const key = client.uniqueId || String(client.clientId || client.id);
 
-      if (!map.has(key)) {
-        map.set(key, []);
-      }
-
+      if (!map.has(key)) map.set(key, []);
       map.get(key)?.push(client);
     });
 
@@ -147,6 +159,14 @@ export default function DocumentTypePage() {
       files,
     }));
   }, [clients]);
+
+  const businessOwnerCount = clientFolders.filter(
+    (folder) => formatLeadType(folder.client.leadType) === 'Business Owner',
+  ).length;
+
+  const referrerCount = clientFolders.filter(
+    (folder) => formatLeadType(folder.client.leadType) === 'Referrer',
+  ).length;
 
   const toggleFolder = (folderKey: string) => {
     setOpenFolders((prev) => ({
@@ -208,6 +228,38 @@ export default function DocumentTypePage() {
           </p>
         </div>
 
+        {!loading && !error && (
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              <p className="text-sm font-bold text-slate-500">Folders</p>
+              <p className="mt-2 text-3xl font-extrabold text-slate-900">
+                {clientFolders.length}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+              <p className="text-sm font-bold text-blue-700">Business Owners</p>
+              <p className="mt-2 text-3xl font-extrabold text-blue-700">
+                {businessOwnerCount}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-purple-200 bg-purple-50 p-5 shadow-sm">
+              <p className="text-sm font-bold text-purple-700">Referrers</p>
+              <p className="mt-2 text-3xl font-extrabold text-purple-700">
+                {referrerCount}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-orange-200 bg-orange-50 p-5 shadow-sm">
+              <p className="text-sm font-bold text-orange-700">Files</p>
+              <p className="mt-2 text-3xl font-extrabold text-orange-700">
+                {clients.length}
+              </p>
+            </div>
+          </div>
+        )}
+
         {loading && (
           <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-sm font-bold text-slate-500">
             Loading {pageTitle} documents from Azure...
@@ -225,6 +277,7 @@ export default function DocumentTypePage() {
             {clientFolders.map(({ key, client, files }) => {
               const isOpen = openFolders[key];
               const fullName = getFullName(client);
+              const leadTypeLabel = formatLeadType(client.leadType);
               const isIdDocument =
                 client.documentType === 'id' || client.documentType === 'ID';
 
@@ -252,14 +305,43 @@ export default function DocumentTypePage() {
                           {fullName || 'Unnamed Client'}
                         </h3>
 
-                        <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span
+                            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ${
+                              leadTypeLabel === 'Referrer'
+                                ? 'bg-purple-100 text-purple-700'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}
+                          >
+                            {leadTypeLabel === 'Referrer' ? (
+                              <FaUserFriends />
+                            ) : (
+                              <FaBriefcase />
+                            )}
+                            {leadTypeLabel}
+                          </span>
+
+                          <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+                            {getStatus(client)}
+                          </span>
+
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                            {client.uniqueId || key}
+                          </span>
+
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                            {files.length} file{files.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+
+                        <p className="mt-3 flex items-center gap-2 text-sm text-slate-500">
                           <FaEnvelope className="text-xs" />
                           {client.email || 'No email'}
                         </p>
 
-                        <p className="mt-1 text-xs font-bold text-orange-600">
-                          {client.uniqueId || key} • {files.length} file
-                          {files.length !== 1 ? 's' : ''}
+                        <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
+                          <FaPhone className="text-xs" />
+                          {client.phone || 'No phone'}
                         </p>
                       </div>
                     </div>
@@ -307,6 +389,20 @@ export default function DocumentTypePage() {
 
                                 <p>
                                   <span className="font-semibold text-slate-800">
+                                    Lead Type:
+                                  </span>{' '}
+                                  {formatLeadType(file.leadType)}
+                                </p>
+
+                                <p>
+                                  <span className="font-semibold text-slate-800">
+                                    Status:
+                                  </span>{' '}
+                                  {getStatus(file)}
+                                </p>
+
+                                <p>
+                                  <span className="font-semibold text-slate-800">
                                     Document Type:
                                   </span>{' '}
                                   {pageTitle}
@@ -317,6 +413,13 @@ export default function DocumentTypePage() {
                                     Email:
                                   </span>{' '}
                                   {file.email || 'N/A'}
+                                </p>
+
+                                <p>
+                                  <span className="font-semibold text-slate-800">
+                                    Phone:
+                                  </span>{' '}
+                                  {file.phone || 'N/A'}
                                 </p>
                               </div>
 
@@ -415,9 +518,15 @@ export default function DocumentTypePage() {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4">
           <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 p-5">
-              <h2 className="text-xl font-extrabold text-slate-900">
-                {previewFile.fileName || 'File Preview'}
-              </h2>
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-900">
+                  {previewFile.fileName || 'File Preview'}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {formatLeadType(previewFile.leadType)} •{' '}
+                  {getStatus(previewFile)}
+                </p>
+              </div>
 
               <button
                 type="button"
