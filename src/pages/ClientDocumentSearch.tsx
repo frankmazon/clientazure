@@ -19,8 +19,13 @@ import {
 } from 'react-icons/fa';
 import DashboardLayout from '../components/layout/layout';
 
-const CLIENTS_API = 'https://docsuploadpythonapi.azurewebsites.net/api/clients';
-const FILE_URL_API = 'https://docsuploadpythonapi.azurewebsites.net/api/file-url';
+const API_BASE = (
+  import.meta.env.VITE_API_BASE_URL ||
+  'https://docsuploadpythonapi.azurewebsites.net/api'
+).replace(/\/$/, '');
+
+const CLIENTS_API = `${API_BASE}/clients`;
+const FILE_URL_API = `${API_BASE}/file-url`;
 
 const requiredDocuments = [
   'id',
@@ -41,11 +46,64 @@ type Client = {
   email?: string;
   phone?: string;
   leadType?: string;
+  source?: string;
+  applicationSource?: string;
   status?: string;
+
+  classificationType?: string;
+  borrowerType?: string;
+  objective?: string;
+  loanType?: string;
+  purpose?: string;
+  transactionType?: string;
+  withBorrowersGuarantors?: string;
+
+  vedaIssues?: string;
+  conductIssues?: string;
+  clientNeedsObjectives?: string;
+  applicantBackground?: string;
+  explanationOfIncome?: string;
+  security?: string;
+
+  loanAmount?: string | number;
+  securityValue?: string | number;
+  lvr?: string | number;
+  anticipatedSettlementDate?: string;
+  specialNotes?: string;
+
+  referrer?: {
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    phone?: string;
+    email?: string;
+  };
+
+  referrerFirstName?: string;
+  referrerMiddleName?: string;
+  referrerLastName?: string;
+  referrerPhone?: string;
+  referrerEmail?: string;
+  brokerFirstName?: string;
+  brokerMiddleName?: string;
+  brokerLastName?: string;
+  brokerPhone?: string;
+  brokerEmail?: string;
+
   documentType?: string;
   fileName?: string;
   fileUrl?: string;
   submittedAt?: string;
+};
+
+type ClientFolder = {
+  uniqueId: string;
+  client: Client;
+  files: Client[];
+  uploadedDocuments: string[];
+  missingDocuments: string[];
+  isComplete: boolean;
+  progress: number;
 };
 
 const documentTypeLabels: Record<string, string> = {
@@ -64,7 +122,7 @@ export default function ClientDocumentSearch() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [selectedType, setSelectedType] = useState<string>('all');
-  const [selectedLeadType, setSelectedLeadType] = useState<string>('all');
+  const [selectedSource, setSelectedSource] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -101,7 +159,7 @@ export default function ClientDocumentSearch() {
         throw new Error(result.message || 'Failed to load clients.');
       }
 
-      setClients(result.clients || []);
+      setClients((result.clients || []).map(normalizeClient));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load clients.');
     } finally {
@@ -112,6 +170,150 @@ export default function ClientDocumentSearch() {
   useEffect(() => {
     loadClients();
   }, []);
+
+  const normalizeKey = (key: string) =>
+    key
+      .replace(/[^a-zA-Z0-9]+/g, '')
+      .toLowerCase();
+
+  const pickValue = (
+    source: Record<string, unknown>,
+    keys: string[],
+  ): string | number | undefined => {
+    for (const key of keys) {
+      const value = source[key];
+      if (value !== undefined && value !== null && value !== '') {
+        return value as string | number;
+      }
+    }
+
+    const normalizedSource = Object.entries(source).reduce<Record<string, unknown>>(
+      (acc, [key, value]) => {
+        acc[normalizeKey(key)] = value;
+        return acc;
+      },
+      {},
+    );
+
+    for (const key of keys) {
+      const value = normalizedSource[normalizeKey(key)];
+      if (value !== undefined && value !== null && value !== '') {
+        return value as string | number;
+      }
+    }
+
+    return undefined;
+  };
+
+  const normalizeClient = (rawClient: Client & Record<string, unknown>): Client => {
+    const referrer =
+      typeof rawClient.referrer === 'object' && rawClient.referrer !== null
+        ? (rawClient.referrer as Client['referrer'])
+        : undefined;
+
+    const normalizedSource = pickValue(rawClient, [
+      'applicationSource',
+      'ApplicationSource',
+      'application_source',
+      'Application Source',
+      'application source',
+      'contact.application_source',
+      'source',
+      'Source',
+      'leadType',
+      'LeadType',
+      'lead_type',
+    ]) as string | undefined;
+
+    return {
+      ...rawClient,
+      id: Number(pickValue(rawClient, ['id', 'Id', 'DocumentId', 'documentId']) || rawClient.id),
+      clientId: Number(pickValue(rawClient, ['clientId', 'ClientId', 'Id']) || rawClient.clientId || rawClient.id),
+      uniqueId: pickValue(rawClient, ['uniqueId', 'UniqueId', 'uniqueID']) as string | undefined,
+      name: pickValue(rawClient, ['name', 'Name', 'fullName', 'FullName']) as string | undefined,
+      firstName: pickValue(rawClient, ['firstName', 'FirstName']) as string | undefined,
+      middleName: pickValue(rawClient, ['middleName', 'MiddleName']) as string | undefined,
+      lastName: pickValue(rawClient, ['lastName', 'LastName']) as string | undefined,
+      email: pickValue(rawClient, ['email', 'Email']) as string | undefined,
+      phone: pickValue(rawClient, ['phone', 'Phone', 'mobile', 'Mobile']) as string | undefined,
+      leadType: pickValue(rawClient, ['leadType', 'LeadType', 'lead_type']) as string | undefined,
+      source: normalizedSource,
+      applicationSource: normalizedSource,
+      status: pickValue(rawClient, ['status', 'Status']) as string | undefined,
+
+      classificationType: pickValue(rawClient, ['classificationType', 'ClassificationType', 'classification_type']) as string | undefined,
+      borrowerType: pickValue(rawClient, ['borrowerType', 'BorrowerType', 'borrower_type']) as string | undefined,
+      objective: pickValue(rawClient, ['objective', 'Objective']) as string | undefined,
+      loanType: pickValue(rawClient, ['loanType', 'LoanType', 'loan_type']) as string | undefined,
+      purpose: pickValue(rawClient, ['purpose', 'Purpose']) as string | undefined,
+      transactionType: pickValue(rawClient, ['transactionType', 'TransactionType', 'transaction_type']) as string | undefined,
+      withBorrowersGuarantors: pickValue(rawClient, [
+        'withBorrowersGuarantors',
+        'WithBorrowersGuarantors',
+        'with_borrowers_guarantors',
+        'withBorrowers',
+      ]) as string | undefined,
+
+      vedaIssues: pickValue(rawClient, ['vedaIssues', 'VedaIssues', 'veda_issues', 'veda issues', 'Veda Issues']) as string | undefined,
+      conductIssues: pickValue(rawClient, ['conductIssues', 'ConductIssues', 'conduct_issues', 'conduct issues', 'Conduct Issues']) as string | undefined,
+      clientNeedsObjectives: pickValue(rawClient, [
+        'clientNeedsObjectives',
+        'ClientNeedsObjectives',
+        'client_needs_objectives',
+        'client needs objectives',
+        'Client Needs Objectives',
+        'Client Needs & Objectives',
+      ]) as string | undefined,
+      applicantBackground: pickValue(rawClient, [
+        'applicantBackground',
+        'ApplicantBackground',
+        'applicant_background',
+        'applicant background',
+        'Applicant Background',
+      ]) as string | undefined,
+      explanationOfIncome: pickValue(rawClient, [
+        'explanationOfIncome',
+        'ExplanationOfIncome',
+        'explanation_of_income',
+        'explanation of income',
+        'Explanation Of Income',
+      ]) as string | undefined,
+      security: pickValue(rawClient, ['security', 'Security']) as string | undefined,
+
+      loanAmount: pickValue(rawClient, ['loanAmount', 'LoanAmount', 'loan_amount', 'loan amount', 'Loan Amount']),
+      securityValue: pickValue(rawClient, ['securityValue', 'SecurityValue', 'security_value', 'security value', 'Security Value']),
+      lvr: pickValue(rawClient, ['lvr', 'Lvr', 'LVR', 'LvrPercent', 'lvr_percent']),
+      anticipatedSettlementDate: pickValue(rawClient, [
+        'anticipatedSettlementDate',
+        'AnticipatedSettlementDate',
+        'anticipated_settlement_date',
+      ]) as string | undefined,
+      specialNotes: pickValue(rawClient, ['specialNotes', 'SpecialNotes', 'special_notes', 'special notes', 'Special Notes']) as string | undefined,
+
+      referrer: {
+        firstName:
+          referrer?.firstName ||
+          (pickValue(rawClient, ['referrerFirstName', 'ReferrerFirstName', 'brokerFirstName', 'BrokerFirstName']) as string | undefined),
+        middleName:
+          referrer?.middleName ||
+          (pickValue(rawClient, ['referrerMiddleName', 'ReferrerMiddleName', 'brokerMiddleName', 'BrokerMiddleName']) as string | undefined),
+        lastName:
+          referrer?.lastName ||
+          (pickValue(rawClient, ['referrerLastName', 'ReferrerLastName', 'brokerLastName', 'BrokerLastName']) as string | undefined),
+        phone:
+          referrer?.phone ||
+          (pickValue(rawClient, ['referrerPhone', 'ReferrerPhone', 'brokerPhone', 'BrokerPhone']) as string | undefined),
+        email:
+          referrer?.email ||
+          (pickValue(rawClient, ['referrerEmail', 'ReferrerEmail', 'brokerEmail', 'BrokerEmail']) as string | undefined),
+      },
+
+      documentType: pickValue(rawClient, ['documentType', 'DocumentType']) as string | undefined,
+      fileName: pickValue(rawClient, ['fileName', 'FileName']) as string | undefined,
+      fileUrl: pickValue(rawClient, ['fileUrl', 'FileUrl', 'blobUrl', 'BlobUrl']) as string | undefined,
+      submittedAt: pickValue(rawClient, ['submittedAt', 'SubmittedAt', 'UploadedAt', 'uploadedAt']) as string | undefined,
+    };
+  };
 
   const getFullName = (client: Client) =>
     (
@@ -133,21 +335,56 @@ export default function ClientDocumentSearch() {
     );
   };
 
-  const formatLeadType = (type?: string) => {
-    const value = (type || 'business_owner').toLowerCase();
+  const formatSource = (type?: string) => {
+    const rawValue = (type || '').trim();
+    const value = rawValue.toLowerCase().replace(/[_\s]+/g, '-');
 
-    if (value === 'referrer') return 'Referrer';
-    return 'Business Owner';
+    if (!value) return '-';
+    if (value === 'broker' || value === 'business-owner') return 'Broker';
+    if (value === 'referral' || value === 'referrer') return 'Referral';
+    if (value === 'direct-client' || value === 'directclient') return 'Direct Client';
+
+    return rawValue
+      .split(/[-_\s]+/)
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ') || '-';
   };
 
+  const getClientSource = (client: Client) =>
+    formatSource(client.applicationSource || client.source || client.leadType);
+
   const getStatus = (client: Client) => client.status || 'Pending Team Call';
+
+  const getDetailLabel = (client: Client) =>
+    getClientSource(client) === 'Broker' ? 'Broker' : 'Referrer';
+
+  const displayValue = (value?: string | number | null) => {
+    if (value === null || value === undefined || value === '') return '-';
+    return value;
+  };
+
+  const getReferrerName = (client: Client) =>
+    [
+      client.referrer?.firstName || client.referrerFirstName || client.brokerFirstName,
+      client.referrer?.middleName || client.referrerMiddleName || client.brokerMiddleName,
+      client.referrer?.lastName || client.referrerLastName || client.brokerLastName,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+  const getReferrerPhone = (client: Client) =>
+    client.referrer?.phone || client.referrerPhone || client.brokerPhone;
+
+  const getReferrerEmail = (client: Client) =>
+    client.referrer?.email || client.referrerEmail || client.brokerEmail;
 
   const filteredClients = useMemo(() => {
     const keyword = search.toLowerCase().trim();
 
     return clients.filter((client) => {
       const fullName = getFullName(client).toLowerCase();
-      const leadType = formatLeadType(client.leadType);
+      const source = getClientSource(client);
       const status = getStatus(client);
 
       const matchesSearch =
@@ -156,23 +393,42 @@ export default function ClientDocumentSearch() {
         (client.uniqueId || '').toLowerCase().includes(keyword) ||
         (client.email || '').toLowerCase().includes(keyword) ||
         (client.phone || '').toLowerCase().includes(keyword) ||
-        leadType.toLowerCase().includes(keyword) ||
+        (client.applicationSource || '').toLowerCase().includes(keyword) ||
+        source.toLowerCase().includes(keyword) ||
         status.toLowerCase().includes(keyword) ||
         (client.fileName || '').toLowerCase().includes(keyword) ||
-        (client.documentType || '').toLowerCase().includes(keyword);
+        (client.documentType || '').toLowerCase().includes(keyword) ||
+        (client.classificationType || '').toLowerCase().includes(keyword) ||
+        (client.borrowerType || '').toLowerCase().includes(keyword) ||
+        (client.objective || '').toLowerCase().includes(keyword) ||
+        (client.loanType || '').toLowerCase().includes(keyword) ||
+        (client.purpose || '').toLowerCase().includes(keyword) ||
+        (client.transactionType || '').toLowerCase().includes(keyword) ||
+        (client.withBorrowersGuarantors || '').toLowerCase().includes(keyword) ||
+        (client.anticipatedSettlementDate || '').toLowerCase().includes(keyword) ||
+        (client.vedaIssues || '').toLowerCase().includes(keyword) ||
+        (client.conductIssues || '').toLowerCase().includes(keyword) ||
+        (client.clientNeedsObjectives || '').toLowerCase().includes(keyword) ||
+        (client.applicantBackground || '').toLowerCase().includes(keyword) ||
+        (client.explanationOfIncome || '').toLowerCase().includes(keyword) ||
+        (client.security || '').toLowerCase().includes(keyword) ||
+        (client.specialNotes || '').toLowerCase().includes(keyword) ||
+        getReferrerName(client).toLowerCase().includes(keyword) ||
+        (getReferrerEmail(client) || '').toLowerCase().includes(keyword) ||
+        (getReferrerPhone(client) || '').toLowerCase().includes(keyword);
 
       const matchesType =
         selectedType === 'all' || client.documentType === selectedType;
 
-      const matchesLeadType =
-        selectedLeadType === 'all' || leadType === selectedLeadType;
+      const matchesSource =
+        selectedSource === 'all' || source === selectedSource;
 
       const matchesStatus =
         selectedStatus === 'all' || status === selectedStatus;
 
-      return matchesSearch && matchesType && matchesLeadType && matchesStatus;
+      return matchesSearch && matchesType && matchesSource && matchesStatus;
     });
-  }, [clients, search, selectedType, selectedLeadType, selectedStatus]);
+  }, [clients, search, selectedType, selectedSource, selectedStatus]);
 
   const documentTypes = useMemo(() => {
     return Array.from(
@@ -184,7 +440,7 @@ export default function ClientDocumentSearch() {
     return Array.from(new Set(clients.map((client) => getStatus(client))));
   }, [clients]);
 
-  const clientFolders = useMemo(() => {
+  const clientFolders = useMemo<ClientFolder[]>(() => {
     const map = new Map<string, Client[]>();
 
     filteredClients.forEach((client) => {
@@ -223,11 +479,15 @@ export default function ClientDocumentSearch() {
 
   const incompleteCount = clientFolders.filter((folder) => !folder.isComplete).length;
   const completeCount = clientFolders.filter((folder) => folder.isComplete).length;
-  const businessOwnerCount = clientFolders.filter(
-    (folder) => formatLeadType(folder.client.leadType) === 'Business Owner',
+  const brokerCount = clientFolders.filter(
+    (folder) => getClientSource(folder.client) === 'Broker',
   ).length;
-  const referrerCount = clientFolders.filter(
-    (folder) => formatLeadType(folder.client.leadType) === 'Referrer',
+  const referralCount = clientFolders.filter(
+    (folder) => getClientSource(folder.client) === 'Referral',
+  ).length;
+  const directClientCount = clientFolders.filter(
+    (folder) =>
+      getClientSource(folder.client) === 'Direct Client',
   ).length;
 
   const handleSearch = () => {
@@ -273,10 +533,25 @@ export default function ClientDocumentSearch() {
 
   const isPdfFile = previewFile?.fileName?.toLowerCase().endsWith('.pdf');
 
+  const InfoBox = ({
+    label,
+    value,
+  }: {
+    label: string;
+    value?: string | number | null;
+  }) => (
+    <div className="rounded-2xl bg-slate-50 p-4">
+      <p className="text-xs font-bold uppercase text-slate-400">{label}</p>
+      <p className="mt-1 break-words font-semibold text-slate-900">
+        {displayValue(value)}
+      </p>
+    </div>
+  );
+
   return (
     <DashboardLayout
       title="Client Document Search"
-      subtitle="Search client files, lead type, phone number, team status, and missing documents."
+      subtitle="Search client files, source, phone number, team status, loan details, and missing documents."
     >
       <div className="space-y-6">
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -286,7 +561,7 @@ export default function ClientDocumentSearch() {
                 Search Client Documents
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Search by Unique ID, name, email, phone, lead type, status, document type, or file name.
+                Search by Unique ID, name, email, phone, source, status, loan details, document type, or file name.
               </p>
             </div>
 
@@ -309,7 +584,7 @@ export default function ClientDocumentSearch() {
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') handleSearch();
                 }}
-                placeholder="Search Unique ID, name, email, phone, status, or file..."
+                placeholder="Search Unique ID, name, email, phone, source, loan details, status, or file..."
                 className="h-12 w-full rounded-xl border border-slate-300 pl-12 pr-4 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
               />
             </div>
@@ -328,13 +603,14 @@ export default function ClientDocumentSearch() {
             </select>
 
             <select
-              value={selectedLeadType}
-              onChange={(event) => setSelectedLeadType(event.target.value)}
+              value={selectedSource}
+              onChange={(event) => setSelectedSource(event.target.value)}
               className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
             >
-              <option value="all">All Lead Types</option>
-              <option value="Business Owner">Business Owner</option>
-              <option value="Referrer">Referrer</option>
+              <option value="all">All Sources</option>
+              <option value="Broker">Broker</option>
+              <option value="Referral">Referral</option>
+              <option value="Direct Client">Direct Client</option>
             </select>
 
             <select
@@ -361,7 +637,7 @@ export default function ClientDocumentSearch() {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-7">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-sm font-bold text-slate-500">Total Records</p>
             <p className="mt-2 text-3xl font-extrabold text-slate-900">
@@ -377,16 +653,23 @@ export default function ClientDocumentSearch() {
           </div>
 
           <div className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
-            <p className="text-sm font-bold text-blue-700">Business Owners</p>
+            <p className="text-sm font-bold text-blue-700">Brokers</p>
             <p className="mt-2 text-3xl font-extrabold text-blue-700">
-              {businessOwnerCount}
+              {brokerCount}
             </p>
           </div>
 
           <div className="rounded-3xl border border-purple-200 bg-purple-50 p-5 shadow-sm">
-            <p className="text-sm font-bold text-purple-700">Referrers</p>
+            <p className="text-sm font-bold text-purple-700">Referrals</p>
             <p className="mt-2 text-3xl font-extrabold text-purple-700">
-              {referrerCount}
+              {referralCount}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-cyan-200 bg-cyan-50 p-5 shadow-sm">
+            <p className="text-sm font-bold text-cyan-700">Direct Clients</p>
+            <p className="mt-2 text-3xl font-extrabold text-cyan-700">
+              {directClientCount}
             </p>
           </div>
 
@@ -429,7 +712,7 @@ export default function ClientDocumentSearch() {
                 isComplete,
                 progress,
               }) => {
-                const leadTypeLabel = formatLeadType(client.leadType);
+                const sourceLabel = getClientSource(client);
 
                 return (
                   <div
@@ -481,17 +764,19 @@ export default function ClientDocumentSearch() {
                       <div className="flex flex-wrap gap-2">
                         <span
                           className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold ${
-                            leadTypeLabel === 'Referrer'
-                              ? 'bg-purple-100 text-purple-700'
-                              : 'bg-blue-100 text-blue-700'
+                            sourceLabel === 'Referral'
+                              ? 'bg-[#EE6521]/10 text-[#EE6521]'
+                              : sourceLabel === 'Direct Client'
+                                ? 'bg-[#6CBF51]/10 text-[#6CBF51]'
+                                : 'bg-[#219688]/10 text-[#219688]'
                           }`}
                         >
-                          {leadTypeLabel === 'Referrer' ? (
+                          {sourceLabel === 'Referral' ? (
                             <FaUserFriends />
                           ) : (
                             <FaBriefcase />
                           )}
-                          {leadTypeLabel}
+                          {sourceLabel}
                         </span>
 
                         <span className="rounded-full bg-orange-100 px-4 py-2 text-sm font-bold text-orange-700">
@@ -507,6 +792,99 @@ export default function ClientDocumentSearch() {
                         >
                           {isComplete ? 'Complete' : 'Incomplete'}
                         </span>
+                      </div>
+                    </div>
+
+                    <div className="border-b border-slate-100 bg-white p-5">
+                      <p className="mb-3 text-xs font-bold uppercase text-slate-500">
+                        Submitted Loan Information
+                      </p>
+
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <InfoBox
+                          label="Classification Type"
+                          value={client.classificationType}
+                        />
+                        <InfoBox label="Borrower Type" value={client.borrowerType} />
+                        <InfoBox label="Objective" value={client.objective} />
+                        <InfoBox label="Loan Type" value={client.loanType} />
+                        <InfoBox label="Purpose" value={client.purpose} />
+                        <InfoBox
+                          label="Transaction Type"
+                          value={client.transactionType}
+                        />
+                        <InfoBox
+                          label="With Borrowers / Guarantors?"
+                          value={client.withBorrowersGuarantors}
+                        />
+                        <InfoBox
+                          label="Anticipated Settlement Date"
+                          value={client.anticipatedSettlementDate}
+                        />
+                      </div>
+
+                      {['Broker', 'Referral'].includes(sourceLabel) && (
+                        <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                          <p className="mb-3 text-sm font-extrabold text-slate-900">
+                            {getDetailLabel(client)} Details
+                          </p>
+
+                          <div className="grid gap-3 md:grid-cols-3">
+                            <InfoBox
+                              label={`${getDetailLabel(client)} Name`}
+                              value={getReferrerName(client)}
+                            />
+                            <InfoBox
+                              label={`${getDetailLabel(client)} Phone`}
+                              value={getReferrerPhone(client)}
+                            />
+                            <InfoBox
+                              label={`${getDetailLabel(client)} Email`}
+                              value={getReferrerEmail(client)}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="border-b border-slate-100 bg-white p-5">
+                      <p className="mb-3 text-xs font-bold uppercase text-slate-500">
+                        Scenario Details
+                      </p>
+
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        <InfoBox label="Veda Issues" value={client.vedaIssues} />
+                        <InfoBox label="Conduct Issues" value={client.conductIssues} />
+                        <InfoBox
+                          label="Client Needs & Objectives"
+                          value={client.clientNeedsObjectives}
+                        />
+                        <InfoBox
+                          label="Applicant Background"
+                          value={client.applicantBackground}
+                        />
+                        <InfoBox
+                          label="Explanation of Income"
+                          value={client.explanationOfIncome}
+                        />
+                        <InfoBox label="Security" value={client.security} />
+                      </div>
+                    </div>
+
+                    <div className="border-b border-slate-100 bg-white p-5">
+                      <p className="mb-3 text-xs font-bold uppercase text-slate-500">
+                        Loan Amount & Settlement
+                      </p>
+
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <InfoBox label="Loan Amount" value={client.loanAmount} />
+                        <InfoBox label="Security Value" value={client.securityValue} />
+                        <InfoBox label="LVR" value={client.lvr} />
+                        <InfoBox
+                          label="Anticipated Settlement Date"
+                          value={client.anticipatedSettlementDate}
+                        />
+                        <InfoBox label="Special Notes" value={client.specialNotes} />
                       </div>
                     </div>
 
@@ -654,7 +1032,7 @@ export default function ClientDocumentSearch() {
                 </h3>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Try searching another Unique ID, name, phone, lead type, or document type.
+                  Try searching another Unique ID, name, phone, source, loan details, or document type.
                 </p>
               </div>
             )}
@@ -666,9 +1044,14 @@ export default function ClientDocumentSearch() {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4">
           <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 p-5">
-              <h2 className="text-xl font-extrabold text-slate-900">
-                {previewFile.fileName || 'File Preview'}
-              </h2>
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-900">
+                  Client File Details
+                </h2>
+                <p className="text-sm text-slate-500">
+                  {previewFile.fileName || 'File Preview'}
+                </p>
+              </div>
 
               <button
                 type="button"
@@ -679,54 +1062,201 @@ export default function ClientDocumentSearch() {
               </button>
             </div>
 
-            <div className="bg-slate-100 p-4">
-              {previewLoading && (
-                <div className="flex h-[70vh] items-center justify-center rounded-2xl bg-white text-slate-500">
-                  Loading secure preview...
+            <div className="overflow-y-auto bg-slate-100 p-4">
+              <div className="mb-4 rounded-2xl bg-white p-5">
+                <h3 className="mb-4 text-lg font-extrabold text-slate-900">
+                  Client Information
+                </h3>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <InfoBox label="Unique ID" value={previewFile.uniqueId} />
+                  <InfoBox
+                    label="Source"
+                    value={getClientSource(previewFile)}
+                  />
+                  <InfoBox label="Team Status" value={getStatus(previewFile)} />
+                  <InfoBox label="Full Name" value={getFullName(previewFile)} />
+                  <InfoBox label="Email" value={previewFile.email} />
+                  <InfoBox label="Phone" value={previewFile.phone} />
+                  <InfoBox
+                    label="Document Type"
+                    value={formatDocumentType(previewFile.documentType)}
+                  />
+                  <InfoBox label="Submitted" value={previewFile.submittedAt} />
+                </div>
+              </div>
+
+              <div className="mb-4 rounded-2xl bg-white p-5">
+                <h3 className="mb-4 text-lg font-extrabold text-slate-900">
+                  Submitted Loan Information
+                </h3>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <InfoBox
+                    label="Classification Type"
+                    value={previewFile.classificationType}
+                  />
+                  <InfoBox
+                    label="Borrower Type"
+                    value={previewFile.borrowerType}
+                  />
+                  <InfoBox label="Objective" value={previewFile.objective} />
+                  <InfoBox label="Loan Type" value={previewFile.loanType} />
+                  <InfoBox label="Purpose" value={previewFile.purpose} />
+                  <InfoBox
+                    label="Transaction Type"
+                    value={previewFile.transactionType}
+                  />
+                  <InfoBox
+                    label="With Borrowers / Guarantors?"
+                    value={previewFile.withBorrowersGuarantors}
+                  />
+                  <InfoBox
+                    label="Anticipated Settlement Date"
+                    value={previewFile.anticipatedSettlementDate}
+                  />
+                </div>
+              </div>
+
+              {['Broker', 'Referral'].includes(getClientSource(previewFile)) && (
+                <div className="mb-4 rounded-2xl border border-blue-200 bg-blue-50 p-5">
+                  <h3 className="mb-4 text-lg font-extrabold text-slate-900">
+                    {getDetailLabel(previewFile)} Details
+                  </h3>
+
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <InfoBox
+                      label={`${getDetailLabel(previewFile)} Name`}
+                      value={getReferrerName(previewFile)}
+                    />
+                    <InfoBox
+                      label={`${getDetailLabel(previewFile)} Phone`}
+                      value={getReferrerPhone(previewFile)}
+                    />
+                    <InfoBox
+                      label={`${getDetailLabel(previewFile)} Email`}
+                      value={getReferrerEmail(previewFile)}
+                    />
+                  </div>
                 </div>
               )}
 
-              {!previewLoading && previewUrl && isImageFile && (
-                <img
-                  src={previewUrl}
-                  alt={previewFile.fileName || 'Preview'}
-                  className="mx-auto max-h-[70vh] rounded-2xl bg-white object-contain"
-                />
-              )}
+              <div className="mb-4 rounded-2xl bg-white p-5">
+                <h3 className="mb-4 text-lg font-extrabold text-slate-900">
+                  Scenario Details
+                </h3>
 
-              {!previewLoading && previewUrl && isPdfFile && (
-                <iframe
-                  src={previewUrl}
-                  title={previewFile.fileName}
-                  className="h-[70vh] w-full rounded-2xl bg-white"
-                />
-              )}
+                <div className="grid gap-3 md:grid-cols-2">
+                  <InfoBox label="Veda Issues" value={previewFile.vedaIssues} />
+                  <InfoBox
+                    label="Conduct Issues"
+                    value={previewFile.conductIssues}
+                  />
+                  <InfoBox
+                    label="Client Needs & Objectives"
+                    value={previewFile.clientNeedsObjectives}
+                  />
+                  <InfoBox
+                    label="Applicant Background"
+                    value={previewFile.applicantBackground}
+                  />
+                  <InfoBox
+                    label="Explanation of Income"
+                    value={previewFile.explanationOfIncome}
+                  />
+                  <InfoBox label="Security" value={previewFile.security} />
+                </div>
+              </div>
 
-              {!previewLoading && previewUrl && !isImageFile && !isPdfFile && (
-                <div className="flex h-[70vh] flex-col items-center justify-center rounded-2xl bg-white text-center text-slate-500">
-                  <FaFileAlt className="mb-4 text-5xl text-slate-300" />
-                  <p className="font-bold text-slate-700">
-                    Preview not available for this file type.
-                  </p>
-                  <p className="mt-1 text-sm">
-                    Please download the file to view it.
-                  </p>
+              <div className="mb-4 rounded-2xl bg-white p-5">
+                <h3 className="mb-4 text-lg font-extrabold text-slate-900">
+                  Loan Amount & Settlement
+                </h3>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <InfoBox label="Loan Amount" value={previewFile.loanAmount} />
+                  <InfoBox
+                    label="Security Value"
+                    value={previewFile.securityValue}
+                  />
+                  <InfoBox label="LVR" value={previewFile.lvr} />
+                  <InfoBox
+                    label="Anticipated Settlement Date"
+                    value={previewFile.anticipatedSettlementDate}
+                  />
+                  <InfoBox label="Special Notes" value={previewFile.specialNotes} />
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-white p-4">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-4">
+                  <div>
+                    <p className="break-all font-semibold text-slate-900">
+                      {previewFile.fileName || 'No file selected'}
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      Submitted client file
+                    </p>
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => window.open(previewUrl, '_blank')}
-                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-green-500 px-5 py-3 text-sm font-bold text-white hover:bg-green-600"
+                    onClick={() => handleDownload(previewFile)}
+                    className="inline-flex items-center gap-2 rounded-lg bg-green-500 px-4 py-2 text-sm font-semibold text-white hover:bg-green-600"
                   >
                     <FaDownload />
-                    Open / Download
+                    Download
                   </button>
                 </div>
-              )}
 
-              {!previewLoading && !previewUrl && (
-                <div className="flex h-[70vh] items-center justify-center rounded-2xl bg-white text-slate-500">
-                  No preview available.
-                </div>
-              )}
+                {previewLoading && (
+                  <div className="flex h-[70vh] items-center justify-center rounded-2xl bg-white text-slate-500">
+                    Loading secure preview...
+                  </div>
+                )}
+
+                {!previewLoading && previewUrl && isImageFile && (
+                  <img
+                    src={previewUrl}
+                    alt={previewFile.fileName || 'Preview'}
+                    className="mx-auto max-h-[70vh] rounded-2xl bg-white object-contain"
+                  />
+                )}
+
+                {!previewLoading && previewUrl && isPdfFile && (
+                  <iframe
+                    src={previewUrl}
+                    title={previewFile.fileName}
+                    className="h-[70vh] w-full rounded-2xl bg-white"
+                  />
+                )}
+
+                {!previewLoading && previewUrl && !isImageFile && !isPdfFile && (
+                  <div className="flex h-[70vh] flex-col items-center justify-center rounded-2xl bg-white text-center text-slate-500">
+                    <FaFileAlt className="mb-4 text-5xl text-slate-300" />
+                    <p className="font-bold text-slate-700">
+                      Preview not available for this file type.
+                    </p>
+                    <p className="mt-1 text-sm">
+                      Please download the file to view it.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => window.open(previewUrl, '_blank')}
+                      className="mt-5 inline-flex items-center gap-2 rounded-xl bg-green-500 px-5 py-3 text-sm font-bold text-white hover:bg-green-600"
+                    >
+                      <FaDownload />
+                      Open / Download
+                    </button>
+                  </div>
+                )}
+
+                {!previewLoading && !previewUrl && (
+                  <div className="flex h-[70vh] items-center justify-center rounded-2xl bg-white text-slate-500">
+                    No preview available.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
