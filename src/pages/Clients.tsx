@@ -6,8 +6,6 @@ import {
   FaExclamationTriangle,
   FaEye,
   FaFileAlt,
-  FaCalendarAlt,
-  FaEnvelope,
   FaPhone,
   FaSearch,
   FaTimes,
@@ -34,25 +32,6 @@ const documentLabels: Record<string, string> = {
   'income-documents': 'Income Documents',
   other: 'Other',
 };
-
-const specialists = {
-  giulio: {
-    label: 'Giulio Avian',
-    name: 'Giulio Avian',
-    phone: '03 8696 6300',
-    email: 'giulio@fundsnational.com',
-    bookingLink: 'https://calendly.com/giulio-4',
-  },
-  leo: {
-    label: 'Leo Iermano',
-    name: 'Leo Iermano',
-    phone: '03 8696 6300',
-    email: 'leo@sbrassist.com.au',
-    bookingLink: 'https://calendly.com/leo-sbrassist/',
-  },
-} as const;
-
-type SpecialistKey = keyof typeof specialists;
 
 type Client = {
   [key: string]: unknown;
@@ -123,10 +102,6 @@ export default function Clients() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedSpecialistKey, setSelectedSpecialistKey] =
-    useState<SpecialistKey>('giulio');
-
-  const selectedSpecialist = specialists[selectedSpecialistKey];
 
   const getSecureFileUrl = async (fileUrl?: string) => {
     if (!fileUrl) throw new Error('No file URL available.');
@@ -432,108 +407,6 @@ export default function Clients() {
       subtitle="View submitted clients, source, loan details, team call status, and document completion."
     >
       <div className="mx-auto max-w-7xl space-y-5">
-        <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
-          <div className="bg-gradient-to-r from-[#219688] via-[#6CBF51] to-[#EE6521] p-5 text-white">
-            <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-white/80">
-              Chat with Your Specialist
-            </p>
-            <h2 className="mt-2 text-2xl font-extrabold">
-              Need help with your client?
-            </h2>
-            <p className="mt-1 text-sm font-medium text-white/85">
-              Select a specialist to view contact and booking details.
-            </p>
-          </div>
-
-          <div className="grid gap-5 p-5 lg:grid-cols-[320px_1fr]">
-            <div>
-              <label className="mb-2 block text-sm font-bold text-slate-700">
-                Specialist
-              </label>
-              <select
-                value={selectedSpecialistKey}
-                onChange={(event) =>
-                  setSelectedSpecialistKey(event.target.value as SpecialistKey)
-                }
-                className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 outline-none focus:border-[#219688] focus:ring-2 focus:ring-[#219688]/20"
-              >
-                {Object.entries(specialists).map(([key, specialist]) => (
-                  <option key={key} value={key}>
-                    {specialist.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#219688] text-xl font-extrabold text-white shadow-md">
-                    {selectedSpecialist.name
-                      .split(' ')
-                      .map((part) => part[0])
-                      .join('')
-                      .slice(0, 2)}
-                  </div>
-
-                  <div>
-                    <h3 className="text-xl font-extrabold text-slate-900">
-                      {selectedSpecialist.name}
-                    </h3>
-                    <p className="text-sm font-semibold text-slate-500">
-                      Client Specialist
-                    </p>
-                  </div>
-                </div>
-
-                <a
-                  href={selectedSpecialist.bookingLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#EE6521] px-5 text-sm font-extrabold text-white shadow-sm hover:bg-[#d95518]"
-                >
-                  <FaCalendarAlt />
-                  Book a time
-                </a>
-              </div>
-
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
-                <a
-                  href={`tel:${selectedSpecialist.phone.replace(/\s+/g, '')}`}
-                  className="rounded-xl bg-white p-4 text-sm font-bold text-slate-700 ring-1 ring-slate-200 hover:ring-[#219688]/40"
-                >
-                  <span className="mb-1 flex items-center gap-2 text-xs uppercase text-slate-400">
-                    <FaPhone /> Phone
-                  </span>
-                  {selectedSpecialist.phone}
-                </a>
-
-                <a
-                  href={`mailto:${selectedSpecialist.email}`}
-                  className="rounded-xl bg-white p-4 text-sm font-bold text-slate-700 ring-1 ring-slate-200 hover:ring-[#219688]/40"
-                >
-                  <span className="mb-1 flex items-center gap-2 text-xs uppercase text-slate-400">
-                    <FaEnvelope /> Email
-                  </span>
-                  {selectedSpecialist.email}
-                </a>
-
-                <a
-                  href={selectedSpecialist.bookingLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded-xl bg-white p-4 text-sm font-bold text-blue-600 ring-1 ring-slate-200 hover:ring-[#EE6521]/40"
-                >
-                  <span className="mb-1 flex items-center gap-2 text-xs uppercase text-slate-400">
-                    <FaCalendarAlt /> Calendly
-                  </span>
-                  {selectedSpecialist.bookingLink.replace('https://', '')}
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
           <div className="relative">
             <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
