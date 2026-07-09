@@ -851,10 +851,10 @@ export default function ClientDashboard() {
 
   if (!loggedClient) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f4fbf4] px-4 py-8 font-sans sm:px-6 lg:py-12">
-        <div className="w-full max-w-[900px] rounded-[36px] bg-white px-6 py-10 shadow-[0_28px_80px_rgba(15,23,42,0.14)] sm:rounded-[44px] sm:px-12 sm:py-14 lg:px-16">
+      <div className="flex min-h-screen items-center justify-center bg-[#f4fbf4] px-4 py-8 font-sans sm:px-6">
+        <div className="w-full max-w-[640px] rounded-[30px] bg-white px-6 py-8 shadow-[0_22px_64px_rgba(15,23,42,0.13)] sm:px-10 sm:py-10 lg:px-12">
           <div className="text-center">
-            <div className="mx-auto mb-10 flex h-32 w-32 items-center justify-center rounded-[34px] border border-[#cfe8e4] bg-white p-6 shadow-[0_18px_36px_rgba(15,23,42,0.16)] sm:h-40 sm:w-40 sm:rounded-[40px]">
+            <div className="mx-auto mb-7 flex h-24 w-24 items-center justify-center rounded-[26px] border border-[#cfe8e4] bg-white p-4 shadow-[0_14px_28px_rgba(15,23,42,0.14)] sm:h-28 sm:w-28 sm:rounded-[30px]">
               <img
                 src="/logo/logo.png"
                 alt="Company Logo"
@@ -862,47 +862,47 @@ export default function ClientDashboard() {
               />
             </div>
 
-            <h1 className="text-4xl font-black text-[#259b8f] sm:text-5xl lg:text-6xl">
+            <h1 className="text-3xl font-black text-[#259b8f] sm:text-4xl">
               Client Portal Login
             </h1>
 
-            <p className="mx-auto mt-5 max-w-2xl text-center text-xl leading-relaxed text-slate-500 sm:text-2xl">
+            <p className="mx-auto mt-4 max-w-lg text-center text-base leading-relaxed text-slate-500 sm:text-lg">
               Use your Client ID as username and your last name as password.
             </p>
           </div>
 
-          <form onSubmit={handleClientLogin} className="mx-auto mt-12 max-w-[760px] space-y-8 sm:mt-14">
+          <form onSubmit={handleClientLogin} className="mx-auto mt-9 max-w-[500px] space-y-6">
             <div>
-              <label className="mb-4 block text-xl font-black text-slate-700 sm:text-2xl">
+              <label className="mb-3 block text-base font-black text-slate-700 sm:text-lg">
                 Client ID
               </label>
 
               <div className="relative">
-                <FaIdBadge className="absolute left-5 top-1/2 -translate-y-1/2 text-xl text-slate-400 sm:left-8 sm:text-2xl" />
+                <FaIdBadge className="absolute left-5 top-1/2 -translate-y-1/2 text-lg text-slate-400" />
 
                 <input
                   value={loginUniqueId}
                   onChange={(event) => setLoginUniqueId(event.target.value)}
                   placeholder="Example: CL-81BE533A"
-                  className="h-16 w-full rounded-[20px] border border-slate-300 pl-16 pr-5 text-base font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15 sm:h-20 sm:pl-24 sm:pr-6 sm:text-2xl"
+                  className="h-14 w-full rounded-2xl border border-slate-300 pl-14 pr-5 text-base font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15 sm:h-16 sm:text-lg"
                 />
               </div>
             </div>
 
             <div>
-              <label className="mb-4 block text-xl font-black text-slate-700 sm:text-2xl">
+              <label className="mb-3 block text-base font-black text-slate-700 sm:text-lg">
                 Password
               </label>
 
               <div className="relative">
-                <FaLock className="absolute left-5 top-1/2 -translate-y-1/2 text-xl text-slate-400 sm:left-8 sm:text-2xl" />
+                <FaLock className="absolute left-5 top-1/2 -translate-y-1/2 text-lg text-slate-400" />
 
                 <input
                   type="password"
                   value={loginPassword}
                   onChange={(event) => setLoginPassword(event.target.value)}
                   placeholder="Enter your last name"
-                  className="h-16 w-full rounded-[20px] border border-slate-300 pl-16 pr-5 text-base font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15 sm:h-20 sm:pl-24 sm:pr-6 sm:text-2xl"
+                  className="h-14 w-full rounded-2xl border border-slate-300 pl-14 pr-5 text-base font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15 sm:h-16 sm:text-lg"
                 />
               </div>
             </div>
@@ -910,13 +910,13 @@ export default function ClientDashboard() {
             <button
               type="submit"
               disabled={loading}
-              className="mt-10 h-16 w-full rounded-[20px] bg-[#259b8f] text-xl font-black text-white shadow-[0_16px_28px_rgba(37,155,143,0.28)] transition hover:bg-[#1f887d] disabled:bg-[#259b8f]/40 sm:h-20 sm:text-2xl"
+              className="mt-8 h-14 w-full rounded-2xl bg-[#259b8f] text-lg font-black text-white shadow-[0_14px_24px_rgba(37,155,143,0.25)] transition hover:bg-[#1f887d] disabled:bg-[#259b8f]/40 sm:h-16 sm:text-xl"
             >
               {loading ? 'Signing in...' : 'Login'}
             </button>
           </form>
 
-          <p className="mt-12 text-center text-lg text-slate-400 sm:text-xl">
+          <p className="mt-9 text-center text-sm text-slate-400 sm:text-base">
             Example password: client last name only.
           </p>
         </div>
