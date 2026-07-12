@@ -1,14 +1,38 @@
 import { useState } from 'react';
-import emailjs from '@emailjs/browser';
 
-const SERVICE_ID = 'service_4d8mjir';
-const TEMPLATE_ID = 'template_5iexv1b';
-const PUBLIC_KEY = 'Z-lJJhTln-512oNez';
+const ENV_API_BASE = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '');
+const LOCAL_API_BASE = 'http://localhost:7071/api';
+const PRODUCTION_API_BASE = 'https://docsuploadpythonapi.azurewebsites.net/api';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://docsuploadpythonapi.azurewebsites.net/api';
+const isLocalDevelopment =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const API_BASE =
+  ENV_API_BASE || (isLocalDevelopment ? LOCAL_API_BASE : PRODUCTION_API_BASE);
+
 const API_URL = `${API_BASE}/uploadclient`;
-const CLIENT_DASHBOARD_URL =
-  'https://icy-river-055fcb80f.7.azurestaticapps.net/client-dashboard';
+
+type GhlOperationResult = {
+  success?: boolean;
+  skipped?: boolean;
+  statusCode?: number;
+  message?: string;
+  body?: unknown;
+};
+
+type UploadClientResponse = {
+  success: boolean;
+  message: string;
+  clientId: number;
+  uniqueId: string;
+  blobUrl: string;
+  leadType?: string;
+  source?: string;
+  status?: string;
+  ghlSync?: GhlOperationResult;
+  ghlSubmissionTrigger?: GhlOperationResult;
+};
 
 const documentOptions = [
   { label: 'ID', value: 'id' },
@@ -41,6 +65,16 @@ const loanTypeOptions = ['Commercial', 'Residential'];
 const purposeOptions = ['Investment', 'Owner occupied'];
 const transactionOptions = ['Alt doc', 'Full doc'];
 const yesNoOptions = ['Yes', 'No'];
+const countryCodeOptions = [
+  { label: 'PH +63', value: '+63' },
+  { label: 'AU +61', value: '+61' },
+  { label: 'US +1', value: '+1' },
+  { label: 'UK +44', value: '+44' },
+  { label: 'NZ +64', value: '+64' },
+  { label: 'SG +65', value: '+65' },
+  { label: 'CA +1', value: '+1' },
+];
+const phoneHelperText = 'Choose the country code, then enter the local phone number.';
 
 const initialFormData = {
   leadType: 'broker',
@@ -50,6 +84,7 @@ const initialFormData = {
   middleName: '',
   lastName: '',
   email: '',
+  phoneCountryCode: '+63',
   phone: '',
 
   classificationType: '',
@@ -63,6 +98,7 @@ const initialFormData = {
   referrerFirstName: '',
   referrerMiddleName: '',
   referrerLastName: '',
+  referrerPhoneCountryCode: '+63',
   referrerPhone: '',
   referrerEmail: '',
 
@@ -90,11 +126,7 @@ const initialFormData = {
 };
 
 const normalizeSource = (source?: string) =>
-  (source || 'broker')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/-/g, '_');
+  (source || 'broker').trim().toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
 
 const canonicalSource = (source?: string) => {
   const normalized = normalizeSource(source);
@@ -110,13 +142,11 @@ const canonicalSource = (source?: string) => {
   return 'broker';
 };
 
-const isDirectClientSource = (source?: string) =>
-  canonicalSource(source) === 'direct-client';
+const isDirectClientSource = (source?: string) => canonicalSource(source) === 'direct-client';
 
 const isReferralSource = (source?: string) => canonicalSource(source) === 'referral';
 
 const isBrokerSource = (source?: string) => canonicalSource(source) === 'broker';
-
 
 const appendFormAliases = (
   formData: FormData,
@@ -130,19 +160,32 @@ const appendFormAliases = (
   });
 };
 
+const formatPhoneNumber = (countryCode: string, phone: string) => {
+  const cleanPhone = phone.trim();
+
+  if (!cleanPhone) return '';
+  if (cleanPhone.startsWith('+')) return cleanPhone;
+
+  return `${countryCode} ${cleanPhone}`;
+};
+
 export default function HomePage() {
+  console.info('Client Submission API:', API_URL);
+
   const [formData, setFormData] = useState(initialFormData);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const showReferrerDetails =
-    isBrokerSource(formData.source) || isReferralSource(formData.source);
+  const showReferrerDetails = isBrokerSource(formData.source) || isReferralSource(formData.source);
 
   const detailLabel = isBrokerSource(formData.source) ? 'Broker' : 'Referral';
+  const fullPhone = formatPhoneNumber(formData.phoneCountryCode, formData.phone);
+  const fullReferrerPhone = formatPhoneNumber(
+    formData.referrerPhoneCountryCode,
+    formData.referrerPhone,
+  );
 
   const handleChange = (
-    event: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >,
+    event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = event.target;
 
@@ -164,6 +207,7 @@ export default function HomePage() {
             referrerFirstName: '',
             referrerMiddleName: '',
             referrerLastName: '',
+            referrerPhoneCountryCode: '+63',
             referrerPhone: '',
             referrerEmail: '',
           }
@@ -192,10 +236,7 @@ export default function HomePage() {
     });
   };
 
-  const handleDocumentFileChange = (
-    type: string,
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleDocumentFileChange = (type: string, event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null;
 
     setFormData((prev) => ({
@@ -248,10 +289,14 @@ export default function HomePage() {
     appendFormAliases(azureFormData, ['source', 'Source'], selectedSource);
 
     appendFormAliases(azureFormData, ['firstName', 'FirstName', 'first_name'], formData.firstName);
-    appendFormAliases(azureFormData, ['middleName', 'MiddleName', 'middle_name'], formData.middleName);
+    appendFormAliases(
+      azureFormData,
+      ['middleName', 'MiddleName', 'middle_name'],
+      formData.middleName,
+    );
     appendFormAliases(azureFormData, ['lastName', 'LastName', 'last_name'], formData.lastName);
     appendFormAliases(azureFormData, ['email', 'Email'], formData.email);
-    appendFormAliases(azureFormData, ['phone', 'Phone'], formData.phone);
+    appendFormAliases(azureFormData, ['phone', 'Phone'], fullPhone);
 
     appendFormAliases(
       azureFormData,
@@ -300,7 +345,7 @@ export default function HomePage() {
     appendFormAliases(
       azureFormData,
       ['referrerPhone', 'ReferrerPhone', 'referrer_phone'],
-      formData.referrerPhone,
+      fullReferrerPhone,
     );
     appendFormAliases(
       azureFormData,
@@ -308,7 +353,11 @@ export default function HomePage() {
       formData.referrerEmail,
     );
 
-    appendFormAliases(azureFormData, ['vedaIssues', 'VedaIssues', 'veda_issues'], formData.vedaIssues);
+    appendFormAliases(
+      azureFormData,
+      ['vedaIssues', 'VedaIssues', 'veda_issues'],
+      formData.vedaIssues,
+    );
     appendFormAliases(
       azureFormData,
       ['conductIssues', 'ConductIssues', 'conduct_issues'],
@@ -331,7 +380,11 @@ export default function HomePage() {
     );
     appendFormAliases(azureFormData, ['security', 'Security'], formData.security);
 
-    appendFormAliases(azureFormData, ['loanAmount', 'LoanAmount', 'loan_amount'], formData.loanAmount);
+    appendFormAliases(
+      azureFormData,
+      ['loanAmount', 'LoanAmount', 'loan_amount'],
+      formData.loanAmount,
+    );
     appendFormAliases(
       azureFormData,
       ['securityValue', 'SecurityValue', 'security_value'],
@@ -362,85 +415,29 @@ export default function HomePage() {
       body: azureFormData,
     });
 
-    const result = await response.json();
+    let result: UploadClientResponse;
+
+    try {
+      result = (await response.json()) as UploadClientResponse;
+    } catch {
+      throw new Error(`The server returned an invalid response (${response.status}).`);
+    }
 
     if (!response.ok || !result.success) {
       throw new Error(result.message || 'Azure upload failed.');
     }
 
-    return result as {
-      success: boolean;
-      message: string;
-      clientId: number;
-      uniqueId: string;
-      blobUrl: string;
-      leadType?: string;
-      source?: string;
-      status?: string;
-      ghlSync?: unknown;
-    };
+    console.info('GHL contact sync:', result.ghlSync);
+    console.info('GHL submission workflow trigger:', result.ghlSubmissionTrigger);
+
+    return result;
   };
 
-  const scheduleIncompleteReminder = (clientData: {
-    uniqueId: string;
-    fullName: string;
-    email: string;
-    missingRequirements: string[];
-  }) => {
-    const existingNotifications = JSON.parse(
-      localStorage.getItem('notifications') || '[]',
-    );
-
-    const reminderNotification = {
-      id: Date.now(),
-      title: 'Incomplete Client Submission',
-      message: `${clientData.fullName} is incomplete. Missing: ${clientData.missingRequirements.join(
-        ', ',
-      )}.`,
-      time: new Date().toLocaleString(),
-      unread: true,
-      type: 'incomplete',
-      redirectTo: '/dashboard',
-    };
-
-    localStorage.setItem(
-      'notifications',
-      JSON.stringify([reminderNotification, ...existingNotifications]),
-    );
-
-    window.setTimeout(async () => {
-      try {
-        await emailjs.send(
-          SERVICE_ID,
-          TEMPLATE_ID,
-          {
-            to_email: clientData.email,
-            email: clientData.email,
-            email_title: 'Incomplete Document Submission',
-            unique_id: clientData.uniqueId,
-            full_name: clientData.fullName,
-            document_type: 'Incomplete Submission',
-            file_name: 'N/A',
-            submitted_at: new Date().toLocaleString(),
-            message:
-              'Your submission is incomplete. Please upload the missing required documents.',
-            missing_fields: clientData.missingRequirements.join(', '),
-            dashboard_link: CLIENT_DASHBOARD_URL,
-          },
-          { publicKey: PUBLIC_KEY },
-        );
-      } catch (error) {
-        console.error('Incomplete reminder email failed:', error);
-      }
-    }, 5 * 60 * 1000);
-  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const missingFiles = formData.documentTypes.filter(
-      (type) => !formData.documentFiles[type],
-    );
+    const missingFiles = formData.documentTypes.filter((type) => !formData.documentFiles[type]);
 
     if (missingFiles.length > 0) {
       alert('Please upload a file for each selected document type, or uncheck the document type.');
@@ -450,9 +447,7 @@ export default function HomePage() {
     try {
       setIsSubmitting(true);
 
-      const existingNotifications = JSON.parse(
-        localStorage.getItem('notifications') || '[]',
-      );
+      const existingNotifications = JSON.parse(localStorage.getItem('notifications') || '[]');
 
       const fullName = `${formData.firstName} ${formData.middleName} ${formData.lastName}`
         .replace(/\s+/g, ' ')
@@ -477,11 +472,7 @@ export default function HomePage() {
 
           if (!file) continue;
 
-          const result = await uploadToAzure(
-            selectedDocumentType,
-            file,
-            sharedUniqueId,
-          );
+          const result = await uploadToAzure(selectedDocumentType, file, sharedUniqueId);
 
           if (!sharedUniqueId) {
             sharedUniqueId = result.uniqueId;
@@ -501,14 +492,28 @@ export default function HomePage() {
         throw new Error('No submission result returned from Azure.');
       }
 
+      const initialSubmissionResult = uploadResults[0];
+
+      const ghlTriggerResult = initialSubmissionResult?.ghlSubmissionTrigger;
+
+      if (!ghlTriggerResult) {
+        console.warn(
+          'The backend response does not include ghlSubmissionTrigger. ' +
+            'The backend may still be the older deployed version.',
+        );
+      } else if (ghlTriggerResult.success !== true) {
+        console.warn(
+          'The application was saved, but the GHL confirmation workflow was not triggered:',
+          ghlTriggerResult,
+        );
+      } else {
+        console.info('GHL confirmation workflow triggered successfully.');
+      }
+
       const selectedDocumentLabels = formData.documentTypes.length
         ? formData.documentTypes.map(formatDocumentType).join(', ')
         : 'loan application details';
 
-      const uploadedFileNames = uploadResults
-        .map((item) => item.fileName)
-        .filter(Boolean)
-        .join(', ');
 
       const missingRequirements = getMissingRequirements(formData);
       const isIncomplete = missingRequirements.length > 0;
@@ -517,9 +522,7 @@ export default function HomePage() {
       const newNotification = {
         id: Date.now(),
         clientId: uploadResults[0]?.clientId,
-        title: isIncomplete
-          ? 'Incomplete Client Submission'
-          : 'New Complete Document Submission',
+        title: isIncomplete ? 'Incomplete Client Submission' : 'New Complete Document Submission',
         message: isIncomplete
           ? `${fullName} submitted ${selectedDocumentLabels}. Missing: ${missingRequirements.join(
               ', ',
@@ -540,80 +543,6 @@ export default function HomePage() {
         JSON.stringify([newNotification, ...existingNotifications]),
       );
 
-      await emailjs.send(
-        SERVICE_ID,
-        TEMPLATE_ID,
-        {
-          to_email: formData.email,
-          email: formData.email,
-          email_title: isIncomplete
-            ? 'Incomplete Document Submission'
-            : 'New Document Submission',
-          unique_id: uniqueId,
-          full_name: fullName,
-          phone: formData.phone || 'N/A',
-          lead_type: sourceLabel,
-          source: sourceLabel,
-          status: 'Pending Team Call',
-
-          classification_type: formData.classificationType || 'N/A',
-          borrower_type: formData.borrowerType || 'N/A',
-          objective: formData.objective || 'N/A',
-          loan_type: formData.loanType || 'N/A',
-          purpose: formData.purpose || 'N/A',
-          transaction_type: formData.transactionType || 'N/A',
-          with_borrowers_guarantors:
-            formData.withBorrowersGuarantors || 'N/A',
-
-          referrer_first_name: formData.referrerFirstName || 'N/A',
-          referrer_middle_name: formData.referrerMiddleName || 'N/A',
-          referrer_last_name: formData.referrerLastName || 'N/A',
-          referrer_phone: formData.referrerPhone || 'N/A',
-          referrer_email: formData.referrerEmail || 'N/A',
-
-          veda_issues: formData.vedaIssues || 'N/A',
-          conduct_issues: formData.conductIssues || 'N/A',
-          client_needs_objectives:
-            formData.clientNeedsObjectives || 'N/A',
-          applicant_background: formData.applicantBackground || 'N/A',
-          explanation_of_income: formData.explanationOfIncome || 'N/A',
-          security: formData.security || 'N/A',
-          loan_amount: formData.loanAmount || 'N/A',
-          security_value: formData.securityValue || 'N/A',
-          lvr: formData.lvr || 'N/A',
-          anticipated_settlement_date:
-            formData.anticipatedSettlementDate || 'N/A',
-          special_notes: formData.specialNotes || 'N/A',
-
-          document_type: selectedDocumentLabels,
-          file_name: uploadedFileNames,
-          submitted_at: submittedAt,
-
-          sss_number: formData.sssNumber || 'N/A',
-          hdmf_number: formData.hdmfNumber || 'N/A',
-          philhealth_number: formData.philhealthNumber || 'N/A',
-          tin_number: formData.tinNumber || 'N/A',
-          license_number: formData.licenseNumber || 'N/A',
-
-          message: isIncomplete
-            ? 'Your submission is incomplete. Please upload the missing required documents.'
-            : 'Your documents have been successfully submitted.',
-          missing_fields: isIncomplete
-            ? missingRequirements.join(', ')
-            : 'None',
-          dashboard_link: CLIENT_DASHBOARD_URL,
-        },
-        { publicKey: PUBLIC_KEY },
-      );
-
-      if (isIncomplete) {
-        scheduleIncompleteReminder({
-          uniqueId,
-          fullName,
-          email: formData.email,
-          missingRequirements,
-        });
-      }
 
       alert(
         isIncomplete
@@ -625,16 +554,12 @@ export default function HomePage() {
 
       setFormData({ ...initialFormData });
 
-      document
-        .querySelectorAll<HTMLInputElement>('input[type="file"]')
-        .forEach((input) => {
-          input.value = '';
-        });
+      document.querySelectorAll<HTMLInputElement>('input[type="file"]').forEach((input) => {
+        input.value = '';
+      });
     } catch (error) {
       console.error('Submit error:', error);
-      alert(
-        error instanceof Error ? error.message : 'Document submission failed.',
-      );
+      alert(error instanceof Error ? error.message : 'Document submission failed.');
     } finally {
       setIsSubmitting(false);
     }
@@ -654,9 +579,7 @@ export default function HomePage() {
     required?: boolean;
   }) => (
     <div>
-      <label className="mb-2 block text-sm font-semibold text-slate-700">
-        {label}
-      </label>
+      <label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label>
 
       <select
         name={name}
@@ -686,9 +609,7 @@ export default function HomePage() {
     placeholder?: string;
   }) => (
     <div>
-      <label className="mb-2 block text-sm font-semibold text-slate-700">
-        {label}
-      </label>
+      <label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label>
 
       <textarea
         name={name}
@@ -707,11 +628,7 @@ export default function HomePage() {
         <div className="w-full max-w-5xl rounded-3xl bg-white p-6 shadow-xl sm:p-8">
           <div className="mb-8 text-center">
             <div className="mb-5 flex justify-center">
-              <img
-                src="/logo/logo.png"
-                alt="Company Logo"
-                className="h-20 w-auto object-contain"
-              />
+              <img src="/logo/logo.png" alt="Company Logo" className="h-20 w-auto object-contain" />
             </div>
 
             <h1 className="text-3xl font-extrabold text-[#219688] sm:text-4xl">
@@ -723,7 +640,6 @@ export default function HomePage() {
             </p>
 
             <div className="mt-5 flex flex-wrap justify-center gap-2">
-
               <span className="rounded-full bg-[#EE6521]/10 px-3 py-1 text-xs font-semibold text-[#EE6521]">
                 Broker
               </span>
@@ -740,9 +656,7 @@ export default function HomePage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                Source
-              </label>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Source</label>
 
               <div className="grid gap-3 sm:grid-cols-3">
                 {sourceOptions.map((source) => {
@@ -759,9 +673,7 @@ export default function HomePage() {
                           : 'border-slate-300 bg-white hover:border-blue-300'
                       }`}
                     >
-                      <span className="text-sm font-bold text-slate-800">
-                        {source.label}
-                      </span>
+                      <span className="text-sm font-bold text-slate-800">{source.label}</span>
                     </button>
                   );
                 })}
@@ -770,9 +682,7 @@ export default function HomePage() {
 
             {showReferrerDetails && (
               <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
-                <h3 className="mb-4 text-lg font-bold text-slate-900">
-                  {detailLabel} Details
-                </h3>
+                <h3 className="mb-4 text-lg font-bold text-slate-900">{detailLabel} Details</h3>
 
                 <div className="grid gap-4 md:grid-cols-3">
                   <input
@@ -804,14 +714,34 @@ export default function HomePage() {
                 </div>
 
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <input
-                    type="tel"
-                    name="referrerPhone"
-                    value={formData.referrerPhone}
-                    onChange={handleChange}
-                    placeholder={`${detailLabel} Phone`}
-                    className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
-                  />
+                  <div>
+                    <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2">
+                      <select
+                        name="referrerPhoneCountryCode"
+                        value={formData.referrerPhoneCountryCode}
+                        onChange={handleChange}
+                        className="h-12 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-orange-500"
+                      >
+                        {countryCodeOptions.map((country) => (
+                          <option key={`${country.label}-${country.value}`} value={country.value}>
+                            {country.label}
+                          </option>
+                        ))}
+                      </select>
+
+                      <input
+                        type="tel"
+                        name="referrerPhone"
+                        value={formData.referrerPhone}
+                        onChange={handleChange}
+                        placeholder={`${detailLabel} Phone`}
+                        inputMode="tel"
+                        autoComplete="tel"
+                        className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+                      />
+                    </div>
+                    <p className="mt-2 text-xs font-medium text-slate-500">{phoneHelperText}</p>
+                  </div>
 
                   <input
                     type="email"
@@ -826,9 +756,7 @@ export default function HomePage() {
             )}
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <h3 className="mb-4 text-lg font-bold text-slate-900">
-                Primary Borrower Details
-              </h3>
+              <h3 className="mb-4 text-lg font-bold text-slate-900">Primary Borrower Details</h3>
 
               <div className="grid gap-5 md:grid-cols-3">
                 <input
@@ -872,66 +800,123 @@ export default function HomePage() {
                   required
                 />
 
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  placeholder="Phone Number"
-                  className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
-                  required
-                />
+                <div>
+                  <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2">
+                    <select
+                      name="phoneCountryCode"
+                      value={formData.phoneCountryCode}
+                      onChange={handleChange}
+                      className="h-12 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-orange-500"
+                    >
+                      {countryCodeOptions.map((country) => (
+                        <option key={`${country.label}-${country.value}`} value={country.value}>
+                          {country.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleChange}
+                      placeholder="Phone Number"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+                      required
+                    />
+                  </div>
+                  <p className="mt-2 text-xs font-medium text-slate-500">{phoneHelperText}</p>
+                </div>
               </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5">
-              <h3 className="mb-4 text-lg font-bold text-slate-900">
-                Loan Details
-              </h3>
+              <h3 className="mb-4 text-lg font-bold text-slate-900">Loan Details</h3>
 
               <div className="grid gap-5 md:grid-cols-2">
-                {renderSelectField({ name: 'classificationType', label: 'Classification Type', options: classificationOptions })}
+                {renderSelectField({
+                  name: 'classificationType',
+                  label: 'Classification Type',
+                  options: classificationOptions,
+                })}
 
-                {renderSelectField({ name: 'borrowerType', label: 'Borrower Type', options: borrowerOptions })}
+                {renderSelectField({
+                  name: 'borrowerType',
+                  label: 'Borrower Type',
+                  options: borrowerOptions,
+                })}
 
-                {renderSelectField({ name: 'objective', label: 'Objective', options: objectiveOptions })}
+                {renderSelectField({
+                  name: 'objective',
+                  label: 'Objective',
+                  options: objectiveOptions,
+                })}
 
-                {renderSelectField({ name: 'loanType', label: 'Loan Type', options: loanTypeOptions })}
+                {renderSelectField({
+                  name: 'loanType',
+                  label: 'Loan Type',
+                  options: loanTypeOptions,
+                })}
 
                 {renderSelectField({ name: 'purpose', label: 'Purpose', options: purposeOptions })}
 
-                {renderSelectField({ name: 'transactionType', label: 'Transaction Type', options: transactionOptions })}
+                {renderSelectField({
+                  name: 'transactionType',
+                  label: 'Transaction Type',
+                  options: transactionOptions,
+                })}
 
-                {renderSelectField({ name: 'withBorrowersGuarantors', label: 'With borrowers / guarantors?', options: yesNoOptions })}
+                {renderSelectField({
+                  name: 'withBorrowersGuarantors',
+                  label: 'With borrowers / guarantors?',
+                  options: yesNoOptions,
+                })}
               </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5">
-              <h3 className="mb-4 text-lg font-bold text-slate-900">
-                Scenario Details
-              </h3>
+              <h3 className="mb-4 text-lg font-bold text-slate-900">Scenario Details</h3>
 
               <div className="grid gap-5 md:grid-cols-2">
-                {renderSelectField({ name: 'vedaIssues', label: 'Veda Issues', options: yesNoOptions, required: false })}
+                {renderSelectField({
+                  name: 'vedaIssues',
+                  label: 'Veda Issues',
+                  options: yesNoOptions,
+                  required: false,
+                })}
 
-                {renderSelectField({ name: 'conductIssues', label: 'Conduct Issues', options: yesNoOptions, required: false })}
+                {renderSelectField({
+                  name: 'conductIssues',
+                  label: 'Conduct Issues',
+                  options: yesNoOptions,
+                  required: false,
+                })}
               </div>
 
               <div className="mt-5 grid gap-5 md:grid-cols-2">
-                {renderTextAreaField({ name: 'clientNeedsObjectives', label: 'Client Needs & Objectives' })}
+                {renderTextAreaField({
+                  name: 'clientNeedsObjectives',
+                  label: 'Client Needs & Objectives',
+                })}
 
-                {renderTextAreaField({ name: 'applicantBackground', label: 'Applicant Background' })}
+                {renderTextAreaField({
+                  name: 'applicantBackground',
+                  label: 'Applicant Background',
+                })}
 
-                {renderTextAreaField({ name: 'explanationOfIncome', label: 'Explanation of Income' })}
+                {renderTextAreaField({
+                  name: 'explanationOfIncome',
+                  label: 'Explanation of Income',
+                })}
 
                 {renderTextAreaField({ name: 'security', label: 'Security' })}
               </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5">
-              <h3 className="mb-4 text-lg font-bold text-slate-900">
-                Loan Amount & Settlement
-              </h3>
+              <h3 className="mb-4 text-lg font-bold text-slate-900">Loan Amount & Settlement</h3>
 
               <div className="grid gap-5 md:grid-cols-2">
                 <input
@@ -985,9 +970,7 @@ export default function HomePage() {
 
               <div className="grid gap-3 sm:grid-cols-2">
                 {documentOptions.map((type) => {
-                  const isSelected = formData.documentTypes.includes(
-                    type.value,
-                  );
+                  const isSelected = formData.documentTypes.includes(type.value);
 
                   return (
                     <button
@@ -1008,14 +991,10 @@ export default function HomePage() {
                               : 'border-slate-300 bg-white'
                           }`}
                         >
-                          {isSelected && (
-                            <span className="h-2 w-2 rounded-full bg-white" />
-                          )}
+                          {isSelected && <span className="h-2 w-2 rounded-full bg-white" />}
                         </span>
 
-                        <span className="text-sm font-bold text-slate-800">
-                          {type.label}
-                        </span>
+                        <span className="text-sm font-bold text-slate-800">{type.label}</span>
                       </div>
                     </button>
                   );
@@ -1025,9 +1004,7 @@ export default function HomePage() {
 
             {isIdDocument && (
               <div className="rounded-2xl border border-orange-200 bg-orange-50 p-5">
-                <h3 className="mb-4 text-lg font-bold text-slate-900">
-                  ID Information
-                </h3>
+                <h3 className="mb-4 text-lg font-bold text-slate-900">ID Information</h3>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   {[
@@ -1053,24 +1030,17 @@ export default function HomePage() {
 
             {formData.documentTypes.length > 0 && (
               <div className="space-y-4">
-                <h3 className="text-lg font-bold text-slate-900">
-                  Upload Documents
-                </h3>
+                <h3 className="text-lg font-bold text-slate-900">Upload Documents</h3>
 
                 {formData.documentTypes.map((type) => (
-                  <div
-                    key={type}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                  >
+                  <div key={type} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <label className="mb-2 block text-sm font-bold text-slate-700">
                       {formatDocumentType(type)} File
                     </label>
 
                     <input
                       type="file"
-                      onChange={(event) =>
-                        handleDocumentFileChange(type, event)
-                      }
+                      onChange={(event) => handleDocumentFileChange(type, event)}
                       className="block w-full rounded-xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-orange-500 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-orange-600"
                       required
                     />

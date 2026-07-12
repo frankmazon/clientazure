@@ -10,6 +10,8 @@ import {
   FaExternalLinkAlt,
   FaExclamationTriangle,
   FaEye,
+  FaEyeSlash,
+  FaKey,
   FaFileAlt,
   FaFolderOpen,
   FaIdBadge,
@@ -89,6 +91,7 @@ type ClientLoginUser = {
   leadType?: string;
   source?: string;
   status?: string;
+  mustChangePassword?: boolean;
 };
 
 const API_BASE = (
@@ -100,6 +103,7 @@ const CLIENTS_API = `${API_BASE}/clients`;
 const UPLOAD_API = `${API_BASE}/uploadclient`;
 const FILE_URL_API = `${API_BASE}/file-url`;
 const CLIENT_LOGIN_API = `${API_BASE}/client-login`;
+const CLIENT_CHANGE_PASSWORD_API = `${API_BASE}/client-change-password`;
 
 const documentTypes = [
   { label: 'ID', value: 'id' },
@@ -340,6 +344,7 @@ const normalizeLoggedClient = (client: ClientLoginUser): ClientLoginUser => {
 export default function ClientDashboard() {
   const [loginUniqueId, setLoginUniqueId] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loggedClient, setLoggedClient] = useState<ClientLoginUser | null>(null);
 
   const [uniqueId, setUniqueId] = useState('');
@@ -352,6 +357,16 @@ export default function ClientDashboard() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedSpecialist, setSelectedSpecialist] = useState<SpecialistKey>('giulio');
+
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   const specialist = specialists[selectedSpecialist];
 
@@ -421,9 +436,6 @@ export default function ClientDashboard() {
     if (value === null || value === undefined || value === '') return 'N/A';
     return String(value);
   };
-
-  const getClientStatus = () =>
-    selectedClient?.status || loggedClient?.status || 'Pending Team Call';
 
   const documentRowsByType = useMemo(() => {
     const map = new Map<string, Submission>();
@@ -568,8 +580,17 @@ export default function ClientDashboard() {
       }
 
       const normalizedClient = normalizeLoggedClient(result.client);
+      const requiresPasswordChange = Boolean(
+        result.mustChangePassword ||
+          result.client?.mustChangePassword ||
+          normalizedClient.mustChangePassword,
+      );
+
       setLoggedClient(normalizedClient);
       setUniqueId(normalizedClient.uniqueId);
+      setMustChangePassword(requiresPasswordChange);
+      setShowChangePassword(requiresPasswordChange);
+      setCurrentPassword(loginPassword.trim());
       await loadClientFiles(normalizedClient.uniqueId);
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Client login failed.');
@@ -582,6 +603,7 @@ export default function ClientDashboard() {
     setLoggedClient(null);
     setLoginUniqueId('');
     setLoginPassword('');
+    setShowLoginPassword(false);
     setUniqueId('');
     setFileSearch('');
     setDocumentType('');
@@ -589,6 +611,115 @@ export default function ClientDashboard() {
     setClientFiles([]);
     setPreviewFile(null);
     setPreviewUrl('');
+    setShowChangePassword(false);
+    setMustChangePassword(false);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+  };
+
+  const resetPasswordForm = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+  };
+
+  const closeChangePasswordModal = () => {
+    if (mustChangePassword || passwordLoading) return;
+    resetPasswordForm();
+    setShowChangePassword(false);
+  };
+
+  const handleChangePassword = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+
+    if (!loggedClient) {
+      alert('Please log in again.');
+      return;
+    }
+
+    if (!currentPassword.trim()) {
+      alert('Please enter your current password.');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      alert('Your new password must contain at least 8 characters.');
+      return;
+    }
+
+    if (!/[A-Z]/.test(newPassword)) {
+      alert('Your new password must contain at least one uppercase letter.');
+      return;
+    }
+
+    if (!/[a-z]/.test(newPassword)) {
+      alert('Your new password must contain at least one lowercase letter.');
+      return;
+    }
+
+    if (!/\d/.test(newPassword)) {
+      alert('Your new password must contain at least one number.');
+      return;
+    }
+
+    if (!/[^A-Za-z0-9]/.test(newPassword)) {
+      alert('Your new password must contain at least one special character.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      alert('The new passwords do not match.');
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      alert('Your new password must be different from your current password.');
+      return;
+    }
+
+    try {
+      setPasswordLoading(true);
+
+      const response = await fetch(CLIENT_CHANGE_PASSWORD_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          uniqueId: loggedClient.uniqueId,
+          currentPassword: currentPassword.trim(),
+          newPassword,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Unable to change password.');
+      }
+
+      setMustChangePassword(false);
+      setShowChangePassword(false);
+      resetPasswordForm();
+
+      alert(
+        result.emailNotificationSent
+          ? 'Password changed successfully. A confirmation email has been sent.'
+          : 'Password changed successfully.',
+      );
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Unable to change password.',
+      );
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   const appendValue = (
@@ -851,74 +982,145 @@ export default function ClientDashboard() {
 
   if (!loggedClient) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f4fbf4] px-4 py-8 font-sans sm:px-6">
-        <div className="w-full max-w-[640px] rounded-[30px] bg-white px-6 py-8 shadow-[0_22px_64px_rgba(15,23,42,0.13)] sm:px-10 sm:py-10 lg:px-12">
-          <div className="text-center">
-            <div className="mx-auto mb-7 flex h-24 w-24 items-center justify-center rounded-[26px] border border-[#cfe8e4] bg-white p-4 shadow-[0_14px_28px_rgba(15,23,42,0.14)] sm:h-28 sm:w-28 sm:rounded-[30px]">
-              <img
-                src="/logo/logo.png"
-                alt="Company Logo"
-                className="h-full w-full object-contain"
-              />
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#eef8f6] px-4 py-8 font-sans text-slate-900 sm:px-6">
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(37,155,143,0.22),rgba(255,255,255,0.72)_42%,rgba(238,101,33,0.13)),radial-gradient(circle_at_18%_18%,rgba(37,155,143,0.24),transparent_30%),radial-gradient(circle_at_82%_78%,rgba(238,101,33,0.2),transparent_28%)]" />
+        <div className="absolute inset-0 opacity-[0.24] [background-image:linear-gradient(rgba(15,23,42,0.09)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.09)_1px,transparent_1px)] [background-size:42px_42px]" />
+
+        <div className="relative grid w-full max-w-5xl overflow-hidden rounded-[28px] bg-white shadow-[0_24px_70px_rgba(15,23,42,0.18)] ring-1 ring-white/70 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="hidden bg-slate-950 p-8 text-white lg:flex lg:flex-col lg:justify-between">
+            <div>
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white p-3 shadow-lg">
+                <img
+                  src="/logo/logo.png"
+                  alt="Company Logo"
+                  className="h-full w-full object-contain"
+                />
+              </div>
+
+              <div className="mt-10">
+                <p className="text-xs font-black uppercase tracking-[0.26em] text-[#6CBF51]">
+                  Client Portal
+                </p>
+                <h1 className="mt-4 text-4xl font-black leading-tight">
+                  Your documents, neatly in one place.
+                </h1>
+                <p className="mt-4 text-sm leading-6 text-slate-300">
+                  Sign in to review your checklist, upload missing files, and track document status.
+                </p>
+              </div>
             </div>
 
-            <h1 className="text-3xl font-black text-[#259b8f] sm:text-4xl">
-              Client Portal Login
-            </h1>
+            <div className="grid gap-3">
+              <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/10">
+                <p className="text-sm font-bold text-white">Secure upload access</p>
+                <p className="mt-1 text-xs leading-5 text-slate-300">
+                  Files are linked to your verified Client ID.
+                </p>
+              </div>
 
-            <p className="mx-auto mt-4 max-w-lg text-center text-base leading-relaxed text-slate-500 sm:text-lg">
-              Use your Client ID as username and your last name as password.
-            </p>
+              <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/10">
+                <p className="text-sm font-bold text-white">Password updates</p>
+                <p className="mt-1 text-xs leading-5 text-slate-300">
+                  Change your password after sign in from the dashboard header.
+                </p>
+              </div>
+            </div>
           </div>
 
-          <form onSubmit={handleClientLogin} className="mx-auto mt-9 max-w-[500px] space-y-6">
-            <div>
-              <label className="mb-3 block text-base font-black text-slate-700 sm:text-lg">
-                Client ID
-              </label>
-
-              <div className="relative">
-                <FaIdBadge className="absolute left-5 top-1/2 -translate-y-1/2 text-lg text-slate-400" />
-
-                <input
-                  value={loginUniqueId}
-                  onChange={(event) => setLoginUniqueId(event.target.value)}
-                  placeholder="Example: CL-81BE533A"
-                  className="h-14 w-full rounded-2xl border border-slate-300 pl-14 pr-5 text-base font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15 sm:h-16 sm:text-lg"
+          <div className="px-5 py-7 sm:px-8 sm:py-9 lg:px-10">
+            <div className="mb-7 flex items-center gap-4 lg:hidden">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white p-2 shadow-md ring-1 ring-slate-200">
+                <img
+                  src="/logo/logo.png"
+                  alt="Company Logo"
+                  className="h-full w-full object-contain"
                 />
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-[#259b8f]">
+                  Client Portal
+                </p>
+                <h1 className="text-2xl font-black text-slate-950">
+                  Sign in
+                </h1>
               </div>
             </div>
 
-            <div>
-              <label className="mb-3 block text-base font-black text-slate-700 sm:text-lg">
-                Password
-              </label>
-
-              <div className="relative">
-                <FaLock className="absolute left-5 top-1/2 -translate-y-1/2 text-lg text-slate-400" />
-
-                <input
-                  type="password"
-                  value={loginPassword}
-                  onChange={(event) => setLoginPassword(event.target.value)}
-                  placeholder="Enter your last name"
-                  className="h-14 w-full rounded-2xl border border-slate-300 pl-14 pr-5 text-base font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15 sm:h-16 sm:text-lg"
-                />
-              </div>
+            <div className="hidden lg:block">
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-[#259b8f]">
+                Welcome Back
+              </p>
+              <h2 className="mt-3 text-3xl font-black text-slate-950">
+                Sign in to continue
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Use your Client ID and password to open your document dashboard.
+              </p>
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="mt-8 h-14 w-full rounded-2xl bg-[#259b8f] text-lg font-black text-white shadow-[0_14px_24px_rgba(37,155,143,0.25)] transition hover:bg-[#1f887d] disabled:bg-[#259b8f]/40 sm:h-16 sm:text-xl"
-            >
-              {loading ? 'Signing in...' : 'Login'}
-            </button>
-          </form>
+            <form onSubmit={handleClientLogin} className="mt-7 space-y-5">
+              <div>
+                <label className="mb-2 block text-sm font-black text-slate-700">
+                  Client ID
+                </label>
 
-          <p className="mt-9 text-center text-sm text-slate-400 sm:text-base">
-            Example password: client last name only.
-          </p>
+                <div className="relative">
+                  <FaIdBadge className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+
+                  <input
+                    value={loginUniqueId}
+                    onChange={(event) => setLoginUniqueId(event.target.value)}
+                    placeholder="Example: CL-81BE533A"
+                    className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-black text-slate-700">
+                  Password
+                </label>
+
+                <div className="relative">
+                  <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+
+                  <input
+                    type={showLoginPassword ? 'text' : 'password'}
+                    value={loginPassword}
+                    onChange={(event) => setLoginPassword(event.target.value)}
+                    placeholder="Enter your password"
+                    className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-12 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginPassword((value) => !value)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showLoginPassword ? <FaEyeSlash /> : <FaEye />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="h-12 w-full rounded-xl bg-[#259b8f] text-sm font-black text-white shadow-[0_14px_24px_rgba(37,155,143,0.24)] transition hover:bg-[#1f887d] disabled:bg-[#259b8f]/40"
+              >
+                {loading ? 'Signing in...' : 'Login'}
+              </button>
+            </form>
+
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                First time signing in?
+              </p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">
+                Your temporary password is usually your last name. You can change it after login.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -953,14 +1155,30 @@ export default function ClientDashboard() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white shadow-sm hover:bg-slate-700"
-            >
-              <FaSignOutAlt />
-              Logout
-            </button>
+            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setConfirmPassword('');
+                  setShowChangePassword(true);
+                }}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#259b8f] px-5 text-sm font-bold text-white shadow-sm hover:bg-[#1f887d]"
+              >
+                <FaKey />
+                Change Password
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white shadow-sm hover:bg-slate-700"
+              >
+                <FaSignOutAlt />
+                Logout
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1713,6 +1931,146 @@ export default function ClientDashboard() {
           </aside>
         </div>
       </div>
+
+      {showChangePassword && loggedClient && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/70 px-3 py-4 sm:px-4">
+          <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 sm:px-7">
+              <div>
+                <div className="mb-3 inline-flex rounded-2xl bg-[#259b8f]/10 p-3 text-[#259b8f]">
+                  <FaKey />
+                </div>
+                <h2 className="text-2xl font-black text-slate-950">
+                  {mustChangePassword
+                    ? 'Create Your New Password'
+                    : 'Change Password'}
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                  {mustChangePassword
+                    ? 'For your security, you must replace your temporary password before continuing.'
+                    : 'Use a strong password that you do not use on another account.'}
+                </p>
+              </div>
+
+              {!mustChangePassword && (
+                <button
+                  type="button"
+                  onClick={closeChangePasswordModal}
+                  disabled={passwordLoading}
+                  className="rounded-xl bg-slate-100 p-3 text-slate-500 hover:bg-slate-200 disabled:opacity-50"
+                  aria-label="Close change password"
+                >
+                  <FaTimes />
+                </button>
+              )}
+            </div>
+
+            <form onSubmit={handleChangePassword} className="space-y-5 px-5 py-6 sm:px-7">
+              <div>
+                <label className="mb-2 block text-sm font-black text-slate-700">
+                  Current Password
+                </label>
+                <div className="relative">
+                  <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type={showCurrentPassword ? 'text' : 'password'}
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    autoComplete="current-password"
+                    className="h-12 w-full rounded-xl border border-slate-300 pl-12 pr-12 outline-none transition focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15"
+                    placeholder="Enter current password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword((value) => !value)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showCurrentPassword ? <FaEyeSlash /> : <FaEye />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-black text-slate-700">
+                  New Password
+                </label>
+                <div className="relative">
+                  <FaKey className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    autoComplete="new-password"
+                    className="h-12 w-full rounded-xl border border-slate-300 pl-12 pr-12 outline-none transition focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15"
+                    placeholder="Create a strong password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((value) => !value)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showNewPassword ? <FaEyeSlash /> : <FaEye />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-black text-slate-700">
+                  Confirm New Password
+                </label>
+                <div className="relative">
+                  <FaCheckCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    autoComplete="new-password"
+                    className="h-12 w-full rounded-xl border border-slate-300 pl-12 pr-12 outline-none transition focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15"
+                    placeholder="Repeat your new password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((value) => !value)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-4 text-xs font-semibold leading-6 text-slate-600">
+                Use at least 8 characters with uppercase and lowercase letters,
+                a number, and a special character.
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                {!mustChangePassword && (
+                  <button
+                    type="button"
+                    onClick={closeChangePasswordModal}
+                    disabled={passwordLoading}
+                    className="h-12 rounded-xl border border-slate-300 px-5 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={passwordLoading}
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#259b8f] px-6 font-black text-white shadow-sm hover:bg-[#1f887d] disabled:bg-[#259b8f]/40"
+                >
+                  <FaKey />
+                  {passwordLoading ? 'Updating...' : 'Update Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {previewFile && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-3 py-4 sm:px-4">
