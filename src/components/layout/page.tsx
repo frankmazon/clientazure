@@ -183,6 +183,15 @@ const formatPhoneNumber = (countryCode: string, phone: string) => {
   return `${dialCode} ${cleanPhone}`;
 };
 
+const calculateLvr = (loanAmount: string, securityValue: string) => {
+  const loanAmountValue = Number(loanAmount);
+  const securityValueValue = Number(securityValue);
+
+  if (!loanAmountValue || !securityValueValue) return '';
+
+  return ((loanAmountValue / securityValueValue) * 100).toFixed(2);
+};
+
 export default function HomePage() {
   console.info('Client Submission API:', API_URL);
 
@@ -207,10 +216,21 @@ export default function HomePage() {
         ? value.replace(/\D/g, '')
         : value;
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: cleanValue,
-    }));
+    setFormData((prev) => {
+      const nextData = {
+        ...prev,
+        [name]: cleanValue,
+      };
+
+      if (name === 'loanAmount' || name === 'securityValue') {
+        return {
+          ...nextData,
+          lvr: calculateLvr(nextData.loanAmount, nextData.securityValue),
+        };
+      }
+
+      return nextData;
+    });
   };
 
   const handleSourceChange = (source: string) => {
@@ -988,15 +1008,20 @@ export default function HomePage() {
                   className={inputClass}
                 />
 
-                <input
-                  type="number"
-                  step="0.01"
-                  name="lvr"
-                  value={formData.lvr}
-                  onChange={handleChange}
-                  placeholder="LVR (%)"
-                  className={inputClass}
-                />
+                <div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="lvr"
+                    value={formData.lvr}
+                    placeholder="LVR (%)"
+                    className={`${inputClass} bg-slate-50`}
+                    readOnly
+                  />
+                  <p className="mt-2 text-xs font-medium text-slate-500">
+                    Auto-calculated: loan amount / security value x 100.
+                  </p>
+                </div>
 
                 <input
                   type="date"
