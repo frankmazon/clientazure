@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   FaBriefcase,
   FaCheckCircle,
@@ -39,6 +39,9 @@ type DocumentStatus = "approved" | "pending" | "rejected";
 
 const approvedStatusValues = ["approved", "verified", "complete", "completed"];
 const rejectedStatusValues = ["rejected", "declined", "failed"];
+
+const panelClass =
+  "overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.07)]";
 
 type Client = {
   id: number;
@@ -582,10 +585,10 @@ export default function Clients() {
     label: string;
     value?: string | number | null;
   }) => (
-    <div className="rounded-2xl bg-slate-50 p-4">
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 p-4 transition hover:border-[#259b8f]/25 hover:bg-white">
       <p className="text-xs font-bold uppercase text-slate-400">{label}</p>
 
-      <p className="mt-1 break-words font-semibold text-slate-900">
+      <p className="mt-1 break-words text-sm font-bold leading-6 text-slate-900">
         {hasValue(value) ? value : "-"}
       </p>
     </div>
@@ -594,17 +597,29 @@ export default function Clients() {
   const StatCard = ({
     label,
     value,
+    icon,
     className,
   }: {
     label: string;
     value: number;
+    icon?: ReactNode;
     className: string;
   }) => (
     <div
-      className={`rounded-2xl border p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${className}`}
+      className={`rounded-2xl border p-4 shadow-[0_14px_34px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.1)] ${className}`}
     >
-      <p className="text-sm font-extrabold leading-snug">{label}</p>
-      <p className="mt-4 text-4xl font-black leading-none">{value}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wide opacity-70">{label}</p>
+          <p className="mt-3 text-3xl font-black leading-none">{value}</p>
+        </div>
+
+        {icon && (
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/70 text-base shadow-sm ring-1 ring-black/5">
+            {icon}
+          </span>
+        )}
+      </div>
     </div>
   );
 
@@ -614,21 +629,35 @@ export default function Clients() {
       subtitle="View submitted clients, source, loan details, team call status, and document completion."
     >
       <div className="mx-auto max-w-[1800px] space-y-6">
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-          <div className="relative">
-            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search unique ID, name, email, phone, source, loan details, status, or file..."
-              className="h-16 w-full rounded-2xl border border-slate-300 pl-12 pr-4 text-base font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
-            />
+        <div className={panelClass}>
+          <div className="bg-[linear-gradient(135deg,rgba(37,155,143,0.94),rgba(15,23,42,0.98)_56%,rgba(238,101,33,0.88))] p-5 text-white sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-white/65">
+              Client Portal Uploads
+            </p>
+            <h2 className="mt-2 text-2xl font-black text-white">
+              Search Client Portal Uploads
+            </h2>
+            <p className="mt-2 max-w-4xl text-sm leading-6 text-white/75">
+              Search by unique ID, contact details, source, team status, loan fields, or uploaded file name.
+            </p>
+          </div>
+
+          <div className="p-5 sm:p-6">
+            <div className="relative">
+              <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search unique ID, name, email, phone, source, loan details, status, or file..."
+                className="h-14 w-full rounded-xl border border-slate-200 bg-slate-50 pl-12 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
+              />
+            </div>
           </div>
         </div>
 
         {loading && (
-          <div className="rounded-2xl bg-white p-10 text-center font-bold text-slate-500 shadow-sm ring-1 ring-slate-200">
+          <div className={`${panelClass} p-10 text-center font-bold text-slate-500`}>
             Loading clients from Azure...
           </div>
         )}
@@ -641,72 +670,91 @@ export default function Clients() {
 
         {!loading && !error && (
           <>
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-9">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
               <StatCard
                 label="Clients"
                 value={clientGroups.length}
+                icon={<FaFileAlt />}
                 className="border-slate-200 bg-white text-slate-900"
               />
               <StatCard
                 label="Brokers"
                 value={brokerCount}
-                className="border-blue-200 bg-blue-50 text-blue-700"
+                icon={<FaBriefcase />}
+                className="border-sky-200 bg-sky-50 text-sky-700"
               />
               <StatCard
                 label="Referrals"
                 value={referralCount}
-                className="border-purple-200 bg-purple-50 text-purple-700"
+                icon={<FaUserFriends />}
+                className="border-[#259b8f]/25 bg-[#259b8f]/10 text-[#1f8178]"
               />
               <StatCard
                 label="Direct Clients"
                 value={directClientCount}
+                icon={<FaFileAlt />}
                 className="border-cyan-200 bg-cyan-50 text-cyan-700"
               />
               <StatCard
                 label="Complete"
                 value={clientGroups.filter((group) => group.isComplete).length}
+                icon={<FaCheckCircle />}
                 className="border-green-200 bg-green-50 text-green-700"
               />
               <StatCard
                 label="Incomplete"
                 value={clientGroups.filter((group) => !group.isComplete).length}
+                icon={<FaExclamationTriangle />}
                 className="border-red-200 bg-red-50 text-red-700"
               />
               <StatCard
                 label="Approved Docs"
                 value={approvedDocsCount}
+                icon={<FaCheckCircle />}
                 className="border-emerald-200 bg-emerald-50 text-emerald-700"
               />
               <StatCard
                 label="Pending Docs"
                 value={pendingDocsCount}
+                icon={<FaFileAlt />}
                 className="border-orange-200 bg-orange-50 text-orange-700"
               />
               <StatCard
                 label="Rejected Docs"
                 value={rejectedDocsCount}
+                icon={<FaExclamationTriangle />}
                 className="border-rose-200 bg-rose-50 text-rose-700"
               />
             </div>
 
-            <div className="hidden overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 lg:block">
-              <div className="flex min-h-28 items-center justify-between border-b border-slate-200 px-8 py-6">
+            <div className={`${panelClass} hidden lg:block`}>
+              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-6 py-5">
                 <div>
-                  <h2 className="text-2xl font-black text-slate-900">
+                  <h2 className="text-xl font-black text-slate-900">
                     Client List
                   </h2>
-                  <p className="mt-1 text-lg text-slate-500">
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
                     {filteredGroups.length} client
                     {filteredGroups.length !== 1 ? "s" : ""}
                   </p>
                 </div>
 
-                <FaFileAlt className="text-3xl text-orange-500" />
+                <FaFileAlt className="text-2xl text-[#EE6521]" />
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1540px]">
-                  <thead className="bg-slate-50">
+                <table className="w-full min-w-[1320px] table-fixed">
+                  <colgroup>
+                    <col className="w-[10%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[13%]" />
+                    <col className="w-[17%]" />
+                    <col className="w-[18%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[11%]" />
+                  </colgroup>
+                  <thead className="bg-slate-50/90">
                     <tr>
                       {[
                         "Unique ID",
@@ -716,12 +764,11 @@ export default function Clients() {
                         "Loan Details",
                         "Team Status",
                         "Docs Status",
-                        "Verification",
-                        "Progress",
+                        "Review",
                       ].map((header) => (
                         <th
                           key={header}
-                          className="px-8 py-7 text-left text-base font-black uppercase tracking-wide text-slate-600"
+                          className="px-5 py-4 text-left text-xs font-black uppercase tracking-wide text-slate-500"
                         >
                           {header}
                         </th>
@@ -738,20 +785,20 @@ export default function Clients() {
                           key={group.key}
                           className="align-middle transition hover:bg-slate-50"
                         >
-                          <td className="max-w-[150px] px-8 py-12 text-lg font-bold leading-tight text-slate-700">
+                          <td className="px-5 py-6 text-sm font-bold leading-tight text-slate-700">
                             <span className="break-words">
                               {group.client.uniqueId || "-"}
                             </span>
                           </td>
 
-                          <td className="px-8 py-12">
+                          <td className="px-5 py-6">
                             <span
-                              className={`inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-black leading-tight ${
+                              className={`inline-flex max-w-full items-center gap-2 rounded-full px-3 py-2 text-xs font-black leading-tight ${
                                 sourceLabel === "Referral"
-                                  ? "bg-purple-100 text-purple-700"
+                                  ? "bg-[#259b8f]/10 text-[#1f8178] ring-1 ring-[#259b8f]/20"
                                   : sourceLabel === "Direct Client"
-                                    ? "bg-cyan-100 text-cyan-700"
-                                    : "bg-blue-100 text-blue-700"
+                                    ? "bg-cyan-100 text-cyan-700 ring-1 ring-cyan-200"
+                                    : "bg-sky-100 text-sky-700 ring-1 ring-sky-200"
                               }`}
                             >
                               {sourceLabel === "Referral" ? (
@@ -763,23 +810,23 @@ export default function Clients() {
                             </span>
                           </td>
 
-                          <td className="max-w-[180px] px-8 py-12">
-                            <p className="break-words text-xl font-black leading-snug text-slate-900">
+                          <td className="px-5 py-6">
+                            <p className="break-words text-base font-black leading-snug text-slate-900">
                               {getFullName(group.client) || "-"}
                             </p>
                           </td>
 
-                          <td className="max-w-[250px] px-8 py-12 text-lg text-slate-600">
-                            <p className="break-words">
+                          <td className="px-5 py-6 text-sm text-slate-600">
+                            <p className="break-words font-semibold">
                               {group.client.email || "-"}
                             </p>
-                            <p className="mt-2 flex items-center gap-2 text-base text-slate-400">
+                            <p className="mt-2 flex items-center gap-2 break-words text-xs font-semibold text-slate-400">
                               <FaPhone />
                               {group.client.phone || "No phone"}
                             </p>
                           </td>
 
-                          <td className="max-w-[220px] px-8 py-12 text-lg leading-snug text-slate-600">
+                          <td className="px-5 py-6 text-sm leading-6 text-slate-600">
                             <p>
                               <span className="font-black text-slate-700">Class:</span>{" "}
                               {getLoanValue(group.client, [
@@ -810,15 +857,15 @@ export default function Clients() {
                             </p>
                           </td>
 
-                          <td className="px-8 py-12">
-                            <span className="inline-flex max-w-[110px] flex-wrap rounded-full bg-orange-100 px-4 py-2 text-sm font-black leading-snug text-orange-700">
+                          <td className="px-5 py-6">
+                            <span className="inline-flex max-w-full rounded-full bg-orange-100 px-3 py-2 text-xs font-black leading-snug text-orange-700 ring-1 ring-orange-200">
                               {getStatus(group.client)}
                             </span>
                           </td>
 
-                          <td className="px-8 py-12">
+                          <td className="px-5 py-6">
                             <span
-                              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-black ${
+                              className={`inline-flex max-w-full items-center gap-2 rounded-full px-3 py-2 text-xs font-black ${
                                 group.isComplete
                                   ? "bg-green-100 text-green-700"
                                   : "bg-red-100 text-red-700"
@@ -833,28 +880,25 @@ export default function Clients() {
                             </span>
                           </td>
 
-                          <td className="px-8 py-12">
-                            <div className="space-y-2 text-base font-black">
-                              <p className="text-green-700">
-                                Approved: {group.statusCounts.approved}
-                              </p>
-                              <p className="text-orange-700">
-                                Pending: {group.statusCounts.pending}
-                              </p>
-                              <p className="text-red-700">
-                                Rejected: {group.statusCounts.rejected}
-                              </p>
-                            </div>
-                          </td>
-
-                          <td className="px-8 py-12">
-                            <div className="w-44">
-                              <p className="mb-2 text-base font-black text-slate-500">
+                          <td className="px-5 py-6">
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-3 gap-1 text-[11px] font-black">
+                                <span className="rounded-lg bg-green-50 px-2 py-1 text-center text-green-700">
+                                  A {group.statusCounts.approved}
+                                </span>
+                                <span className="rounded-lg bg-orange-50 px-2 py-1 text-center text-orange-700">
+                                  P {group.statusCounts.pending}
+                                </span>
+                                <span className="rounded-lg bg-red-50 px-2 py-1 text-center text-red-700">
+                                  R {group.statusCounts.rejected}
+                                </span>
+                              </div>
+                              <p className="text-xs font-black text-slate-500">
                                 {group.progress}%
                               </p>
-                              <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                              <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
                                 <div
-                                  className="h-full rounded-full bg-orange-500"
+                                  className="h-full rounded-full bg-[linear-gradient(90deg,#259b8f,#EE6521)]"
                                   style={{ width: `${group.progress}%` }}
                                 />
                               </div>
@@ -867,7 +911,7 @@ export default function Clients() {
                     {filteredGroups.length === 0 && (
                       <tr>
                         <td
-                          colSpan={9}
+                          colSpan={8}
                           className="px-6 py-12 text-center text-sm text-slate-500"
                         >
                           No clients found.
@@ -886,7 +930,7 @@ export default function Clients() {
                 return (
                   <div
                     key={group.key}
-                    className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"
+                    className={`${panelClass} p-5`}
                   >
                     <div className="mb-5 flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -908,17 +952,17 @@ export default function Clients() {
                       <span
                         className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-xs font-black ${
                           sourceLabel === "Referral"
-                            ? "bg-purple-100 text-purple-700"
+                            ? "bg-[#259b8f]/10 text-[#1f8178] ring-1 ring-[#259b8f]/20"
                             : sourceLabel === "Direct Client"
-                              ? "bg-cyan-100 text-cyan-700"
-                              : "bg-blue-100 text-blue-700"
+                              ? "bg-cyan-100 text-cyan-700 ring-1 ring-cyan-200"
+                              : "bg-sky-100 text-sky-700 ring-1 ring-sky-200"
                         }`}
                       >
                         {sourceLabel}
                       </span>
                     </div>
 
-                    <div className="mb-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                    <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-sm leading-6 text-slate-600">
                       <p>
                         <strong className="text-slate-700">Classification:</strong>{" "}
                         {getLoanValue(group.client, [
@@ -959,7 +1003,7 @@ export default function Clients() {
                     </div>
 
                     <div className="mb-4 flex flex-wrap gap-2">
-                      <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-700">
+                      <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-700 ring-1 ring-orange-200">
                         {getStatus(group.client)}
                       </span>
 
@@ -979,16 +1023,16 @@ export default function Clients() {
                       </span>
                     </div>
 
-                    <div className="mb-4 grid gap-3 rounded-2xl border border-slate-200 p-4">
-                      <div className="grid grid-cols-3 gap-2 text-sm font-black">
-                        <p className="text-green-700">
-                          Approved: {group.statusCounts.approved}
+                    <div className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="grid grid-cols-3 gap-2 text-xs font-black">
+                        <p className="rounded-lg bg-green-50 px-2 py-2 text-center text-green-700">
+                          Approved {group.statusCounts.approved}
                         </p>
-                        <p className="text-orange-700">
-                          Pending: {group.statusCounts.pending}
+                        <p className="rounded-lg bg-orange-50 px-2 py-2 text-center text-orange-700">
+                          Pending {group.statusCounts.pending}
                         </p>
-                        <p className="text-red-700">
-                          Rejected: {group.statusCounts.rejected}
+                        <p className="rounded-lg bg-red-50 px-2 py-2 text-center text-red-700">
+                          Rejected {group.statusCounts.rejected}
                         </p>
                       </div>
 
@@ -999,7 +1043,7 @@ export default function Clients() {
                         </div>
                         <div className="h-3 overflow-hidden rounded-full bg-slate-100">
                           <div
-                            className="h-full rounded-full bg-orange-500"
+                            className="h-full rounded-full bg-[linear-gradient(90deg,#259b8f,#EE6521)]"
                             style={{ width: `${group.progress}%` }}
                           />
                         </div>
@@ -1056,7 +1100,7 @@ export default function Clients() {
                           onClick={() =>
                             handlePreview(mergeClientRows([group.client, file]))
                           }
-                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
+                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800"
                         >
                           <FaEye />
                           View
@@ -1065,7 +1109,7 @@ export default function Clients() {
                         <button
                           type="button"
                           onClick={() => handleDownload(file)}
-                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
+                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#EE6521] px-3 py-2 text-xs font-bold text-white hover:bg-orange-600"
                         >
                           <FaDownload />
                           Download
@@ -1077,7 +1121,7 @@ export default function Clients() {
               })}
 
               {filteredGroups.length === 0 && (
-                <div className="rounded-2xl bg-white p-10 text-center text-sm text-slate-500 shadow-sm ring-1 ring-slate-200">
+                <div className={`${panelClass} p-10 text-center text-sm text-slate-500`}>
                   No clients found.
                 </div>
               )}
@@ -1087,14 +1131,14 @@ export default function Clients() {
       </div>
 
       {selectedClient && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-3xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-              <div>
-                <h2 className="text-xl font-extrabold text-slate-900">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 px-3 py-4 sm:px-4">
+          <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:rounded-3xl">
+            <div className="flex items-center justify-between gap-3 bg-[linear-gradient(135deg,#259b8f,#0f172a)] px-4 py-4 text-white sm:px-6">
+              <div className="min-w-0">
+                <h2 className="break-words text-xl font-black text-white">
                   Client File Details
                 </h2>
-                <p className="text-sm text-slate-500">
+                <p className="mt-1 text-sm text-white/70">
                   View submitted client information and uploaded file.
                 </p>
               </div>
@@ -1102,15 +1146,15 @@ export default function Clients() {
               <button
                 type="button"
                 onClick={handleClosePreview}
-                className="rounded-xl bg-slate-100 p-3 text-slate-600 hover:bg-slate-200"
+                className="shrink-0 rounded-xl bg-white/10 p-3 text-white hover:bg-white/20"
               >
                 <FaTimes />
               </button>
             </div>
 
-            <div className="max-h-[calc(90vh-80px)] overflow-y-auto p-6">
-              <div className="mb-6">
-                <h3 className="mb-4 text-lg font-extrabold text-slate-900">
+            <div className="overflow-y-auto bg-slate-100 p-3 sm:p-4">
+              <div className="mb-4 rounded-2xl bg-white p-5">
+                <h3 className="mb-4 text-lg font-black text-slate-900">
                   Client Information
                 </h3>
 
@@ -1142,8 +1186,8 @@ export default function Clients() {
                 </div>
               </div>
 
-              <div className="mb-6">
-                <h3 className="mb-4 text-lg font-extrabold text-slate-900">
+              <div className="mb-4 rounded-2xl bg-white p-5">
+                <h3 className="mb-4 text-lg font-black text-slate-900">
                   Submitted Loan Information
                 </h3>
 
@@ -1199,8 +1243,8 @@ export default function Clients() {
               </div>
 
               {getSourceLabel(selectedClient) !== "Direct Client" && (
-                <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 p-5">
-                  <h3 className="mb-4 text-lg font-extrabold text-slate-900">
+                <div className="mb-4 rounded-2xl border border-[#259b8f]/20 bg-[#259b8f]/10 p-5">
+                  <h3 className="mb-4 text-lg font-black text-slate-900">
                     {getDetailLabel(selectedClient)} Details
                   </h3>
 
@@ -1235,8 +1279,8 @@ export default function Clients() {
                 </div>
               )}
 
-              <div className="mb-6">
-                <h3 className="mb-4 text-lg font-extrabold text-slate-900">
+              <div className="mb-4 rounded-2xl bg-white p-5">
+                <h3 className="mb-4 text-lg font-black text-slate-900">
                   Scenario Details
                 </h3>
 
@@ -1286,8 +1330,8 @@ export default function Clients() {
                 </div>
               </div>
 
-              <div className="mb-6">
-                <h3 className="mb-4 text-lg font-extrabold text-slate-900">
+              <div className="mb-4 rounded-2xl bg-white p-5">
+                <h3 className="mb-4 text-lg font-black text-slate-900">
                   Loan Amount & Settlement
                 </h3>
 
@@ -1327,14 +1371,14 @@ export default function Clients() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 p-4">
-                <p className="mb-3 text-sm font-bold text-slate-700">
+              <div className="rounded-2xl bg-white p-4">
+                <p className="mb-3 text-sm font-black text-slate-700">
                   File Preview
                 </p>
 
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-4">
-                  <div>
-                    <p className="break-all font-semibold text-slate-900">
+                  <div className="min-w-0">
+                    <p className="break-all font-bold text-slate-900">
                       {selectedClient.fileName || "No file selected"}
                     </p>
                     <p className="text-sm text-slate-500">
@@ -1345,7 +1389,7 @@ export default function Clients() {
                   <button
                     type="button"
                     onClick={() => handleDownload(selectedClient)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#EE6521] px-4 py-2 text-sm font-bold text-white hover:bg-orange-600"
                   >
                     <FaDownload />
                     Download
@@ -1353,7 +1397,7 @@ export default function Clients() {
                 </div>
 
                 {previewLoading && (
-                  <div className="flex h-[500px] items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500">
+                  <div className="flex h-[68vh] items-center justify-center rounded-2xl bg-white text-center text-slate-500 sm:h-[70vh]">
                     Loading secure preview...
                   </div>
                 )}
@@ -1362,7 +1406,7 @@ export default function Clients() {
                   <img
                     src={previewUrl}
                     alt={selectedClient.fileName || "Preview"}
-                    className="mx-auto max-h-[500px] rounded-xl border border-slate-200 bg-white object-contain"
+                    className="mx-auto max-h-[68vh] rounded-2xl bg-white object-contain sm:max-h-[70vh]"
                   />
                 )}
 
@@ -1370,7 +1414,7 @@ export default function Clients() {
                   <iframe
                     src={previewUrl}
                     title="Client File Preview"
-                    className="h-[500px] w-full rounded-xl border border-slate-200"
+                    className="h-[68vh] w-full rounded-2xl bg-white sm:h-[70vh]"
                   />
                 )}
 
@@ -1378,7 +1422,7 @@ export default function Clients() {
                   previewUrl &&
                   !isImageFile &&
                   !isPdfFile && (
-                    <div className="flex h-[500px] flex-col items-center justify-center rounded-xl border border-slate-200 bg-white text-center text-slate-500">
+                    <div className="flex h-[68vh] flex-col items-center justify-center rounded-2xl bg-white px-4 text-center text-slate-500 sm:h-[70vh]">
                       <FaFileAlt className="mb-4 text-5xl text-slate-300" />
                       <p className="font-bold text-slate-700">
                         Preview not available for this file type.
@@ -1389,7 +1433,7 @@ export default function Clients() {
                       <button
                         type="button"
                         onClick={() => window.open(previewUrl, "_blank")}
-                        className="mt-5 inline-flex items-center gap-2 rounded-xl bg-green-500 px-5 py-3 text-sm font-bold text-white hover:bg-green-600"
+                        className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#259b8f] px-5 py-3 text-sm font-bold text-white hover:bg-[#1f8178]"
                       >
                         <FaDownload />
                         Open / Download

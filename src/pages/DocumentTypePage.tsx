@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   FaBriefcase,
@@ -92,6 +92,9 @@ const documentTypeLabels: Record<string, string> = {
   'income-documents': 'Income Documents',
   other: 'Other',
 };
+
+const panelClass =
+  'overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.07)]';
 
 const getAnyValue = (
   data: Record<string, unknown> | undefined | null,
@@ -428,11 +431,40 @@ export default function DocumentTypePage() {
     label: string;
     value?: string | number | null;
   }) => (
-    <div className="rounded-2xl bg-slate-50 p-4">
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 p-4 transition hover:border-[#259b8f]/25 hover:bg-white">
       <p className="text-xs font-bold uppercase text-slate-400">{label}</p>
-      <p className="mt-1 break-words font-semibold text-slate-900">
+      <p className="mt-1 break-words text-sm font-bold leading-6 text-slate-900">
         {displayValue(value)}
       </p>
+    </div>
+  );
+
+  const StatCard = ({
+    label,
+    value,
+    icon,
+    className,
+  }: {
+    label: string;
+    value: number;
+    icon?: ReactNode;
+    className: string;
+  }) => (
+    <div
+      className={`rounded-2xl border p-4 shadow-[0_14px_34px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.1)] ${className}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wide opacity-70">{label}</p>
+          <p className="mt-3 text-3xl font-black leading-none">{value}</p>
+        </div>
+
+        {icon && (
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/70 text-base shadow-sm ring-1 ring-black/5">
+            {icon}
+          </span>
+        )}
+      </div>
     </div>
   );
 
@@ -441,60 +473,60 @@ export default function DocumentTypePage() {
       title={`${pageTitle} Folders`}
       subtitle={`Client folders containing ${pageTitle} submissions from Azure SQL`}
     >
-      <div className="space-y-6">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-extrabold text-slate-900">
-            {pageTitle} Document Folders
-          </h2>
-
-          <p className="mt-1 text-sm text-slate-500">
-            {loading
-              ? 'Loading...'
-              : `${clientFolders.length} client folder(s), ${clients.length} file(s) found`}
-          </p>
+      <div className="mx-auto max-w-[1800px] space-y-6">
+        <div className={panelClass}>
+          <div className="bg-[linear-gradient(135deg,rgba(37,155,143,0.94),rgba(15,23,42,0.98)_56%,rgba(238,101,33,0.88))] p-5 text-white sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-white/65">
+              Document Type
+            </p>
+            <h2 className="mt-2 text-2xl font-black text-white">
+              {pageTitle} Document Folders
+            </h2>
+            <p className="mt-2 max-w-4xl text-sm leading-6 text-white/75">
+              {loading
+                ? 'Loading folders from Azure SQL...'
+                : `${clientFolders.length} client folder(s), ${clients.length} file(s) found`}
+            </p>
+          </div>
         </div>
 
         {!loading && !error && (
-          <div className="grid gap-4 md:grid-cols-5">
-            <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-              <p className="text-sm font-bold text-slate-500">Folders</p>
-              <p className="mt-2 text-3xl font-extrabold text-slate-900">
-                {clientFolders.length}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
-              <p className="text-sm font-bold text-blue-700">Brokers</p>
-              <p className="mt-2 text-3xl font-extrabold text-blue-700">
-                {brokerCount}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-purple-200 bg-purple-50 p-5 shadow-sm">
-              <p className="text-sm font-bold text-purple-700">Referrals</p>
-              <p className="mt-2 text-3xl font-extrabold text-purple-700">
-                {referralCount}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-5 shadow-sm">
-              <p className="text-sm font-bold text-cyan-700">Direct Clients</p>
-              <p className="mt-2 text-3xl font-extrabold text-cyan-700">
-                {directClientCount}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-orange-200 bg-orange-50 p-5 shadow-sm">
-              <p className="text-sm font-bold text-orange-700">Files</p>
-              <p className="mt-2 text-3xl font-extrabold text-orange-700">
-                {clients.length}
-              </p>
-            </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+            <StatCard
+              label="Folders"
+              value={clientFolders.length}
+              icon={<FaFolder />}
+              className="border-slate-200 bg-white text-slate-900"
+            />
+            <StatCard
+              label="Brokers"
+              value={brokerCount}
+              icon={<FaBriefcase />}
+              className="border-sky-200 bg-sky-50 text-sky-700"
+            />
+            <StatCard
+              label="Referrals"
+              value={referralCount}
+              icon={<FaUserFriends />}
+              className="border-[#259b8f]/25 bg-[#259b8f]/10 text-[#1f8178]"
+            />
+            <StatCard
+              label="Direct Clients"
+              value={directClientCount}
+              icon={<FaFolderOpen />}
+              className="border-cyan-200 bg-cyan-50 text-cyan-700"
+            />
+            <StatCard
+              label="Files"
+              value={clients.length}
+              icon={<FaFileAlt />}
+              className="border-orange-200 bg-orange-50 text-orange-700"
+            />
           </div>
         )}
 
         {loading && (
-          <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-sm font-bold text-slate-500">
+          <div className={`${panelClass} p-12 text-center text-sm font-bold text-slate-500`}>
             Loading {pageTitle} documents from Azure...
           </div>
         )}
@@ -517,7 +549,7 @@ export default function DocumentTypePage() {
               return (
                 <div
                   key={key}
-                  className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+                  className={panelClass}
                 >
                   <button
                     type="button"
@@ -525,7 +557,7 @@ export default function DocumentTypePage() {
                     className="flex w-full items-center justify-between gap-4 p-5 text-left transition hover:bg-slate-50"
                   >
                     <div className="flex min-w-0 items-center gap-4">
-                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-orange-600">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-[#EE6521]">
                         {isOpen ? (
                           <FaFolderOpen className="text-2xl" />
                         ) : (
@@ -534,7 +566,7 @@ export default function DocumentTypePage() {
                       </div>
 
                       <div className="min-w-0">
-                        <h3 className="truncate text-lg font-extrabold text-slate-900">
+                        <h3 className="break-words text-lg font-black text-slate-900">
                           {fullName || 'Unnamed Client'}
                         </h3>
 
@@ -542,10 +574,10 @@ export default function DocumentTypePage() {
                           <span
                             className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ${
                               sourceLabel === 'Referral'
-                                ? 'bg-purple-100 text-purple-700'
+                                ? 'bg-[#259b8f]/10 text-[#1f8178] ring-1 ring-[#259b8f]/20'
                                 : sourceLabel === 'Direct Client'
-                                  ? 'bg-cyan-100 text-cyan-700'
-                                  : 'bg-blue-100 text-blue-700'
+                                  ? 'bg-cyan-100 text-cyan-700 ring-1 ring-cyan-200'
+                                  : 'bg-sky-100 text-sky-700 ring-1 ring-sky-200'
                             }`}
                           >
                             {sourceLabel === 'Referral' ? (
@@ -556,7 +588,7 @@ export default function DocumentTypePage() {
                             {sourceLabel}
                           </span>
 
-                          <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+                          <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700 ring-1 ring-orange-200">
                             {getStatus(client)}
                           </span>
 
@@ -597,15 +629,15 @@ export default function DocumentTypePage() {
                       </div>
                     </div>
 
-                    <div className="shrink-0 text-slate-400">
+                    <div className="shrink-0 rounded-xl bg-slate-100 p-3 text-slate-500">
                       {isOpen ? <FaChevronDown /> : <FaChevronRight />}
                     </div>
                   </button>
 
                   {isOpen && (
-                    <div className="space-y-4 border-t border-slate-100 bg-slate-50 p-5">
-                      <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                        <h4 className="mb-4 text-base font-extrabold text-slate-900">
+                    <div className="space-y-4 border-t border-slate-100 bg-slate-100 p-4 sm:p-5">
+                      <div className="rounded-2xl bg-white p-5">
+                        <h4 className="mb-4 text-base font-black text-slate-900">
                           Submitted Loan Information
                         </h4>
 
@@ -633,8 +665,8 @@ export default function DocumentTypePage() {
                         </div>
 
                         {sourceLabel !== 'Direct Client' && (
-                          <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-5">
-                            <h5 className="mb-3 text-sm font-extrabold text-slate-900">
+                          <div className="mt-5 rounded-2xl border border-[#259b8f]/20 bg-[#259b8f]/10 p-5">
+                            <h5 className="mb-3 text-sm font-black text-slate-900">
                               {getDetailLabel(client)} Details
                             </h5>
 
@@ -700,81 +732,81 @@ export default function DocumentTypePage() {
                       {files.map((file) => (
                         <div
                           key={`${file.id}-${file.fileName}`}
-                          className="rounded-2xl border border-slate-200 bg-white p-5"
+                          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
                         >
                           <div className="flex items-start gap-4">
-                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#EE6521] text-white">
                               <FaFileAlt />
                             </div>
 
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold uppercase text-orange-600">
+                              <p className="text-xs font-black uppercase tracking-wide text-[#EE6521]">
                                 {pageTitle}
                               </p>
 
-                              <h4 className="mt-1 truncate text-base font-bold text-slate-900">
+                              <h4 className="mt-1 break-words text-base font-black text-slate-900">
                                 {file.fileName || 'No file name'}
                               </h4>
 
-                              <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-3">
-                                <p>
-                                  <span className="font-semibold text-slate-800">
+                              <div className="mt-3 grid gap-3 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-3">
+                                <p className="rounded-xl bg-slate-50 p-3">
+                                  <span className="font-bold text-slate-800">
                                     Client ID:
                                   </span>{' '}
                                   {file.uniqueId || file.clientId || file.id}
                                 </p>
 
-                                <p>
-                                  <span className="font-semibold text-slate-800">
+                                <p className="rounded-xl bg-slate-50 p-3">
+                                  <span className="font-bold text-slate-800">
                                     Submitted:
                                   </span>{' '}
                                   {file.submittedAt || 'N/A'}
                                 </p>
 
-                                <p>
-                                  <span className="font-semibold text-slate-800">
+                                <p className="rounded-xl bg-slate-50 p-3">
+                                  <span className="font-bold text-slate-800">
                                     Source:
                                   </span>{' '}
                                   {formatSource(file.source || file.leadType)}
                                 </p>
 
-                                <p>
-                                  <span className="font-semibold text-slate-800">
+                                <p className="rounded-xl bg-slate-50 p-3">
+                                  <span className="font-bold text-slate-800">
                                     Status:
                                   </span>{' '}
                                   {getStatus(file)}
                                 </p>
 
-                                <p>
-                                  <span className="font-semibold text-slate-800">
+                                <p className="rounded-xl bg-slate-50 p-3">
+                                  <span className="font-bold text-slate-800">
                                     Document Type:
                                   </span>{' '}
                                   {pageTitle}
                                 </p>
 
-                                <p>
-                                  <span className="font-semibold text-slate-800">
+                                <p className="rounded-xl bg-slate-50 p-3">
+                                  <span className="font-bold text-slate-800">
                                     Email:
                                   </span>{' '}
                                   {file.email || 'N/A'}
                                 </p>
 
-                                <p>
-                                  <span className="font-semibold text-slate-800">
+                                <p className="rounded-xl bg-slate-50 p-3">
+                                  <span className="font-bold text-slate-800">
                                     Phone:
                                   </span>{' '}
                                   {file.phone || 'N/A'}
                                 </p>
 
-                                <p>
-                                  <span className="font-semibold text-slate-800">
+                                <p className="rounded-xl bg-slate-50 p-3">
+                                  <span className="font-bold text-slate-800">
                                     Loan Type:
                                   </span>{' '}
                                   {file.loanType || 'N/A'}
                                 </p>
 
-                                <p>
-                                  <span className="font-semibold text-slate-800">
+                                <p className="rounded-xl bg-slate-50 p-3">
+                                  <span className="font-bold text-slate-800">
                                     Objective:
                                   </span>{' '}
                                   {file.objective || 'N/A'}
@@ -785,7 +817,7 @@ export default function DocumentTypePage() {
                                 <button
                                   type="button"
                                   onClick={() => handlePreview(file)}
-                                  className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2 text-sm font-bold text-white hover:bg-blue-600"
+                                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800"
                                 >
                                   <FaEye />
                                   View File
@@ -794,7 +826,7 @@ export default function DocumentTypePage() {
                                 <button
                                   type="button"
                                   onClick={() => handleDownload(file)}
-                                  className="inline-flex items-center gap-2 rounded-xl bg-green-500 px-4 py-2 text-sm font-bold text-white hover:bg-green-600"
+                                  className="inline-flex items-center gap-2 rounded-xl bg-[#EE6521] px-4 py-2 text-sm font-bold text-white hover:bg-orange-600"
                                 >
                                   <FaDownload />
                                   Download
@@ -803,7 +835,7 @@ export default function DocumentTypePage() {
 
                               {isIdDocument && (
                                 <div className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-4">
-                                  <h5 className="mb-3 text-sm font-extrabold text-slate-900">
+                                  <h5 className="mb-3 text-sm font-black text-slate-900">
                                     ID Information
                                   </h5>
 
@@ -856,10 +888,10 @@ export default function DocumentTypePage() {
             })}
 
             {clientFolders.length === 0 && (
-              <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center">
+              <div className={`${panelClass} border-dashed p-12 text-center`}>
                 <FaFolder className="mx-auto text-5xl text-slate-300" />
 
-                <h3 className="mt-4 text-lg font-bold text-slate-900">
+                <h3 className="mt-4 text-lg font-black text-slate-900">
                   No folders found
                 </h3>
 
@@ -873,15 +905,15 @@ export default function DocumentTypePage() {
       </div>
 
       {previewFile && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4">
-          <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 p-5">
-              <div>
-                <h2 className="text-xl font-extrabold text-slate-900">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 px-3 py-4 sm:px-4">
+          <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:rounded-3xl">
+            <div className="flex items-center justify-between gap-3 bg-[linear-gradient(135deg,#259b8f,#0f172a)] px-4 py-4 text-white sm:px-6">
+              <div className="min-w-0">
+                <h2 className="break-words text-xl font-black text-white">
                   {previewFile.fileName || 'File Preview'}
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  {formatSource(previewFile.source || previewFile.leadType)} •{' '}
+                <p className="mt-1 text-sm text-white/70">
+                  {formatSource(previewFile.source || previewFile.leadType)} -{' '}
                   {getStatus(previewFile)}
                 </p>
               </div>
@@ -889,15 +921,15 @@ export default function DocumentTypePage() {
               <button
                 type="button"
                 onClick={handleClosePreview}
-                className="rounded-xl bg-slate-100 p-3 text-slate-600 hover:bg-slate-200"
+                className="shrink-0 rounded-xl bg-white/10 p-3 text-white hover:bg-white/20"
               >
                 <FaTimes />
               </button>
             </div>
 
-            <div className="max-h-[calc(90vh-80px)] overflow-y-auto bg-slate-100 p-4">
+            <div className="overflow-y-auto bg-slate-100 p-3 sm:p-4">
               <div className="mb-4 rounded-2xl bg-white p-5">
-                <h3 className="mb-4 text-lg font-extrabold text-slate-900">
+                <h3 className="mb-4 text-lg font-black text-slate-900">
                   Client & Loan Information
                 </h3>
 
@@ -963,8 +995,8 @@ export default function DocumentTypePage() {
 
                 {formatSource(previewFile.source || previewFile.leadType) !==
                   'Direct Client' && (
-                  <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-5">
-                    <h4 className="mb-3 text-base font-extrabold text-slate-900">
+                  <div className="mt-5 rounded-2xl border border-[#259b8f]/20 bg-[#259b8f]/10 p-5">
+                    <h4 className="mb-3 text-base font-black text-slate-900">
                       {getDetailLabel(previewFile)} Details
                     </h4>
 
@@ -987,7 +1019,7 @@ export default function DocumentTypePage() {
               </div>
 
               {previewLoading && (
-                <div className="flex h-[70vh] items-center justify-center rounded-2xl bg-white text-slate-500">
+                <div className="flex h-[68vh] items-center justify-center rounded-2xl bg-white text-center text-slate-500 sm:h-[70vh]">
                   Loading secure preview...
                 </div>
               )}
@@ -996,7 +1028,7 @@ export default function DocumentTypePage() {
                 <img
                   src={previewUrl}
                   alt={previewFile.fileName || 'Preview'}
-                  className="mx-auto max-h-[70vh] rounded-2xl bg-white object-contain"
+                  className="mx-auto max-h-[68vh] rounded-2xl bg-white object-contain sm:max-h-[70vh]"
                 />
               )}
 
@@ -1004,12 +1036,12 @@ export default function DocumentTypePage() {
                 <iframe
                   src={previewUrl}
                   title={previewFile.fileName}
-                  className="h-[70vh] w-full rounded-2xl bg-white"
+                  className="h-[68vh] w-full rounded-2xl bg-white sm:h-[70vh]"
                 />
               )}
 
               {!previewLoading && previewUrl && !isImageFile && !isPdfFile && (
-                <div className="flex h-[70vh] flex-col items-center justify-center rounded-2xl bg-white text-center text-slate-500">
+                <div className="flex h-[68vh] flex-col items-center justify-center rounded-2xl bg-white px-4 text-center text-slate-500 sm:h-[70vh]">
                   <FaFileAlt className="mb-4 text-5xl text-slate-300" />
                   <p className="font-bold text-slate-700">
                     Preview not available for this file type.
@@ -1020,7 +1052,7 @@ export default function DocumentTypePage() {
                   <button
                     type="button"
                     onClick={() => window.open(previewUrl, '_blank')}
-                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-green-500 px-5 py-3 text-sm font-bold text-white hover:bg-green-600"
+                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#259b8f] px-5 py-3 text-sm font-bold text-white hover:bg-[#1f8178]"
                   >
                     <FaDownload />
                     Open / Download
@@ -1029,7 +1061,7 @@ export default function DocumentTypePage() {
               )}
 
               {!previewLoading && !previewUrl && (
-                <div className="flex h-[70vh] items-center justify-center rounded-2xl bg-white text-slate-500">
+                <div className="flex h-[68vh] items-center justify-center rounded-2xl bg-white text-center text-slate-500 sm:h-[70vh]">
                   No preview available.
                 </div>
               )}

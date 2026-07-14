@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   FaBriefcase,
   FaCheckCircle,
@@ -700,6 +700,12 @@ export default function ClientDocumentSearch() {
 
   const isPdfFile = previewFile?.fileName?.toLowerCase().endsWith('.pdf');
 
+  const panelClass =
+    'rounded-2xl border border-slate-200/80 bg-white/95 shadow-[0_18px_45px_rgba(15,23,42,0.06)]';
+
+  const sectionTitleClass =
+    'mb-3 text-xs font-black uppercase tracking-[0.18em] text-slate-500';
+
   const InfoBox = ({
     label,
     value,
@@ -707,9 +713,9 @@ export default function ClientDocumentSearch() {
     label: string;
     value?: string | number | null;
   }) => (
-    <div className="rounded-2xl bg-slate-50 p-4">
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 p-4 transition hover:border-[#259b8f]/25 hover:bg-white">
       <p className="text-xs font-bold uppercase text-slate-400">{label}</p>
-      <p className="mt-1 break-words font-semibold text-slate-900">
+      <p className="mt-1 break-words text-sm font-bold leading-6 text-slate-900">
         {displayValue(value)}
       </p>
     </div>
@@ -719,16 +725,27 @@ export default function ClientDocumentSearch() {
     label,
     value,
     className,
+    icon,
   }: {
     label: string;
     value: number;
     className: string;
+    icon?: ReactNode;
   }) => (
     <div
-      className={`rounded-2xl border p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${className}`}
+      className={`rounded-2xl border p-4 shadow-[0_14px_34px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.1)] ${className}`}
     >
-      <p className="text-sm font-black leading-snug">{label}</p>
-      <p className="mt-4 text-4xl font-black leading-none">{value}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-black uppercase tracking-wide opacity-80">
+          {label}
+        </p>
+        {icon && (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/70 text-base shadow-sm">
+            {icon}
+          </span>
+        )}
+      </div>
+      <p className="mt-4 text-2xl font-black leading-none sm:text-3xl">{value}</p>
     </div>
   );
 
@@ -738,13 +755,17 @@ export default function ClientDocumentSearch() {
       subtitle="Search client files, source, phone number, team status, loan details, and missing documents."
     >
       <div className="mx-auto max-w-[1800px] space-y-6">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className={`${panelClass} overflow-hidden`}>
+          <div className="bg-[linear-gradient(135deg,rgba(37,155,143,0.94),rgba(15,23,42,0.98)_56%,rgba(238,101,33,0.88))] p-5 text-white sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
-              <h2 className="text-2xl font-black text-slate-900">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-white/65">
+                Document Control
+              </p>
+              <h2 className="mt-2 text-2xl font-black text-white">
                 Search Client Documents
               </h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-2 max-w-4xl text-sm leading-6 text-white/75">
                 Search by Unique ID, name, email, phone, source, status, loan details, document type, or file name.
               </p>
             </div>
@@ -752,14 +773,15 @@ export default function ClientDocumentSearch() {
             <button
               type="button"
               onClick={() => loadClients()}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 text-sm font-bold text-slate-700 hover:bg-slate-200"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-slate-950 shadow-sm hover:bg-slate-100"
             >
               <FaSyncAlt />
               Refresh
             </button>
           </div>
+          </div>
 
-          <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(280px,1fr)_200px_180px_180px_auto]">
+          <div className="grid gap-4 p-5 sm:p-6 xl:grid-cols-[minmax(280px,1fr)_200px_180px_180px_auto]">
             <div className="relative">
               <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -769,14 +791,14 @@ export default function ClientDocumentSearch() {
                   if (event.key === 'Enter') handleSearch();
                 }}
                 placeholder="Search Unique ID, name, email, phone, source, loan details, status, or file..."
-                className="h-14 w-full rounded-2xl border border-slate-300 pl-12 pr-4 text-sm font-medium outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                className="h-14 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 text-sm font-medium outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
               />
             </div>
 
             <select
               value={selectedType}
               onChange={(event) => setSelectedType(event.target.value)}
-              className="h-14 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-medium outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+              className="h-14 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none transition focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
             >
               <option value="all">All Document Types</option>
               {documentTypes.map((type) => (
@@ -789,7 +811,7 @@ export default function ClientDocumentSearch() {
             <select
               value={selectedSource}
               onChange={(event) => setSelectedSource(event.target.value)}
-              className="h-14 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-medium outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+              className="h-14 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none transition focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
             >
               <option value="all">All Sources</option>
               <option value="Broker">Broker</option>
@@ -800,7 +822,7 @@ export default function ClientDocumentSearch() {
             <select
               value={selectedStatus}
               onChange={(event) => setSelectedStatus(event.target.value)}
-              className="h-14 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-medium outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+              className="h-14 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none transition focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
             >
               <option value="all">All Statuses</option>
               {statuses.map((status) => (
@@ -813,7 +835,7 @@ export default function ClientDocumentSearch() {
             <button
               type="button"
               onClick={handleSearch}
-              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-orange-500 px-6 text-sm font-bold text-white shadow-sm hover:bg-orange-600"
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-[#EE6521] px-6 text-sm font-black text-white shadow-[0_14px_24px_rgba(238,101,33,0.22)] hover:bg-orange-600"
             >
               <FaSearch />
               Search
@@ -821,61 +843,71 @@ export default function ClientDocumentSearch() {
           </div>
         </section>
 
-        <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-10">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
           <StatCard
             label="Total Records"
             value={clients.length}
-            className="border-slate-200 bg-white text-slate-900"
+            className="border-slate-200/80 bg-white text-slate-900"
+            icon={<FaFileAlt />}
           />
           <StatCard
             label="Client Folders"
             value={clientFolders.length}
-            className="border-slate-200 bg-white text-slate-900"
+            className="border-slate-200/80 bg-white text-slate-900"
+            icon={<FaFolder />}
           />
           <StatCard
             label="Brokers"
             value={brokerCount}
-            className="border-blue-200 bg-blue-50 text-blue-700"
+            className="border-cyan-200/80 bg-white text-cyan-700"
+            icon={<FaBriefcase />}
           />
           <StatCard
             label="Referrals"
             value={referralCount}
-            className="border-purple-200 bg-purple-50 text-purple-700"
+            className="border-[#259b8f]/30 bg-white text-[#259b8f]"
+            icon={<FaUserFriends />}
           />
           <StatCard
             label="Direct Clients"
             value={directClientCount}
-            className="border-cyan-200 bg-cyan-50 text-cyan-700"
+            className="border-sky-200/80 bg-white text-sky-700"
+            icon={<FaUser />}
           />
           <StatCard
             label="Complete"
             value={completeCount}
-            className="border-green-200 bg-green-50 text-green-700"
+            className="border-green-200/80 bg-white text-green-700"
+            icon={<FaCheckCircle />}
           />
           <StatCard
             label="Incomplete"
             value={incompleteCount}
-            className="border-red-200 bg-red-50 text-red-700"
+            className="border-red-200/80 bg-white text-red-700"
+            icon={<FaExclamationTriangle />}
           />
           <StatCard
             label="Verified Docs"
             value={verifiedDocsCount}
-            className="border-emerald-200 bg-emerald-50 text-emerald-700"
+            className="border-emerald-200/80 bg-white text-emerald-700"
+            icon={<FaCheckCircle />}
           />
           <StatCard
             label="Pending Docs"
             value={pendingDocsCount}
-            className="border-orange-200 bg-orange-50 text-orange-700"
+            className="border-orange-200/80 bg-white text-orange-700"
+            icon={<FaSyncAlt />}
           />
           <StatCard
             label="Rejected Docs"
             value={rejectedDocsCount}
-            className="border-rose-200 bg-rose-50 text-rose-700"
+            className="border-rose-200/80 bg-white text-rose-700"
+            icon={<FaExclamationTriangle />}
           />
         </section>
 
         {loading && (
-          <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-sm font-bold text-slate-500 shadow-sm">
+          <div className={`${panelClass} p-10 text-center text-sm font-bold text-slate-500`}>
             Loading client documents from Azure...
           </div>
         )}
@@ -905,15 +937,15 @@ export default function ClientDocumentSearch() {
                 return (
                   <div
                     key={uniqueId}
-                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+                    className={`${panelClass} overflow-hidden`}
                   >
-                    <div className="flex flex-col gap-4 border-b border-slate-100 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex flex-col gap-4 border-b border-slate-200/80 bg-slate-50/80 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
                       <div className="flex min-w-0 items-center gap-4">
                         <div
                           className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
                             isComplete
-                              ? 'bg-green-100 text-green-600'
-                              : 'bg-red-100 text-red-600'
+                              ? 'bg-green-100 text-green-600 ring-1 ring-green-200'
+                              : 'bg-red-100 text-red-600 ring-1 ring-red-200'
                           }`}
                         >
                           {isComplete ? (
@@ -928,18 +960,18 @@ export default function ClientDocumentSearch() {
                             {getFullName(client) || 'Unnamed Client'}
                           </h3>
 
-                          <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-500">
-                            <span className="inline-flex min-w-0 items-center gap-2 break-all">
+                          <div className="mt-2 flex flex-wrap gap-2 text-sm text-slate-500">
+                            <span className="inline-flex min-w-0 items-center gap-2 break-all rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
                               <FaIdBadge className="text-xs" />
                               {client.uniqueId || uniqueId}
                             </span>
 
-                            <span className="inline-flex min-w-0 items-center gap-2 break-all">
+                            <span className="inline-flex min-w-0 items-center gap-2 break-all rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
                               <FaUser className="text-xs" />
                               {client.email || 'No email'}
                             </span>
 
-                            <span className="inline-flex items-center gap-2">
+                            <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
                               <FaPhone className="text-xs" />
                               {client.phone || 'No phone'}
                             </span>
@@ -951,10 +983,10 @@ export default function ClientDocumentSearch() {
                         <span
                           className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-black sm:px-4 sm:text-sm ${
                             sourceLabel === 'Referral'
-                              ? 'bg-purple-100 text-purple-700'
+                              ? 'bg-[#259b8f]/10 text-[#1f8178] ring-1 ring-[#259b8f]/20'
                               : sourceLabel === 'Direct Client'
-                                ? 'bg-cyan-100 text-cyan-700'
-                                : 'bg-blue-100 text-blue-700'
+                                ? 'bg-cyan-100 text-cyan-700 ring-1 ring-cyan-200'
+                                : 'bg-sky-100 text-sky-700 ring-1 ring-sky-200'
                           }`}
                         >
                           {sourceLabel === 'Referral' ? (
@@ -965,15 +997,15 @@ export default function ClientDocumentSearch() {
                           {sourceLabel}
                         </span>
 
-                        <span className="rounded-full bg-orange-100 px-3 py-2 text-xs font-black text-orange-700 sm:px-4 sm:text-sm">
+                        <span className="rounded-full bg-orange-100 px-3 py-2 text-xs font-black text-orange-700 ring-1 ring-orange-200 sm:px-4 sm:text-sm">
                           {getStatus(client)}
                         </span>
 
                         <span
                           className={`rounded-full px-3 py-2 text-xs font-black sm:px-4 sm:text-sm ${
                             isComplete
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-red-100 text-red-700'
+                              ? 'bg-green-100 text-green-700 ring-1 ring-green-200'
+                              : 'bg-red-100 text-red-700 ring-1 ring-red-200'
                           }`}
                         >
                           {isComplete ? 'Complete' : 'Incomplete'}
@@ -982,7 +1014,7 @@ export default function ClientDocumentSearch() {
                     </div>
 
                     <div className="border-b border-slate-100 bg-white p-4 sm:p-5">
-                      <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">
+                      <p className={sectionTitleClass}>
                         Submitted Loan Information
                       </p>
 
@@ -1010,7 +1042,7 @@ export default function ClientDocumentSearch() {
                       </div>
 
                       {['Broker', 'Referral'].includes(sourceLabel) && (
-                        <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                        <div className="mt-4 rounded-2xl border border-cyan-200 bg-cyan-50/80 p-4">
                           <p className="mb-3 text-sm font-extrabold text-slate-900">
                             {getDetailLabel(client)} Details
                           </p>
@@ -1034,7 +1066,7 @@ export default function ClientDocumentSearch() {
                     </div>
 
                     <div className="border-b border-slate-100 bg-white p-4 sm:p-5">
-                      <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">
+                      <p className={sectionTitleClass}>
                         Scenario Details
                       </p>
 
@@ -1058,7 +1090,7 @@ export default function ClientDocumentSearch() {
                     </div>
 
                     <div className="border-b border-slate-100 bg-white p-4 sm:p-5">
-                      <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">
+                      <p className={sectionTitleClass}>
                         Loan Amount & Settlement
                       </p>
 
@@ -1074,17 +1106,19 @@ export default function ClientDocumentSearch() {
                       </div>
                     </div>
 
-                    <div className="border-b border-slate-100 bg-slate-50 p-4 sm:p-5">
+                    <div className="border-b border-slate-100 bg-slate-50/80 p-4 sm:p-5">
                       <div className="mb-5">
                         <div className="mb-2 flex items-center justify-between text-sm font-bold text-slate-600">
                           <span>Document Progress</span>
                           <span>{progress}%</span>
                         </div>
 
-                        <div className="h-3 overflow-hidden rounded-full bg-white">
+                        <div className="h-3 overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
                           <div
                             className={`h-full rounded-full ${
-                              isComplete ? 'bg-green-500' : 'bg-orange-500'
+                              isComplete
+                                ? 'bg-[linear-gradient(90deg,#259b8f,#6CBF51)]'
+                                : 'bg-[linear-gradient(90deg,#EE6521,#f59e0b)]'
                             }`}
                             style={{ width: `${progress}%` }}
                           />
@@ -1092,7 +1126,7 @@ export default function ClientDocumentSearch() {
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        <div>
+                        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                           <p className="mb-2 text-xs font-bold uppercase text-slate-500">
                             Verified Documents
                           </p>
@@ -1114,7 +1148,7 @@ export default function ClientDocumentSearch() {
                           </div>
                         </div>
 
-                        <div>
+                        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                           <p className="mb-2 text-xs font-bold uppercase text-slate-500">
                             Missing Documents
                           </p>
@@ -1136,7 +1170,7 @@ export default function ClientDocumentSearch() {
                           </div>
                         </div>
 
-                        <div>
+                        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                           <p className="mb-2 text-xs font-bold uppercase text-slate-500">
                             Pending Review
                           </p>
@@ -1158,7 +1192,7 @@ export default function ClientDocumentSearch() {
                           </div>
                         </div>
 
-                        <div>
+                        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                           <p className="mb-2 text-xs font-bold uppercase text-slate-500">
                             Rejected Documents
                           </p>
@@ -1182,14 +1216,14 @@ export default function ClientDocumentSearch() {
                       </div>
                     </div>
 
-                    <div className="grid gap-4 p-4 sm:p-5 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid gap-4 p-4 sm:p-5 md:grid-cols-2 2xl:grid-cols-3">
                       {files.map((file) => (
                         <div
                           key={`${file.id}-${file.fileName}`}
-                          className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                          className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:bg-white hover:shadow-md"
                         >
                           <div className="flex items-start gap-3">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#EE6521] text-white shadow-sm">
                               <FaFileAlt />
                             </div>
 
@@ -1198,7 +1232,7 @@ export default function ClientDocumentSearch() {
                                 {formatDocumentType(file.documentType)}
                               </p>
 
-                              <h4 className="mt-1 truncate text-sm font-extrabold text-slate-900">
+                              <h4 className="mt-1 break-words text-sm font-extrabold leading-5 text-slate-900">
                                 {file.fileName || 'No file name'}
                               </h4>
 
@@ -1223,11 +1257,11 @@ export default function ClientDocumentSearch() {
                             </div>
                           </div>
 
-                          <div className="mt-4 grid grid-cols-2 gap-2">
+                          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
                             <button
                               type="button"
                               onClick={() => handlePreview(file)}
-                              className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-500 px-3 py-2 text-xs font-bold text-white hover:bg-blue-600"
+                              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700"
                             >
                               <FaEye />
                               View
@@ -1236,7 +1270,7 @@ export default function ClientDocumentSearch() {
                             <button
                               type="button"
                               onClick={() => handleDownload(file)}
-                              className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-500 px-3 py-2 text-xs font-bold text-white hover:bg-green-600"
+                              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#259b8f] px-3 py-2 text-xs font-bold text-white hover:bg-[#1f8178]"
                             >
                               <FaDownload />
                               Download
@@ -1246,7 +1280,7 @@ export default function ClientDocumentSearch() {
                               type="button"
                               onClick={() => updateDocumentStatus(file, 'verify')}
                               disabled={loading}
-                              className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-3 py-2 text-xs font-bold text-white hover:bg-green-700 disabled:bg-green-300"
+                              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-green-600 px-3 py-2 text-xs font-bold text-white hover:bg-green-700 disabled:bg-green-300"
                             >
                               <FaCheckCircle />
                               Approve
@@ -1256,7 +1290,7 @@ export default function ClientDocumentSearch() {
                               type="button"
                               onClick={() => updateDocumentStatus(file, 'reject')}
                               disabled={loading}
-                              className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:bg-red-300"
+                              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:bg-red-300"
                             >
                               <FaExclamationTriangle />
                               Reject
@@ -1266,7 +1300,7 @@ export default function ClientDocumentSearch() {
                               type="button"
                               onClick={() => updateDocumentStatus(file, 'pending')}
                               disabled={loading}
-                              className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-3 py-2 text-xs font-bold text-white hover:bg-orange-600 disabled:bg-orange-300"
+                              className="col-span-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#EE6521] px-3 py-2 text-xs font-bold text-white hover:bg-orange-600 disabled:bg-orange-300 sm:col-span-1"
                             >
                               <FaSyncAlt />
                               Mark Pending
@@ -1281,7 +1315,7 @@ export default function ClientDocumentSearch() {
             )}
 
             {clientFolders.length === 0 && (
-              <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center">
+              <div className="rounded-3xl border border-dashed border-slate-300 bg-white/95 p-12 text-center shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
                 <FaFolder className="mx-auto text-5xl text-slate-300" />
 
                 <h3 className="mt-4 text-lg font-bold text-slate-900">
@@ -1298,14 +1332,14 @@ export default function ClientDocumentSearch() {
       </div>
 
       {previewFile && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-3 py-4 sm:px-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 px-3 py-4 sm:px-4">
           <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:rounded-3xl">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-[linear-gradient(135deg,#259b8f,#0f172a)] p-4 text-white sm:p-5">
               <div className="min-w-0">
-                <h2 className="break-words text-xl font-black text-slate-900">
+                <h2 className="break-words text-xl font-black text-white">
                   Client File Details
                 </h2>
-                <p className="break-words text-sm text-slate-500">
+                <p className="break-words text-sm text-white/70">
                   {previewFile.fileName || 'File Preview'}
                 </p>
               </div>
@@ -1313,7 +1347,7 @@ export default function ClientDocumentSearch() {
               <button
                 type="button"
                 onClick={handleClosePreview}
-                className="shrink-0 rounded-xl bg-slate-100 p-3 text-slate-600 hover:bg-slate-200"
+                className="shrink-0 rounded-xl bg-white/10 p-3 text-white ring-1 ring-white/15 hover:bg-white/15"
               >
                 <FaTimes />
               </button>
@@ -1383,7 +1417,7 @@ export default function ClientDocumentSearch() {
               </div>
 
               {['Broker', 'Referral'].includes(getClientSource(previewFile)) && (
-                <div className="mb-4 rounded-2xl border border-blue-200 bg-blue-50 p-5">
+                <div className="mb-4 rounded-2xl border border-cyan-200 bg-cyan-50/80 p-5">
                   <h3 className="mb-4 text-lg font-black text-slate-900">
                     {getDetailLabel(previewFile)} Details
                   </h3>

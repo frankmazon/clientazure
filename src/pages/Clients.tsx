@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   FaBriefcase,
   FaCheckCircle,
@@ -457,6 +457,9 @@ export default function Clients() {
 
   const isPdfFile = selectedClient?.fileName?.toLowerCase().endsWith('.pdf');
 
+  const panelClass =
+    'rounded-2xl border border-slate-200/80 bg-white/95 shadow-[0_18px_45px_rgba(15,23,42,0.06)]';
+
   const InfoBox = ({
     label,
     value,
@@ -464,9 +467,9 @@ export default function Clients() {
     label: string;
     value?: string | number | null;
   }) => (
-    <div className="rounded-2xl bg-slate-50 p-4">
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 p-4 transition hover:border-[#259b8f]/25 hover:bg-white">
       <p className="text-xs font-bold uppercase text-slate-400">{label}</p>
-      <p className="mt-1 break-words font-semibold text-slate-900">
+      <p className="mt-1 break-words text-sm font-bold leading-6 text-slate-900">
         {displayValue(value)}
       </p>
     </div>
@@ -476,16 +479,27 @@ export default function Clients() {
     label,
     value,
     className,
+    icon,
   }: {
     label: string;
     value: number;
     className: string;
+    icon?: ReactNode;
   }) => (
     <div
-      className={`rounded-2xl border p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${className}`}
+      className={`rounded-2xl border p-4 shadow-[0_14px_34px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.1)] ${className}`}
     >
-      <p className="text-sm font-black leading-snug">{label}</p>
-      <p className="mt-4 text-4xl font-black leading-none">{value}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-black uppercase tracking-wide opacity-80">
+          {label}
+        </p>
+        {icon && (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/70 text-base shadow-sm">
+            {icon}
+          </span>
+        )}
+      </div>
+      <p className="mt-4 text-2xl font-black leading-none sm:text-3xl">{value}</p>
     </div>
   );
 
@@ -495,8 +509,21 @@ export default function Clients() {
       subtitle="View submitted clients, source, loan details, team call status, and document completion."
     >
       <div className="mx-auto max-w-[1800px] space-y-6">
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-          <div className="relative">
+        <div className={`${panelClass} overflow-hidden`}>
+          <div className="bg-[linear-gradient(135deg,rgba(37,155,143,0.94),rgba(15,23,42,0.98)_56%,rgba(238,101,33,0.88))] p-5 text-white sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-white/65">
+              Client Records
+            </p>
+            <h2 className="mt-2 text-2xl font-black text-white">
+              Search Clients
+            </h2>
+            <p className="mt-2 max-w-4xl text-sm leading-6 text-white/75">
+              Search by unique ID, contact details, source, status, loan details, or uploaded file name.
+            </p>
+          </div>
+
+          <div className="p-5 sm:p-6">
+            <div className="relative">
             <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
 
             <input
@@ -504,13 +531,14 @@ export default function Clients() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search unique ID, name, email, phone, source, loan details, status, or file..."
-              className="h-16 w-full rounded-2xl border border-slate-300 pl-12 pr-4 text-base font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+              className="h-14 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 text-sm font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
             />
+            </div>
           </div>
         </div>
 
         {loading && (
-          <div className="rounded-2xl bg-white p-10 text-center font-bold text-slate-500 shadow-sm ring-1 ring-slate-200">
+          <div className={`${panelClass} p-10 text-center font-bold text-slate-500`}>
             Loading clients from Azure...
           </div>
         )}
@@ -523,51 +551,60 @@ export default function Clients() {
 
         {!loading && !error && (
           <>
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-9">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
               <StatCard
                 label="Clients"
                 value={clientGroups.length}
-                className="border-slate-200 bg-white text-slate-900"
+                className="border-slate-200/80 bg-white text-slate-900"
+                icon={<FaFileAlt />}
               />
               <StatCard
                 label="Brokers"
                 value={brokerCount}
-                className="border-blue-200 bg-blue-50 text-blue-700"
+                className="border-cyan-200/80 bg-white text-cyan-700"
+                icon={<FaBriefcase />}
               />
               <StatCard
                 label="Referrals"
                 value={referralCount}
-                className="border-purple-200 bg-purple-50 text-purple-700"
+                className="border-[#259b8f]/30 bg-white text-[#259b8f]"
+                icon={<FaUserFriends />}
               />
               <StatCard
                 label="Direct Clients"
                 value={directClientCount}
-                className="border-cyan-200 bg-cyan-50 text-cyan-700"
+                className="border-sky-200/80 bg-white text-sky-700"
+                icon={<FaBriefcase />}
               />
               <StatCard
                 label="Complete"
                 value={completeCount}
-                className="border-green-200 bg-green-50 text-green-700"
+                className="border-green-200/80 bg-white text-green-700"
+                icon={<FaCheckCircle />}
               />
               <StatCard
                 label="Incomplete"
                 value={incompleteCount}
-                className="border-red-200 bg-red-50 text-red-700"
+                className="border-red-200/80 bg-white text-red-700"
+                icon={<FaExclamationTriangle />}
               />
               <StatCard
                 label="Approved Docs"
                 value={approvedDocsCount}
-                className="border-emerald-200 bg-emerald-50 text-emerald-700"
+                className="border-emerald-200/80 bg-white text-emerald-700"
+                icon={<FaCheckCircle />}
               />
               <StatCard
                 label="Pending Docs"
                 value={pendingDocsCount}
-                className="border-orange-200 bg-orange-50 text-orange-700"
+                className="border-orange-200/80 bg-white text-orange-700"
+                icon={<FaFileAlt />}
               />
               <StatCard
                 label="Rejected Docs"
                 value={rejectedDocsCount}
-                className="border-rose-200 bg-rose-50 text-rose-700"
+                className="border-rose-200/80 bg-white text-rose-700"
+                icon={<FaExclamationTriangle />}
               />
             </div>
 
@@ -578,7 +615,7 @@ export default function Clients() {
                 return (
                   <div
                     key={group.key}
-                    className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200"
+                    className={`${panelClass} p-5`}
                   >
                     <div className="mb-5 flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -602,10 +639,10 @@ export default function Clients() {
                       <span
                         className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-xs font-black ${
                           sourceLabel === 'Referral'
-                            ? 'bg-purple-100 text-purple-700'
+                            ? 'bg-[#259b8f]/10 text-[#1f8178] ring-1 ring-[#259b8f]/20'
                             : sourceLabel === 'Direct Client'
-                              ? 'bg-cyan-100 text-cyan-700'
-                              : 'bg-blue-100 text-blue-700'
+                              ? 'bg-cyan-100 text-cyan-700 ring-1 ring-cyan-200'
+                              : 'bg-sky-100 text-sky-700 ring-1 ring-sky-200'
                         }`}
                       >
                         {sourceLabel}
@@ -613,15 +650,15 @@ export default function Clients() {
                     </div>
 
                     <div className="mb-4 flex flex-wrap gap-2">
-                      <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-700">
+                      <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-700 ring-1 ring-orange-200">
                         {getStatus(group.client)}
                       </span>
 
                       <span
                         className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-black ${
                           group.isComplete
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-100 text-red-700'
+                            ? 'bg-green-100 text-green-700 ring-1 ring-green-200'
+                            : 'bg-red-100 text-red-700 ring-1 ring-red-200'
                         }`}
                       >
                         {group.isComplete ? 'Complete' : 'Incomplete'}
@@ -633,7 +670,7 @@ export default function Clients() {
                       </span>
                     </div>
 
-                    <div className="mb-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+                    <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-sm leading-6 text-slate-700">
                       <p>
                         <strong className="text-slate-700">Classification:</strong>{' '}
                         {displayValue(getClientValue(group.client, ['classificationType', 'ClassificationType', 'classification_type']))}
@@ -652,15 +689,15 @@ export default function Clients() {
                       </p>
                     </div>
 
-                    <div className="mb-4 grid gap-3 rounded-2xl border border-slate-200 p-4">
+                    <div className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                       <div className="grid grid-cols-3 gap-2 text-sm font-black">
-                        <p className="text-green-700">
+                        <p className="rounded-xl bg-white px-2 py-2 text-green-700 ring-1 ring-slate-200">
                           Approved: {group.statusCounts.approved}
                         </p>
-                        <p className="text-orange-700">
+                        <p className="rounded-xl bg-white px-2 py-2 text-orange-700 ring-1 ring-slate-200">
                           Pending: {group.statusCounts.pending}
                         </p>
-                        <p className="text-red-700">
+                        <p className="rounded-xl bg-white px-2 py-2 text-red-700 ring-1 ring-slate-200">
                           Rejected: {group.statusCounts.rejected}
                         </p>
                       </div>
@@ -670,9 +707,9 @@ export default function Clients() {
                           <span>Progress</span>
                           <span>{group.progress}%</span>
                         </div>
-                        <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-3 overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
                           <div
-                            className="h-full rounded-full bg-orange-500"
+                            className="h-full rounded-full bg-[linear-gradient(90deg,#EE6521,#f59e0b)]"
                             style={{ width: `${group.progress}%` }}
                           />
                         </div>
@@ -681,7 +718,7 @@ export default function Clients() {
 
                     <div className="grid gap-3 text-sm">
 
-                      <div className="rounded-xl bg-slate-50 p-3">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
                         <p className="text-xs font-bold uppercase text-slate-400">
                           Uploaded
                         </p>
@@ -703,7 +740,7 @@ export default function Clients() {
                         </div>
                       </div>
 
-                      <div className="rounded-xl bg-slate-50 p-3">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
                         <p className="text-xs font-bold uppercase text-slate-400">
                           Missing
                         </p>
@@ -732,7 +769,7 @@ export default function Clients() {
                           <button
                             type="button"
                             onClick={() => handlePreview(file)}
-                            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-500 text-sm font-bold text-white hover:bg-blue-600"
+                            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 text-sm font-bold text-white hover:bg-slate-700"
                           >
                             <FaEye />
                             View
@@ -741,7 +778,7 @@ export default function Clients() {
                           <button
                             type="button"
                             onClick={() => handleDownload(file)}
-                            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 text-sm font-bold text-white hover:bg-orange-600"
+                            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#EE6521] text-sm font-bold text-white hover:bg-orange-600"
                           >
                             <FaDownload />
                             Download
@@ -754,14 +791,14 @@ export default function Clients() {
               })}
 
               {filteredGroups.length === 0 && (
-                <div className="rounded-2xl bg-white p-10 text-center text-sm text-slate-500 shadow-sm ring-1 ring-slate-200">
+                <div className={`${panelClass} p-10 text-center text-sm text-slate-500`}>
                   No clients found.
                 </div>
               )}
             </div>
 
-            <div className="hidden overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 lg:block">
-              <div className="flex min-h-28 items-center justify-between border-b border-slate-200 px-8 py-6">
+            <div className={`hidden overflow-hidden lg:block ${panelClass}`}>
+              <div className="flex min-h-28 items-center justify-between border-b border-slate-200 bg-slate-50/80 px-8 py-6">
                 <div>
                   <h2 className="text-2xl font-black text-slate-900">
                     Client List
@@ -772,7 +809,7 @@ export default function Clients() {
                   </p>
                 </div>
 
-                <FaFileAlt className="text-3xl text-orange-500" />
+                <FaFileAlt className="text-3xl text-[#EE6521]" />
               </div>
 
               <div className="overflow-x-auto">
@@ -788,7 +825,7 @@ export default function Clients() {
                     <col className="w-[11%]" />
                     <col className="w-[9%]" />
                   </colgroup>
-                  <thead className="bg-slate-50">
+                  <thead className="bg-slate-50/90">
                     <tr>
                       {[
                         'Unique ID',
@@ -827,10 +864,10 @@ export default function Clients() {
                             <span
                               className={`inline-flex max-w-full items-center gap-2 rounded-full px-3 py-2 text-xs font-black leading-tight ${
                                 sourceLabel === 'Referral'
-                                  ? 'bg-purple-100 text-purple-700'
+                                  ? 'bg-[#259b8f]/10 text-[#1f8178] ring-1 ring-[#259b8f]/20'
                                   : sourceLabel === 'Direct Client'
-                                    ? 'bg-cyan-100 text-cyan-700'
-                                    : 'bg-blue-100 text-blue-700'
+                                    ? 'bg-cyan-100 text-cyan-700 ring-1 ring-cyan-200'
+                                    : 'bg-sky-100 text-sky-700 ring-1 ring-sky-200'
                               }`}
                             >
                               {sourceLabel === 'Referral' ? (
@@ -876,7 +913,7 @@ export default function Clients() {
                           </td>
 
                           <td className="px-5 py-9">
-                            <span className="inline-flex max-w-full rounded-2xl bg-orange-100 px-3 py-2 text-sm font-black leading-snug text-orange-700">
+                            <span className="inline-flex max-w-full rounded-2xl bg-orange-100 px-3 py-2 text-sm font-black leading-snug text-orange-700 ring-1 ring-orange-200">
                               {getStatus(group.client)}
                             </span>
                           </td>
@@ -917,9 +954,9 @@ export default function Clients() {
                               <p className="mb-2 text-sm font-black text-slate-500">
                                 {group.progress}%
                               </p>
-                              <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                              <div className="h-3 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
                                 <div
-                                  className="h-full rounded-full bg-orange-500"
+                                  className="h-full rounded-full bg-[linear-gradient(90deg,#EE6521,#f59e0b)]"
                                   style={{ width: `${group.progress}%` }}
                                 />
                               </div>
@@ -948,14 +985,14 @@ export default function Clients() {
       </div>
 
       {selectedClient && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-3 py-4 sm:px-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 px-3 py-4 sm:px-4">
           <div className="max-h-[92vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl sm:rounded-3xl">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-[linear-gradient(135deg,#259b8f,#0f172a)] px-4 py-4 text-white sm:px-6">
               <div className="min-w-0">
-                <h2 className="break-words text-xl font-black text-slate-900">
+                <h2 className="break-words text-xl font-black text-white">
                   Client File Details
                 </h2>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-white/70">
                   View submitted client information and uploaded file.
                 </p>
               </div>
@@ -963,14 +1000,14 @@ export default function Clients() {
               <button
                 type="button"
                 onClick={handleClosePreview}
-                className="shrink-0 rounded-xl bg-slate-100 p-3 text-slate-600 hover:bg-slate-200"
+                className="shrink-0 rounded-xl bg-white/10 p-3 text-white ring-1 ring-white/15 hover:bg-white/15"
               >
                 <FaTimes />
               </button>
             </div>
 
-            <div className="max-h-[calc(92vh-80px)] overflow-y-auto p-4 sm:p-6">
-              <div className="mb-6">
+            <div className="max-h-[calc(92vh-80px)] overflow-y-auto bg-slate-100 p-4 sm:p-6">
+              <div className="mb-4 rounded-2xl bg-white p-5">
                 <h3 className="mb-4 text-lg font-black text-slate-900">
                   Client Information
                 </h3>
@@ -996,7 +1033,7 @@ export default function Clients() {
                 </div>
               </div>
 
-              <div className="mb-6">
+              <div className="mb-4 rounded-2xl bg-white p-5">
                 <h3 className="mb-4 text-lg font-black text-slate-900">
                   Submitted Loan Information
                 </h3>
@@ -1026,7 +1063,7 @@ export default function Clients() {
 
               {getClientSource(selectedClient) !==
                 'Direct Client' && (
-                <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 p-5">
+                <div className="mb-4 rounded-2xl border border-cyan-200 bg-cyan-50/80 p-5">
                   <h3 className="mb-4 text-lg font-black text-slate-900">
                     {getDetailLabel(selectedClient)} Details
                   </h3>
@@ -1054,7 +1091,7 @@ export default function Clients() {
                 </div>
               )}
 
-              <div className="mb-6">
+              <div className="mb-4 rounded-2xl bg-white p-5">
                 <h3 className="mb-4 text-lg font-black text-slate-900">
                   Scenario Details
                 </h3>
@@ -1081,7 +1118,7 @@ export default function Clients() {
                 </div>
               </div>
 
-              <div className="mb-6">
+              <div className="mb-4 rounded-2xl bg-white p-5">
                 <h3 className="mb-4 text-lg font-black text-slate-900">
                   Loan Amount & Settlement
                 </h3>
@@ -1101,7 +1138,7 @@ export default function Clients() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 p-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="mb-3 text-sm font-bold text-slate-700">
                   File Preview
                 </p>
@@ -1119,7 +1156,7 @@ export default function Clients() {
                   <button
                     type="button"
                     onClick={() => handleDownload(selectedClient)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#EE6521] px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
                   >
                     <FaDownload />
                     Download
@@ -1160,7 +1197,7 @@ export default function Clients() {
                     <button
                       type="button"
                       onClick={() => window.open(previewUrl, '_blank')}
-                      className="mt-5 inline-flex items-center gap-2 rounded-xl bg-green-500 px-5 py-3 text-sm font-bold text-white hover:bg-green-600"
+                      className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#259b8f] px-5 py-3 text-sm font-bold text-white hover:bg-[#1f8178]"
                     >
                       <FaDownload />
                       Open / Download

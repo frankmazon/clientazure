@@ -66,15 +66,26 @@ const purposeOptions = ['Investment', 'Owner occupied'];
 const transactionOptions = ['Alt doc', 'Full doc'];
 const yesNoOptions = ['Yes', 'No'];
 const countryCodeOptions = [
-  { label: 'PH +63', value: '+63' },
-  { label: 'AU +61', value: '+61' },
-  { label: 'US +1', value: '+1' },
-  { label: 'UK +44', value: '+44' },
-  { label: 'NZ +64', value: '+64' },
-  { label: 'SG +65', value: '+65' },
-  { label: 'CA +1', value: '+1' },
+  { flag: '🇵🇭', label: 'PH +63', country: 'Philippines', value: 'PH:+63', dialCode: '+63' },
+  { flag: '🇦🇺', label: 'AU +61', country: 'Australia', value: 'AU:+61', dialCode: '+61' },
+  { flag: '🇺🇸', label: 'US +1', country: 'United States', value: 'US:+1', dialCode: '+1' },
+  { flag: '🇬🇧', label: 'UK +44', country: 'United Kingdom', value: 'UK:+44', dialCode: '+44' },
+  { flag: '🇳🇿', label: 'NZ +64', country: 'New Zealand', value: 'NZ:+64', dialCode: '+64' },
+  { flag: '🇸🇬', label: 'SG +65', country: 'Singapore', value: 'SG:+65', dialCode: '+65' },
+  { flag: '🇨🇦', label: 'CA +1', country: 'Canada', value: 'CA:+1', dialCode: '+1' },
 ];
-const phoneHelperText = 'Choose the country code, then enter the local phone number.';
+
+const inputClass =
+  'h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15';
+
+const selectClass =
+  'h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-800 outline-none transition focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15';
+
+const textAreaClass =
+  'w-full resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15';
+
+const sectionClass =
+  'rounded-2xl border border-slate-200/80 bg-white/95 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]';
 
 const initialFormData = {
   leadType: 'broker',
@@ -84,7 +95,7 @@ const initialFormData = {
   middleName: '',
   lastName: '',
   email: '',
-  phoneCountryCode: '+63',
+  phoneCountryCode: 'PH:+63',
   phone: '',
 
   classificationType: '',
@@ -98,7 +109,7 @@ const initialFormData = {
   referrerFirstName: '',
   referrerMiddleName: '',
   referrerLastName: '',
-  referrerPhoneCountryCode: '+63',
+  referrerPhoneCountryCode: 'PH:+63',
   referrerPhone: '',
   referrerEmail: '',
 
@@ -166,7 +177,10 @@ const formatPhoneNumber = (countryCode: string, phone: string) => {
   if (!cleanPhone) return '';
   if (cleanPhone.startsWith('+')) return cleanPhone;
 
-  return `${countryCode} ${cleanPhone}`;
+  const selectedCountry = countryCodeOptions.find((country) => country.value === countryCode);
+  const dialCode = selectedCountry?.dialCode || countryCode.split(':').pop() || countryCode;
+
+  return `${dialCode} ${cleanPhone}`;
 };
 
 export default function HomePage() {
@@ -188,10 +202,14 @@ export default function HomePage() {
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = event.target;
+    const cleanValue =
+      name === 'phone' || name === 'referrerPhone'
+        ? value.replace(/\D/g, '')
+        : value;
 
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: cleanValue,
     }));
   };
 
@@ -207,7 +225,7 @@ export default function HomePage() {
             referrerFirstName: '',
             referrerMiddleName: '',
             referrerLastName: '',
-            referrerPhoneCountryCode: '+63',
+            referrerPhoneCountryCode: 'PH:+63',
             referrerPhone: '',
             referrerEmail: '',
           }
@@ -567,6 +585,66 @@ export default function HomePage() {
 
   const isIdDocument = formData.documentTypes.includes('id');
 
+  const renderPhoneField = ({
+    countryCodeName,
+    phoneName,
+    label,
+    placeholder,
+    required = false,
+  }: {
+    countryCodeName: 'phoneCountryCode' | 'referrerPhoneCountryCode';
+    phoneName: 'phone' | 'referrerPhone';
+    label: string;
+    placeholder: string;
+    required?: boolean;
+  }) => {
+    const selectedCountry =
+      countryCodeOptions.find((country) => country.value === formData[countryCodeName]) ||
+      countryCodeOptions[0];
+    const phonePlaceholder = `${selectedCountry.country} phone number`;
+
+    return (
+      <div>
+        <label className="mb-2 block text-sm font-bold text-slate-700">{label}</label>
+
+        <div className="grid grid-cols-[142px_minmax(0,1fr)] gap-2">
+          <div>
+            <select
+              name={countryCodeName}
+              value={formData[countryCodeName]}
+              onChange={handleChange}
+              className={`${selectClass} px-3`}
+            >
+              {countryCodeOptions.map((country) => (
+                <option key={`${country.label}-${country.value}`} value={country.value}>
+                  {country.flag} {country.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <input
+            type="tel"
+            name={phoneName}
+            value={formData[phoneName]}
+            onChange={handleChange}
+            placeholder={phonePlaceholder || placeholder}
+            inputMode="tel"
+            autoComplete="tel"
+            pattern="[0-9]*"
+            className={inputClass}
+            required={required}
+          />
+        </div>
+
+        <p className="mt-2 text-xs font-medium text-slate-500">
+          {selectedCountry.flag} {selectedCountry.country} selected. Enter the local phone number;
+          it will be saved with {selectedCountry.dialCode}.
+        </p>
+      </div>
+    );
+  };
+
   const renderSelectField = ({
     name,
     label,
@@ -586,7 +664,7 @@ export default function HomePage() {
         value={formData[name] as string}
         onChange={handleChange}
         required={required}
-        className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+        className={selectClass}
       >
         <option value="">Select {label}</option>
 
@@ -617,46 +695,61 @@ export default function HomePage() {
         onChange={handleChange}
         placeholder={placeholder}
         rows={4}
-        className="w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-orange-500"
+        className={textAreaClass}
       />
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-slate-100 font-sans">
-      <main className="flex min-h-screen items-center justify-center px-4 py-10">
-        <div className="w-full max-w-5xl rounded-3xl bg-white p-6 shadow-xl sm:p-8">
-          <div className="mb-8 text-center">
-            <div className="mb-5 flex justify-center">
-              <img src="/logo/logo.png" alt="Company Logo" className="h-20 w-auto object-contain" />
-            </div>
+    <div className="min-h-screen bg-[#eef8f6] font-sans text-slate-900">
+      <div className="fixed inset-0 -z-10 bg-[linear-gradient(135deg,rgba(37,155,143,0.16),rgba(255,255,255,0.9)_42%,rgba(238,101,33,0.12)),radial-gradient(circle_at_12%_12%,rgba(37,155,143,0.22),transparent_28%),radial-gradient(circle_at_86%_18%,rgba(108,191,81,0.14),transparent_26%),radial-gradient(circle_at_78%_88%,rgba(238,101,33,0.14),transparent_30%)]" />
+      <main className="px-4 py-8 sm:px-6 lg:py-10">
+        <div className="mx-auto w-full max-w-6xl overflow-hidden rounded-3xl bg-white/95 shadow-[0_24px_70px_rgba(15,23,42,0.15)] ring-1 ring-white/70">
+          <div className="bg-[linear-gradient(135deg,rgba(37,155,143,0.94),rgba(15,23,42,0.98)_56%,rgba(238,101,33,0.88))] px-6 py-8 text-white sm:px-8 lg:px-10">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-white p-3 shadow-[0_18px_40px_rgba(0,0,0,0.18)]">
+                  <img
+                    src="/logo/logo.png"
+                    alt="Company Logo"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
 
-            <h1 className="text-3xl font-extrabold text-[#219688] sm:text-4xl">
-              Client Submission Portal
-            </h1>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.24em] text-white/70">
+                    Client Portal
+                  </p>
+                  <h1 className="mt-2 text-3xl font-black text-white sm:text-4xl">
+                    Client Submission Portal
+                  </h1>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-white/75">
+                    Submit borrower details, loan scenario notes, and supporting documents in one secure application.
+                  </p>
+                </div>
+              </div>
 
-            <p className="mt-2 text-sm text-slate-600">
-              Fill out the form and upload your required document.
-            </p>
-
-            <div className="mt-5 flex flex-wrap justify-center gap-2">
-              <span className="rounded-full bg-[#EE6521]/10 px-3 py-1 text-xs font-semibold text-[#EE6521]">
-                Broker
-              </span>
-
-              <span className="rounded-full bg-[#219688]/10 px-3 py-1 text-xs font-semibold text-[#219688]">
-                Referral
-              </span>
-
-              <span className="rounded-full bg-[#6CBF51]/10 px-3 py-1 text-xs font-semibold text-[#6CBF51]">
-                Direct Client
-              </span>
+              <div className="grid gap-2 sm:grid-cols-3 lg:w-[360px]">
+                {sourceOptions.map((source) => (
+                  <span
+                    key={source.value}
+                    className="rounded-full bg-white/12 px-3 py-2 text-center text-xs font-bold text-white ring-1 ring-white/15"
+                  >
+                    {source.label}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Source</label>
+          <form onSubmit={handleSubmit} className="space-y-6 p-5 sm:p-8 lg:p-10">
+            <div className={sectionClass}>
+              <div className="mb-4">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#259b8f]">
+                  Application Source
+                </p>
+                <h2 className="mt-1 text-xl font-black text-slate-950">Who referred this client?</h2>
+              </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
                 {sourceOptions.map((source) => {
@@ -667,10 +760,10 @@ export default function HomePage() {
                       key={source.value}
                       type="button"
                       onClick={() => handleSourceChange(source.value)}
-                      className={`rounded-2xl border p-4 text-center transition ${
+                      className={`rounded-2xl border p-4 text-center transition hover:-translate-y-0.5 ${
                         isSelected
-                          ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-100'
-                          : 'border-slate-300 bg-white hover:border-blue-300'
+                          ? 'border-[#259b8f] bg-[#259b8f]/10 ring-4 ring-[#259b8f]/10'
+                          : 'border-slate-200 bg-white hover:border-[#259b8f]/40'
                       }`}
                     >
                       <span className="text-sm font-bold text-slate-800">{source.label}</span>
@@ -681,8 +774,8 @@ export default function HomePage() {
             </div>
 
             {showReferrerDetails && (
-              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
-                <h3 className="mb-4 text-lg font-bold text-slate-900">{detailLabel} Details</h3>
+              <div className="rounded-2xl border border-cyan-200 bg-cyan-50/80 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
+                <h3 className="mb-4 text-lg font-black text-slate-900">{detailLabel} Details</h3>
 
                 <div className="grid gap-4 md:grid-cols-3">
                   <input
@@ -691,7 +784,7 @@ export default function HomePage() {
                     value={formData.referrerFirstName}
                     onChange={handleChange}
                     placeholder={`${detailLabel} First Name`}
-                    className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+                    className={inputClass}
                   />
 
                   <input
@@ -700,7 +793,7 @@ export default function HomePage() {
                     value={formData.referrerMiddleName}
                     onChange={handleChange}
                     placeholder={`${detailLabel} Middle Name`}
-                    className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+                    className={inputClass}
                   />
 
                   <input
@@ -709,39 +802,17 @@ export default function HomePage() {
                     value={formData.referrerLastName}
                     onChange={handleChange}
                     placeholder={`${detailLabel} Last Name`}
-                    className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+                    className={inputClass}
                   />
                 </div>
 
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <div>
-                    <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2">
-                      <select
-                        name="referrerPhoneCountryCode"
-                        value={formData.referrerPhoneCountryCode}
-                        onChange={handleChange}
-                        className="h-12 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-orange-500"
-                      >
-                        {countryCodeOptions.map((country) => (
-                          <option key={`${country.label}-${country.value}`} value={country.value}>
-                            {country.label}
-                          </option>
-                        ))}
-                      </select>
-
-                      <input
-                        type="tel"
-                        name="referrerPhone"
-                        value={formData.referrerPhone}
-                        onChange={handleChange}
-                        placeholder={`${detailLabel} Phone`}
-                        inputMode="tel"
-                        autoComplete="tel"
-                        className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
-                      />
-                    </div>
-                    <p className="mt-2 text-xs font-medium text-slate-500">{phoneHelperText}</p>
-                  </div>
+                  {renderPhoneField({
+                    countryCodeName: 'referrerPhoneCountryCode',
+                    phoneName: 'referrerPhone',
+                    label: `${detailLabel} Phone`,
+                    placeholder: `${detailLabel} Phone`,
+                  })}
 
                   <input
                     type="email"
@@ -749,14 +820,14 @@ export default function HomePage() {
                     value={formData.referrerEmail}
                     onChange={handleChange}
                     placeholder={`${detailLabel} Email`}
-                    className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+                    className={inputClass}
                   />
                 </div>
               </div>
             )}
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <h3 className="mb-4 text-lg font-bold text-slate-900">Primary Borrower Details</h3>
+            <div className={sectionClass}>
+              <h3 className="mb-4 text-lg font-black text-slate-900">Primary Borrower Details</h3>
 
               <div className="grid gap-5 md:grid-cols-3">
                 <input
@@ -765,7 +836,7 @@ export default function HomePage() {
                   value={formData.firstName}
                   onChange={handleChange}
                   placeholder="First Name"
-                  className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+                  className={inputClass}
                   required
                 />
 
@@ -775,7 +846,7 @@ export default function HomePage() {
                   value={formData.middleName}
                   onChange={handleChange}
                   placeholder="Middle Name"
-                  className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+                  className={inputClass}
                 />
 
                 <input
@@ -784,7 +855,7 @@ export default function HomePage() {
                   value={formData.lastName}
                   onChange={handleChange}
                   placeholder="Last Name"
-                  className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+                  className={inputClass}
                   required
                 />
               </div>
@@ -796,44 +867,22 @@ export default function HomePage() {
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="Email Address"
-                  className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+                  className={inputClass}
                   required
                 />
 
-                <div>
-                  <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2">
-                    <select
-                      name="phoneCountryCode"
-                      value={formData.phoneCountryCode}
-                      onChange={handleChange}
-                      className="h-12 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 outline-none focus:border-orange-500"
-                    >
-                      {countryCodeOptions.map((country) => (
-                        <option key={`${country.label}-${country.value}`} value={country.value}>
-                          {country.label}
-                        </option>
-                      ))}
-                    </select>
-
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleChange}
-                      placeholder="Phone Number"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
-                      required
-                    />
-                  </div>
-                  <p className="mt-2 text-xs font-medium text-slate-500">{phoneHelperText}</p>
-                </div>
+                {renderPhoneField({
+                  countryCodeName: 'phoneCountryCode',
+                  phoneName: 'phone',
+                  label: 'Phone Number',
+                  placeholder: 'Phone Number',
+                  required: true,
+                })}
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5">
-              <h3 className="mb-4 text-lg font-bold text-slate-900">Loan Details</h3>
+            <div className={sectionClass}>
+              <h3 className="mb-4 text-lg font-black text-slate-900">Loan Details</h3>
 
               <div className="grid gap-5 md:grid-cols-2">
                 {renderSelectField({
@@ -876,8 +925,8 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5">
-              <h3 className="mb-4 text-lg font-bold text-slate-900">Scenario Details</h3>
+            <div className={sectionClass}>
+              <h3 className="mb-4 text-lg font-black text-slate-900">Scenario Details</h3>
 
               <div className="grid gap-5 md:grid-cols-2">
                 {renderSelectField({
@@ -915,8 +964,8 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5">
-              <h3 className="mb-4 text-lg font-bold text-slate-900">Loan Amount & Settlement</h3>
+            <div className={sectionClass}>
+              <h3 className="mb-4 text-lg font-black text-slate-900">Loan Amount & Settlement</h3>
 
               <div className="grid gap-5 md:grid-cols-2">
                 <input
@@ -926,7 +975,7 @@ export default function HomePage() {
                   value={formData.loanAmount}
                   onChange={handleChange}
                   placeholder="Loan Amount"
-                  className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+                  className={inputClass}
                 />
 
                 <input
@@ -936,7 +985,7 @@ export default function HomePage() {
                   value={formData.securityValue}
                   onChange={handleChange}
                   placeholder="Security Value"
-                  className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+                  className={inputClass}
                 />
 
                 <input
@@ -946,7 +995,7 @@ export default function HomePage() {
                   value={formData.lvr}
                   onChange={handleChange}
                   placeholder="LVR (%)"
-                  className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+                  className={inputClass}
                 />
 
                 <input
@@ -954,7 +1003,7 @@ export default function HomePage() {
                   name="anticipatedSettlementDate"
                   value={formData.anticipatedSettlementDate}
                   onChange={handleChange}
-                  className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+                  className={inputClass}
                 />
               </div>
 
@@ -963,10 +1012,15 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">
-                Document Type
-              </label>
+            <div className={sectionClass}>
+              <div className="mb-4">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#EE6521]">
+                  Documents
+                </p>
+                <h3 className="mt-1 text-lg font-black text-slate-900">
+                  Select Document Types
+                </h3>
+              </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 {documentOptions.map((type) => {
@@ -977,10 +1031,10 @@ export default function HomePage() {
                       key={type.value}
                       type="button"
                       onClick={() => handleDocumentTypeToggle(type.value)}
-                      className={`rounded-2xl border p-4 text-left transition ${
+                      className={`rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 ${
                         isSelected
-                          ? 'border-orange-500 bg-orange-50 ring-2 ring-orange-100'
-                          : 'border-slate-300 bg-white hover:border-orange-300'
+                          ? 'border-[#EE6521] bg-orange-50 ring-4 ring-orange-100'
+                          : 'border-slate-200 bg-white hover:border-orange-300'
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -1003,8 +1057,8 @@ export default function HomePage() {
             </div>
 
             {isIdDocument && (
-              <div className="rounded-2xl border border-orange-200 bg-orange-50 p-5">
-                <h3 className="mb-4 text-lg font-bold text-slate-900">ID Information</h3>
+              <div className="rounded-2xl border border-orange-200 bg-orange-50/90 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
+                <h3 className="mb-4 text-lg font-black text-slate-900">ID Information</h3>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   {[
@@ -1021,7 +1075,7 @@ export default function HomePage() {
                       value={formData[name as keyof typeof formData] as string}
                       onChange={handleChange}
                       placeholder={label}
-                      className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-orange-500"
+                      className={inputClass}
                     />
                   ))}
                 </div>
@@ -1029,11 +1083,11 @@ export default function HomePage() {
             )}
 
             {formData.documentTypes.length > 0 && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-bold text-slate-900">Upload Documents</h3>
+              <div className={sectionClass}>
+                <h3 className="mb-4 text-lg font-black text-slate-900">Upload Documents</h3>
 
                 {formData.documentTypes.map((type) => (
-                  <div key={type} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div key={type} className="mb-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 last:mb-0">
                     <label className="mb-2 block text-sm font-bold text-slate-700">
                       {formatDocumentType(type)} File
                     </label>
@@ -1041,7 +1095,7 @@ export default function HomePage() {
                     <input
                       type="file"
                       onChange={(event) => handleDocumentFileChange(type, event)}
-                      className="block w-full rounded-xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-orange-500 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-orange-600"
+                      className="block w-full rounded-xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm text-slate-600 file:mr-4 file:rounded-lg file:border-0 file:bg-[#EE6521] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-orange-600"
                       required
                     />
 
@@ -1058,7 +1112,7 @@ export default function HomePage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="h-12 w-full rounded-xl bg-orange-500 text-sm font-bold text-white shadow-md transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-orange-300"
+              className="h-14 w-full rounded-xl bg-[#EE6521] text-sm font-black text-white shadow-[0_14px_24px_rgba(238,101,33,0.24)] transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-orange-300"
             >
               {isSubmitting ? 'Submitting...' : 'Submit Application'}
             </button>

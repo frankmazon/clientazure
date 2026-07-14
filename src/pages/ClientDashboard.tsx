@@ -956,6 +956,12 @@ export default function ClientDashboard() {
 
   const isPdfFile = previewFile?.fileName?.toLowerCase().endsWith('.pdf');
 
+  const sectionClass =
+    'rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-[0_18px_45px_rgba(15,23,42,0.06)] sm:p-6';
+
+  const fieldCardClass =
+    'min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 p-4 transition hover:border-[#259b8f]/25 hover:bg-white';
+
   const StatCard = ({
     label,
     value,
@@ -968,13 +974,19 @@ export default function ClientDashboard() {
     icon?: ReactNode;
   }) => (
     <div
-      className={`rounded-2xl border p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${className}`}
+      className={`rounded-2xl border p-4 shadow-[0_14px_34px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.1)] ${className}`}
     >
       <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-extrabold leading-snug">{label}</p>
-        {icon && <span className="mt-1 text-lg">{icon}</span>}
+        <p className="text-xs font-black uppercase tracking-wide opacity-80">
+          {label}
+        </p>
+        {icon && (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/70 text-base shadow-sm">
+            {icon}
+          </span>
+        )}
       </div>
-      <p className="mt-4 break-words text-3xl font-black leading-none sm:text-4xl">
+      <p className="mt-4 break-words text-2xl font-black leading-none sm:text-3xl">
         {value}
       </p>
     </div>
@@ -1127,57 +1139,78 @@ export default function ClientDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 px-3 py-4 font-sans sm:px-4 sm:py-8">
+    <div className="min-h-screen bg-[#eef8f6] px-3 py-4 font-sans text-slate-900 sm:px-4 sm:py-8">
+      <div className="fixed inset-0 -z-10 bg-[linear-gradient(135deg,rgba(37,155,143,0.16),rgba(255,255,255,0.88)_38%,rgba(238,101,33,0.1)),radial-gradient(circle_at_12%_16%,rgba(37,155,143,0.22),transparent_28%),radial-gradient(circle_at_86%_12%,rgba(108,191,81,0.16),transparent_26%),radial-gradient(circle_at_72%_88%,rgba(238,101,33,0.14),transparent_30%)]" />
       <div className="mx-auto max-w-7xl space-y-6">
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-white p-3 shadow-md ring-1 ring-slate-200 sm:h-24 sm:w-24">
-                <img
-                  src="/logo/logo.png"
-                  alt="Company Logo"
-                  className="h-full w-full object-contain"
-                />
+        <div className="overflow-hidden rounded-3xl bg-slate-950 shadow-[0_24px_70px_rgba(15,23,42,0.18)]">
+          <div className="bg-[linear-gradient(135deg,rgba(37,155,143,0.92),rgba(15,23,42,0.98)_54%,rgba(238,101,33,0.88))] p-5 text-white sm:p-6 lg:p-7">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-white p-3 shadow-[0_18px_40px_rgba(0,0,0,0.18)] sm:h-24 sm:w-24">
+                  <img
+                    src="/logo/logo.png"
+                    alt="Company Logo"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+
+                <div className="min-w-0">
+                  <p className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-white/70 sm:text-sm">
+                    Client Portal
+                  </p>
+
+                  <h1 className="text-3xl font-black text-white sm:text-4xl">
+                    Document Dashboard
+                  </h1>
+
+                  <p className="mt-3 break-words text-sm font-medium text-white/75 sm:text-base">
+                    You are logged in as {getFullName(loggedClient) || uniqueId}.
+                  </p>
+
+                  <div className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
+                    <span className="rounded-full bg-white/12 px-3 py-1 text-xs font-bold text-white ring-1 ring-white/15">
+                      {currentSource}
+                    </span>
+                    <span className="rounded-full bg-white/12 px-3 py-1 text-xs font-bold text-white ring-1 ring-white/15">
+                      {approvedDocumentTypes.length}/{documentTypes.length} approved
+                    </span>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${
+                        isComplete
+                          ? 'bg-[#6CBF51]/20 text-[#d9ffd1] ring-[#6CBF51]/30'
+                          : 'bg-[#EE6521]/20 text-orange-100 ring-[#EE6521]/30'
+                      }`}
+                    >
+                      {isComplete ? 'Complete' : 'Action needed'}
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              <div className="min-w-0">
-                <p className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-[#219688] sm:text-sm">
-                  Client Portal
-                </p>
+              <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentPassword('');
+                    setNewPassword('');
+                    setConfirmPassword('');
+                    setShowChangePassword(true);
+                  }}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white px-5 text-sm font-bold text-slate-950 shadow-sm hover:bg-slate-100"
+                >
+                  <FaKey />
+                  Change Password
+                </button>
 
-                <h1 className="text-3xl font-black text-slate-950 sm:text-4xl">
-                  Document Dashboard
-                </h1>
-
-                <p className="mt-3 break-words text-sm font-medium text-slate-500 sm:text-base">
-                  You are logged in as {getFullName(loggedClient) || uniqueId}.
-                </p>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white/10 px-5 text-sm font-bold text-white ring-1 ring-white/15 hover:bg-white/15"
+                >
+                  <FaSignOutAlt />
+                  Logout
+                </button>
               </div>
-            </div>
-
-            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-              <button
-                type="button"
-                onClick={() => {
-                  setCurrentPassword('');
-                  setNewPassword('');
-                  setConfirmPassword('');
-                  setShowChangePassword(true);
-                }}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#259b8f] px-5 text-sm font-bold text-white shadow-sm hover:bg-[#1f887d]"
-              >
-                <FaKey />
-                Change Password
-              </button>
-
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white shadow-sm hover:bg-slate-700"
-              >
-                <FaSignOutAlt />
-                Logout
-              </button>
             </div>
           </div>
         </div>
@@ -1186,7 +1219,7 @@ export default function ClientDashboard() {
           <StatCard
             label="Source"
             value={currentSource}
-            className="border-cyan-200 bg-cyan-50 text-cyan-700"
+            className="border-cyan-200/80 bg-white text-cyan-700"
             icon={
               currentSource === 'Referral' ? <FaUserFriends /> : <FaBriefcase />
             }
@@ -1194,40 +1227,40 @@ export default function ClientDashboard() {
           <StatCard
             label="Approved Docs"
             value={approvedDocumentTypes.length}
-            className="border-green-200 bg-green-50 text-green-700"
+            className="border-green-200/80 bg-white text-green-700"
             icon={<FaCheckCircle />}
           />
           <StatCard
             label="Pending Docs"
             value={pendingDocumentTypes.length}
-            className="border-orange-200 bg-orange-50 text-orange-700"
+            className="border-orange-200/80 bg-white text-orange-700"
             icon={<FaClock />}
           />
           <StatCard
             label="Rejected Docs"
             value={rejectedDocumentTypes.length}
-            className="border-red-200 bg-red-50 text-red-700"
+            className="border-red-200/80 bg-white text-red-700"
             icon={<FaExclamationTriangle />}
           />
           <StatCard
             label="Required Docs"
             value={`${approvedDocumentTypes.length}/${documentTypes.length}`}
-            className="border-slate-200 bg-white text-slate-900"
+            className="border-slate-200/80 bg-white text-slate-900"
             icon={<FaFileAlt />}
           />
           <StatCard
             label="Progress"
             value={`${documentProgress}%`}
-            className="border-emerald-200 bg-emerald-50 text-emerald-700"
+            className="border-emerald-200/80 bg-white text-emerald-700"
             icon={<FaCheckCircle />}
           />
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="space-y-6">
-            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
+            <section className={sectionClass}>
               <div className="mb-5 flex items-start gap-3 sm:items-center">
-                <div className="rounded-2xl bg-cyan-50 p-3 text-cyan-700">
+                <div className="rounded-2xl bg-cyan-50 p-3 text-cyan-700 ring-1 ring-cyan-100">
                   <FaSearch />
                 </div>
 
@@ -1252,7 +1285,7 @@ export default function ClientDashboard() {
                     <input
                       value={uniqueId}
                       readOnly
-                      className="h-12 w-full rounded-xl border border-slate-300 bg-slate-50 pl-12 pr-4 font-semibold text-slate-700 outline-none"
+                      className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-12 pr-4 font-semibold text-slate-700 outline-none"
                     />
                   </div>
                 </div>
@@ -1261,7 +1294,7 @@ export default function ClientDashboard() {
                   type="button"
                   onClick={() => loadClientFiles()}
                   disabled={loading}
-                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 font-bold text-white shadow-sm hover:bg-slate-700 disabled:bg-slate-300 md:w-fit"
+                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-6 font-bold text-white shadow-sm hover:bg-slate-800 disabled:bg-slate-300 md:w-fit"
                 >
                   <FaFolderOpen />
                   {loading ? 'Loading...' : 'Refresh My Files'}
@@ -1269,9 +1302,9 @@ export default function ClientDashboard() {
               </div>
             </section>
 
-            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
+            <section className={sectionClass}>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-cyan-50 text-cyan-700 sm:h-16 sm:w-16">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-cyan-50 text-cyan-700 ring-1 ring-cyan-100 sm:h-16 sm:w-16">
                   <FaUser />
                 </div>
 
@@ -1296,7 +1329,7 @@ export default function ClientDashboard() {
             </section>
 
             {selectedClient && (
-              <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
+              <section className={sectionClass}>
                 <h2 className="mb-5 text-xl font-black text-slate-900">
                   Submitted Loan Information
                 </h2>
@@ -1321,7 +1354,7 @@ export default function ClientDashboard() {
                   ].map(([label, value]) => (
                     <div
                       key={label}
-                      className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                      className={fieldCardClass}
                     >
                       <p className="text-xs font-bold uppercase text-slate-400">
                         {label}
@@ -1355,7 +1388,7 @@ export default function ClientDashboard() {
                     ].map(([label, value]) => (
                       <div
                         key={label}
-                        className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                        className={fieldCardClass}
                       >
                         <p className="text-xs font-bold uppercase text-slate-400">
                           {label}
@@ -1386,7 +1419,7 @@ export default function ClientDashboard() {
                     ].map(([label, value]) => (
                       <div
                         key={label}
-                        className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                        className={fieldCardClass}
                       >
                         <p className="text-xs font-bold uppercase text-slate-400">
                           {label}
@@ -1400,7 +1433,7 @@ export default function ClientDashboard() {
                 </div>
 
                 {showBrokerOrReferrer && (
-                  <div className="mt-6 rounded-2xl border border-cyan-200 bg-cyan-50 p-5">
+                  <div className="mt-6 rounded-2xl border border-cyan-200 bg-cyan-50/80 p-5">
                     <h3 className="mb-4 text-lg font-black text-slate-900">
                       {detailLabel} Details
                     </h3>
@@ -1432,7 +1465,7 @@ export default function ClientDashboard() {
               </section>
             )}
 
-            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
+            <section className={sectionClass}>
               <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <h2 className="text-xl font-black text-slate-900">
@@ -1454,27 +1487,27 @@ export default function ClientDashboard() {
                 </span>
               </div>
 
-              <div className="mb-5 h-3 overflow-hidden rounded-full bg-slate-100">
+              <div className="mb-5 h-3 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/80">
                 <div
-                  className="h-full rounded-full bg-orange-500"
+                  className="h-full rounded-full bg-[linear-gradient(90deg,#259b8f,#6CBF51,#EE6521)]"
                   style={{ width: `${documentProgress}%` }}
                 />
               </div>
 
-              <div className="mb-4 grid gap-3 rounded-2xl border border-slate-200 p-4 sm:grid-cols-3">
-                <p className="text-sm font-black text-green-700">
+              <div className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:grid-cols-3">
+                <p className="rounded-xl bg-white px-3 py-2 text-sm font-black text-green-700 shadow-sm">
                   Approved: {approvedDocumentTypes.length}
                 </p>
-                <p className="text-sm font-black text-orange-700">
+                <p className="rounded-xl bg-white px-3 py-2 text-sm font-black text-orange-700 shadow-sm">
                   Pending: {pendingDocumentTypes.length}
                 </p>
-                <p className="text-sm font-black text-red-700">
+                <p className="rounded-xl bg-white px-3 py-2 text-sm font-black text-red-700 shadow-sm">
                   Rejected: {rejectedDocumentTypes.length}
                 </p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
+                <div className="rounded-2xl border border-orange-200 bg-orange-50/90 p-4">
                   <h3 className="mb-3 flex items-center gap-2 font-black text-orange-700">
                     <FaExclamationTriangle />
                     Outstanding Documents
@@ -1498,7 +1531,7 @@ export default function ClientDashboard() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-green-200 bg-green-50 p-4">
+                <div className="rounded-2xl border border-green-200 bg-green-50/90 p-4">
                   <h3 className="mb-3 flex items-center gap-2 font-black text-green-700">
                     <FaCheckCircle />
                     Submitted Documents
@@ -1523,7 +1556,7 @@ export default function ClientDashboard() {
                 </div>
 
                 {rejectedDocumentTypes.length > 0 && (
-                  <div className="rounded-2xl border border-red-200 bg-red-50 p-4 md:col-span-2">
+                  <div className="rounded-2xl border border-red-200 bg-red-50/90 p-4 md:col-span-2">
                     <h3 className="mb-3 flex items-center gap-2 font-extrabold text-red-700">
                       <FaExclamationTriangle />
                       Rejected Documents - Re-upload Required
@@ -1568,7 +1601,7 @@ export default function ClientDashboard() {
             </section>
 
             {clientFiles.length > 0 && (
-              <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
+              <section className={sectionClass}>
                 <label className="mb-2 block text-sm font-bold text-slate-700">
                   Search Files
                 </label>
@@ -1579,7 +1612,7 @@ export default function ClientDashboard() {
                     value={fileSearch}
                     onChange={(event) => setFileSearch(event.target.value)}
                     placeholder="Search by file name or document type"
-                    className="h-12 w-full rounded-xl border border-slate-300 pl-12 pr-12 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-12 pr-12 text-sm outline-none transition focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-100"
                   />
 
                   {fileSearch && (
@@ -1595,10 +1628,10 @@ export default function ClientDashboard() {
               </section>
             )}
 
-            <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              <div className="flex items-center justify-between border-b border-slate-200 px-4 py-5 sm:px-6">
+            <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 px-4 py-5 sm:px-6">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-2xl bg-orange-50 p-3 text-orange-600">
+                  <div className="rounded-2xl bg-orange-50 p-3 text-orange-600 ring-1 ring-orange-100">
                     <FaFileAlt />
                   </div>
 
@@ -1616,7 +1649,7 @@ export default function ClientDashboard() {
 
               <div className="p-4 md:overflow-x-auto md:p-0">
                 <table className="block w-full md:table md:min-w-[980px]">
-                  <thead className="hidden bg-slate-50 md:table-header-group">
+                  <thead className="hidden bg-slate-50/90 md:table-header-group">
                     <tr>
                       <th className="px-6 py-4 text-left text-sm font-black uppercase tracking-wide text-slate-600">
                         File Name
@@ -1644,7 +1677,7 @@ export default function ClientDashboard() {
                       >
                         <td className="block px-4 py-4 md:table-cell md:px-6">
                           <div className="flex items-center gap-3">
-                            <div className="rounded-xl bg-slate-100 p-3 text-slate-600">
+                            <div className="rounded-xl bg-slate-100 p-3 text-slate-600 ring-1 ring-slate-200">
                               <FaFileAlt />
                             </div>
 
@@ -1743,7 +1776,7 @@ export default function ClientDashboard() {
           </div>
 
           <aside className="space-y-6 xl:sticky xl:top-8 xl:h-fit">
-            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
+            <section className={sectionClass}>
               <div className="mb-5">
                 <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#219688] sm:tracking-[0.25em]">
                   Chat with Your Specialist
@@ -1765,15 +1798,15 @@ export default function ClientDashboard() {
                 onChange={(event) =>
                   setSelectedSpecialist(event.target.value as SpecialistKey)
                 }
-                className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-100"
               >
                 <option value="giulio">Giulio Avian</option>
                 <option value="leo">Leo Iermano</option>
               </select>
 
-              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5">
                 <div className="mb-5 flex items-center gap-4">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-xl font-black text-white shadow-sm">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#259b8f,#0f172a)] text-xl font-black text-white shadow-sm">
                     {specialist.name
                       .split(' ')
                       .map((namePart) => namePart.charAt(0))
@@ -1794,7 +1827,7 @@ export default function ClientDashboard() {
                 <div className="space-y-3">
                   <a
                     href={`tel:${specialist.phone.replace(/\s+/g, '')}`}
-                    className="flex min-w-0 items-center gap-3 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:text-cyan-700"
+                    className="flex min-w-0 items-center gap-3 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:text-cyan-700"
                   >
                     <FaPhoneAlt className="text-cyan-700" />
                     <span>{specialist.phone}</span>
@@ -1802,7 +1835,7 @@ export default function ClientDashboard() {
 
                   <a
                     href={`mailto:${specialist.email}`}
-                    className="flex min-w-0 items-center gap-3 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 hover:text-cyan-700"
+                    className="flex min-w-0 items-center gap-3 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:text-cyan-700"
                   >
                     <FaEnvelope className="text-green-600" />
                     <span className="break-all">{specialist.email}</span>
@@ -1812,7 +1845,7 @@ export default function ClientDashboard() {
                     href={specialist.booking}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-orange-500 px-4 py-3 text-sm font-extrabold text-white shadow-sm hover:bg-orange-600"
+                    className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-[#EE6521] px-4 py-3 text-sm font-extrabold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-orange-600"
                   >
                     <span className="inline-flex items-center gap-3">
                       <FaCalendarAlt />
@@ -1824,109 +1857,109 @@ export default function ClientDashboard() {
               </div>
             </section>
 
-            <section id="client-upload-files-card" className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6">
-            <div className="mb-5 flex items-start gap-3 sm:items-center">
-              <div className="rounded-2xl bg-cyan-50 p-3 text-cyan-700">
-                <FaCloudUploadAlt />
-              </div>
+            <section id="client-upload-files-card" className={sectionClass}>
+              <div className="mb-5 flex items-start gap-3 sm:items-center">
+                <div className="rounded-2xl bg-cyan-50 p-3 text-cyan-700 ring-1 ring-cyan-100">
+                  <FaCloudUploadAlt />
+                </div>
 
-              <div className="min-w-0">
-                <h2 className="text-xl font-black text-slate-900">
-                  Upload Files
-                </h2>
-                <p className="text-sm text-slate-500">
-                  Upload missing documents or replace rejected files under your Client ID.
-                </p>
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <label className="mb-2 block text-sm font-bold text-slate-700">
-                Document Type
-              </label>
-
-              <select
-                value={documentType}
-                onChange={(event) => setDocumentType(event.target.value)}
-                className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
-              >
-                <option value="">Select document type</option>
-                {documentTypes.map((type) => {
-                  const file = documentRowsByType.get(type.value);
-                  const status = file ? normalizeDocumentStatus(file.documentStatus) : 'Missing';
-                  const isApproved = status === 'Approved';
-
-                  return (
-                    <option key={type.value} value={type.value} disabled={isApproved}>
-                      {type.label}
-                      {isApproved ? ' (Approved)' : status === 'Rejected' ? ' (Rejected - re-upload)' : ''}
-                    </option>
-                  );
-                })}
-              </select>
-              {documentType &&
-                isDocumentRejected(documentRowsByType.get(documentType)?.documentStatus) && (
-                  <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
-                    This document was rejected. Choose a new file below to re-upload it.
+                <div className="min-w-0">
+                  <h2 className="text-xl font-black text-slate-900">
+                    Upload Files
+                  </h2>
+                  <p className="text-sm text-slate-500">
+                    Upload missing documents or replace rejected files under your Client ID.
                   </p>
-                )}
-
-              {documentType && documentRowsByType.get(documentType)?.remarks && (
-                <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
-                  Admin remarks: {documentRowsByType.get(documentType)?.remarks}
-                </p>
-              )}
-            </div>
-
-            <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-6 text-center hover:border-orange-400 hover:bg-orange-50 sm:p-8">
-              <FaCloudUploadAlt className="mb-3 text-3xl text-cyan-700 sm:text-4xl" />
-
-              <span className="font-bold text-slate-800">Choose files</span>
-              <span className="mt-1 text-sm text-slate-500">
-                PDF, JPG, PNG, DOCX
-              </span>
-
-              <input
-                type="file"
-                multiple
-                onChange={(event) => setNewFiles(event.target.files)}
-                className="hidden"
-              />
-            </label>
-
-            {newFiles && newFiles.length > 0 && (
-              <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                <p className="mb-2 text-sm font-bold text-slate-700">
-                  Selected Files
-                </p>
-
-                <div className="space-y-2">
-                  {Array.from(newFiles).map((file) => (
-                    <p
-                      key={file.name}
-                      className="truncate rounded-lg bg-white px-3 py-2 text-sm text-slate-600"
-                    >
-                      {file.name}
-                    </p>
-                  ))}
                 </div>
               </div>
-            )}
 
-            <button
-              type="button"
-              onClick={handleUpload}
-              disabled={loading}
-              className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 font-bold text-white shadow-sm hover:bg-slate-700 disabled:bg-slate-300"
-            >
-              <FaCloudUploadAlt />
-              {loading
-                ? 'Uploading...'
-                : documentType &&
-                    isDocumentRejected(documentRowsByType.get(documentType)?.documentStatus)
-                  ? 'Re-upload Rejected Document'
-                  : 'Upload Documents'}
-            </button>
+              <div className="mb-4">
+                <label className="mb-2 block text-sm font-bold text-slate-700">
+                  Document Type
+                </label>
+
+                <select
+                  value={documentType}
+                  onChange={(event) => setDocumentType(event.target.value)}
+                  className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                >
+                  <option value="">Select document type</option>
+                  {documentTypes.map((type) => {
+                    const file = documentRowsByType.get(type.value);
+                    const status = file ? normalizeDocumentStatus(file.documentStatus) : 'Missing';
+                    const isApproved = status === 'Approved';
+
+                    return (
+                      <option key={type.value} value={type.value} disabled={isApproved}>
+                        {type.label}
+                        {isApproved ? ' (Approved)' : status === 'Rejected' ? ' (Rejected - re-upload)' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+                {documentType &&
+                  isDocumentRejected(documentRowsByType.get(documentType)?.documentStatus) && (
+                    <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                      This document was rejected. Choose a new file below to re-upload it.
+                    </p>
+                  )}
+
+                {documentType && documentRowsByType.get(documentType)?.remarks && (
+                  <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                    Admin remarks: {documentRowsByType.get(documentType)?.remarks}
+                  </p>
+                )}
+              </div>
+
+              <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/80 p-6 text-center transition hover:border-orange-400 hover:bg-orange-50 sm:p-8">
+                <FaCloudUploadAlt className="mb-3 text-3xl text-cyan-700 sm:text-4xl" />
+
+                <span className="font-bold text-slate-800">Choose files</span>
+                <span className="mt-1 text-sm text-slate-500">
+                  PDF, JPG, PNG, DOCX
+                </span>
+
+                <input
+                  type="file"
+                  multiple
+                  onChange={(event) => setNewFiles(event.target.files)}
+                  className="hidden"
+                />
+              </label>
+
+              {newFiles && newFiles.length > 0 && (
+                <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                  <p className="mb-2 text-sm font-bold text-slate-700">
+                    Selected Files
+                  </p>
+
+                  <div className="space-y-2">
+                    {Array.from(newFiles).map((file) => (
+                      <p
+                        key={file.name}
+                        className="truncate rounded-lg bg-white px-3 py-2 text-sm text-slate-600"
+                      >
+                        {file.name}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleUpload}
+                disabled={loading}
+                className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:bg-slate-300"
+              >
+                <FaCloudUploadAlt />
+                {loading
+                  ? 'Uploading...'
+                  : documentType &&
+                      isDocumentRejected(documentRowsByType.get(documentType)?.documentStatus)
+                    ? 'Re-upload Rejected Document'
+                    : 'Upload Documents'}
+              </button>
             </section>
           </aside>
         </div>
