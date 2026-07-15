@@ -20,11 +20,27 @@ interface SidebarProps {
 }
 
 const documentTypes = [
-  { label: 'ID', value: 'id' },
-  { label: 'Property Documents', value: 'property-documents' },
-  { label: 'Credit History', value: 'credit-history' },
-  { label: 'Income Documents', value: 'income-documents' },
-  { label: 'Other', value: 'other' },
+  { label: 'BAS from ATO Portal', value: 'bas-from-ato-portal' },
+  {
+    label: 'Business Banking Statements',
+    value: 'business-banking-statements',
+  },
+  { label: 'Payslip', value: 'payslip' },
+  {
+    label: 'Management Reports / Financial Statements',
+    value: 'management-reports-financial-statements',
+  },
+  {
+    label: 'Group Certificate / Payment Summary',
+    value: 'group-certificate-payment-summary',
+  },
+  { label: 'Company Tax Returns', value: 'company-tax-returns' },
+  { label: 'Individual Tax Returns', value: 'individual-tax-returns' },
+  {
+    label: 'Last 6 Months Mortgage Statements',
+    value: 'last-6-months-mortgage-statements',
+  },
+  { label: 'Council Rates Notice', value: 'council-rates-notice' },
 ];
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
@@ -47,7 +63,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     }`;
 
   const childNavLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `ml-6 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+    `ml-6 flex items-start gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold leading-5 transition ${
       isActive
         ? 'bg-orange-500 text-white shadow-lg'
         : 'text-slate-400 hover:bg-white/10 hover:text-white'
@@ -87,7 +103,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </div>
 
           <nav className="flex-1 space-y-2 overflow-y-auto px-4 py-6">
-            <NavLink to="/dashboard" end onClick={onClose} className={navLinkClass}>
+            <NavLink
+              to="/dashboard"
+              end
+              onClick={onClose}
+              className={navLinkClass}
+            >
               <FaTachometerAlt />
               Client Summary
             </NavLink>
@@ -113,8 +134,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     onClick={onClose}
                     className={childNavLinkClass}
                   >
-                    <FaUsers />
-                    All Clients
+                    <FaUsers className="mt-0.5 shrink-0" />
+                    <span>All Clients</span>
                   </NavLink>
 
                   <NavLink
@@ -122,8 +143,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     onClick={onClose}
                     className={childNavLinkClass}
                   >
-                    <FaUsers />
-                    Search Client
+                    <FaUsers className="mt-0.5 shrink-0" />
+                    <span>Search Client</span>
                   </NavLink>
 
                   {documentTypes.map((type) => (
@@ -133,8 +154,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                       onClick={onClose}
                       className={childNavLinkClass}
                     >
-                      <FaFolder className="text-orange-400" />
-                      {type.label}
+                      <FaFolder className="mt-0.5 shrink-0 text-orange-400" />
+                      <span>{type.label}</span>
                     </NavLink>
                   ))}
                 </div>
@@ -166,8 +187,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     onClick={onClose}
                     className={childNavLinkClass}
                   >
-                    <FaExternalLinkAlt className="text-xs" />
-                    Open Client Portal
+                    <FaExternalLinkAlt className="mt-0.5 shrink-0 text-xs" />
+                    <span>Open Client Portal</span>
                   </NavLink>
 
                   <NavLink
@@ -175,8 +196,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     onClick={onClose}
                     className={childNavLinkClass}
                   >
-                    <FaFolder className="text-orange-400" />
-                    Client Portal Uploads
+                    <FaFolder className="mt-0.5 shrink-0 text-orange-400" />
+                    <span>Client Portal Uploads</span>
                   </NavLink>
                 </div>
               )}

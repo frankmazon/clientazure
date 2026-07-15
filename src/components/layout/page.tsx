@@ -34,13 +34,42 @@ type UploadClientResponse = {
   ghlSubmissionTrigger?: GhlOperationResult;
 };
 
-const documentOptions = [
-  { label: 'ID', value: 'id' },
-  { label: 'Property Documents', value: 'property-documents' },
-  { label: 'Credit History', value: 'credit-history' },
-  { label: 'Income Documents', value: 'income-documents' },
-  { label: 'Other', value: 'other' },
+type DocumentOption = {
+  label: string;
+  value: string;
+};
+
+const sharedDocumentOptions: DocumentOption[] = [
+  { label: 'Last 6 Months Mortgage Statements', value: 'last-6-months-mortgage-statements' },
+  { label: 'Council Rates Notice', value: 'council-rates-notice' },
 ];
+
+const transactionDocumentOptions: Record<string, DocumentOption[]> = {
+  'Alt doc': [
+    { label: 'BAS from ATO Portal', value: 'bas-from-ato-portal' },
+    { label: 'Business Banking Statements', value: 'business-banking-statements' },
+    ...sharedDocumentOptions,
+  ],
+  'Full doc': [
+    { label: 'Payslip', value: 'payslip' },
+    {
+      label: 'Management Reports / Financial Statements',
+      value: 'management-reports-financial-statements',
+    },
+    {
+      label: 'Group Certificate / Payment Summary',
+      value: 'group-certificate-payment-summary',
+    },
+    { label: 'Company Tax Returns', value: 'company-tax-returns' },
+    { label: 'Individual Tax Returns', value: 'individual-tax-returns' },
+    ...sharedDocumentOptions,
+  ],
+};
+
+const allDocumentOptions = Object.values(transactionDocumentOptions).flat();
+
+const getDocumentOptionsForTransaction = (transactionType?: string): DocumentOption[] =>
+  transactionDocumentOptions[transactionType || ''] || [];
 
 const sourceOptions = [
   { label: 'Broker', value: 'broker' },
@@ -207,6 +236,8 @@ export default function HomePage() {
     formData.referrerPhone,
   );
 
+  const activeDocumentOptions = getDocumentOptionsForTransaction(formData.transactionType);
+
   const handleChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => {
@@ -221,6 +252,14 @@ export default function HomePage() {
         ...prev,
         [name]: cleanValue,
       };
+
+      if (name === 'transactionType') {
+        return {
+          ...nextData,
+          documentTypes: [],
+          documentFiles: {},
+        };
+      }
 
       if (name === 'loanAmount' || name === 'securityValue') {
         return {
@@ -287,7 +326,7 @@ export default function HomePage() {
   };
 
   const formatDocumentType = (type: string) =>
-    documentOptions.find((item) => item.value === type)?.label ||
+    allDocumentOptions.find((item) => item.value === type)?.label ||
     type
       .split('-')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -299,15 +338,11 @@ export default function HomePage() {
   };
 
   const getMissingRequirements = (data: typeof initialFormData) => {
-    const missing: string[] = [];
+    const requiredDocuments = getDocumentOptionsForTransaction(data.transactionType);
 
-    documentOptions.forEach((item) => {
-      if (!data.documentTypes.includes(item.value)) {
-        missing.push(`${item.label} document`);
-      }
-    });
-
-    return missing;
+    return requiredDocuments
+      .filter((item) => !data.documentTypes.includes(item.value))
+      .map((item) => `${item.label} document`);
   };
 
   const uploadToAzure = async (
@@ -602,8 +637,6 @@ export default function HomePage() {
       setIsSubmitting(false);
     }
   };
-
-  const isIdDocument = formData.documentTypes.includes('id');
 
   const renderPhoneField = ({
     countryCodeName,
@@ -986,7 +1019,7 @@ export default function HomePage() {
 
             <div className={sectionClass}>
               <h3 className="mb-4 text-lg font-black text-slate-900">Loan Amount & Settlement</h3>
-
+                
               <div className="grid gap-5 md:grid-cols-2">
                 <input
                   type="number"
@@ -1047,65 +1080,58 @@ export default function HomePage() {
                 </h3>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                {documentOptions.map((type) => {
-                  const isSelected = formData.documentTypes.includes(type.value);
+              {!formData.transactionType ? (
+                <div className="rounded-2xl border border-dashed border-orange-200 bg-orange-50/70 p-6 text-center">
+                  <p className="text-sm font-bold text-slate-800">
+                    Select a Transaction Type first.
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    The required document checklist will appear automatically for Alt doc or Full doc.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    Showing documents required for{' '}
+                    <strong className="text-slate-900">{formData.transactionType}</strong>.
+                  </div>
 
-                  return (
-                    <button
-                      key={type.value}
-                      type="button"
-                      onClick={() => handleDocumentTypeToggle(type.value)}
-                      className={`rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 ${
-                        isSelected
-                          ? 'border-[#EE6521] bg-orange-50 ring-4 ring-orange-100'
-                          : 'border-slate-200 bg-white hover:border-orange-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`flex h-5 w-5 items-center justify-center rounded border ${
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {activeDocumentOptions.map((type) => {
+                      const isSelected = formData.documentTypes.includes(type.value);
+
+                      return (
+                        <button
+                          key={type.value}
+                          type="button"
+                          onClick={() => handleDocumentTypeToggle(type.value)}
+                          className={`rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 ${
                             isSelected
-                              ? 'border-orange-500 bg-orange-500'
-                              : 'border-slate-300 bg-white'
+                              ? 'border-[#EE6521] bg-orange-50 ring-4 ring-orange-100'
+                              : 'border-slate-200 bg-white hover:border-orange-300'
                           }`}
                         >
-                          {isSelected && <span className="h-2 w-2 rounded-full bg-white" />}
-                        </span>
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`flex h-5 w-5 items-center justify-center rounded border ${
+                                isSelected
+                                  ? 'border-orange-500 bg-orange-500'
+                                  : 'border-slate-300 bg-white'
+                              }`}
+                            >
+                              {isSelected && <span className="h-2 w-2 rounded-full bg-white" />}
+                            </span>
 
-                        <span className="text-sm font-bold text-slate-800">{type.label}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                            <span className="text-sm font-bold text-slate-800">{type.label}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
 
-            {isIdDocument && (
-              <div className="rounded-2xl border border-orange-200 bg-orange-50/90 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-                <h3 className="mb-4 text-lg font-black text-slate-900">ID Information</h3>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  {[
-                    ['sssNumber', 'SSS Number'],
-                    ['hdmfNumber', 'HDMF / Pag-IBIG Number'],
-                    ['philhealthNumber', 'PhilHealth Number'],
-                    ['tinNumber', 'TIN Number'],
-                    ['licenseNumber', 'License Number'],
-                  ].map(([name, label]) => (
-                    <input
-                      key={name}
-                      type="text"
-                      name={name}
-                      value={formData[name as keyof typeof formData] as string}
-                      onChange={handleChange}
-                      placeholder={label}
-                      className={inputClass}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
 
             {formData.documentTypes.length > 0 && (
               <div className={sectionClass}>

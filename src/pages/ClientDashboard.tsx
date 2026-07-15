@@ -105,13 +105,80 @@ const FILE_URL_API = `${API_BASE}/file-url`;
 const CLIENT_LOGIN_API = `${API_BASE}/client-login`;
 const CLIENT_CHANGE_PASSWORD_API = `${API_BASE}/client-change-password`;
 
-const documentTypes = [
-  { label: 'ID', value: 'id' },
-  { label: 'Property Documents', value: 'property-documents' },
-  { label: 'Credit History', value: 'credit-history' },
-  { label: 'Income Documents', value: 'income-documents' },
-  { label: 'Other', value: 'other' },
+type DocumentOption = {
+  label: string;
+  value: string;
+};
+
+type NormalizedTransactionType = 'alt_doc' | 'full_doc';
+
+const sharedDocumentTypes: DocumentOption[] = [
+  {
+    label: 'Last 6 Months Mortgage Statements',
+    value: 'last-6-months-mortgage-statements',
+  },
+  { label: 'Council Rates Notice', value: 'council-rates-notice' },
 ];
+
+const transactionDocumentTypes: Record<NormalizedTransactionType, DocumentOption[]> = {
+  alt_doc: [
+    { label: 'BAS from ATO Portal', value: 'bas-from-ato-portal' },
+    {
+      label: 'Business Banking Statements',
+      value: 'business-banking-statements',
+    },
+    ...sharedDocumentTypes,
+  ],
+  full_doc: [
+    { label: 'Payslip', value: 'payslip' },
+    {
+      label: 'Management Reports / Financial Statements',
+      value: 'management-reports-financial-statements',
+    },
+    {
+      label: 'Group Certificate / Payment Summary',
+      value: 'group-certificate-payment-summary',
+    },
+    { label: 'Company Tax Returns', value: 'company-tax-returns' },
+    { label: 'Individual Tax Returns', value: 'individual-tax-returns' },
+    ...sharedDocumentTypes,
+  ],
+};
+
+const allDocumentTypes = Object.values(transactionDocumentTypes).flat();
+
+const normalizeTransactionType = (transactionType?: string): NormalizedTransactionType | '' => {
+  const normalized = (transactionType || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  if (normalized === 'alt' || normalized === 'alt_doc' || normalized === 'altdoc') {
+    return 'alt_doc';
+  }
+
+  if (normalized === 'full' || normalized === 'full_doc' || normalized === 'fulldoc') {
+    return 'full_doc';
+  }
+
+  return '';
+};
+
+const getDocumentTypesForTransaction = (transactionType?: string): DocumentOption[] => {
+  const normalizedTransactionType = normalizeTransactionType(transactionType);
+
+  return normalizedTransactionType
+    ? transactionDocumentTypes[normalizedTransactionType]
+    : [];
+};
+
+const normalizeDocumentTypeValue = (documentType?: string) =>
+  (documentType || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-')
+    .replace(/-+/g, '-');
 
 const specialists = {
   giulio: {
@@ -375,6 +442,16 @@ export default function ClientDashboard() {
     clientFiles.find((client) => client.uniqueId) ||
     null;
 
+  const requiredDocumentTypes = useMemo(
+    () => getDocumentTypesForTransaction(selectedClient?.transactionType),
+    [selectedClient?.transactionType],
+  );
+
+  const requiredDocumentTypeValues = useMemo(
+    () => requiredDocumentTypes.map((document) => document.value),
+    [requiredDocumentTypes],
+  );
+
   const uploadedFileRows = useMemo(
     () =>
       clientFiles.filter(
@@ -411,7 +488,9 @@ export default function ClientDashboard() {
       .trim();
 
   const formatDocumentType = (type?: string) =>
-    documentTypes.find((item) => item.value === type)?.label ||
+    allDocumentTypes.find(
+      (item) => item.value === normalizeDocumentTypeValue(type),
+    )?.label ||
     (type || 'document')
       .split('-')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -441,7 +520,7 @@ export default function ClientDashboard() {
     const map = new Map<string, Submission>();
 
     uploadedFileRows.forEach((file) => {
-      const type = file.documentType?.toLowerCase();
+      const type = normalizeDocumentTypeValue(file.documentType);
       if (!type) return;
 
       if (!map.has(type)) {
@@ -478,47 +557,52 @@ export default function ClientDashboard() {
   }, [uploadedFileRows]);
 
   const uploadedDocumentTypes = useMemo(
-    () => Array.from(documentRowsByType.keys()),
-    [documentRowsByType],
+    () => requiredDocumentTypeValues.filter((type) => documentRowsByType.has(type)),
+    [documentRowsByType, requiredDocumentTypeValues],
   );
 
   const approvedDocumentTypes = useMemo(
     () =>
-      Array.from(documentRowsByType.entries())
-        .filter(([, file]) => isDocumentApproved(file.documentStatus))
-        .map(([type]) => type),
-    [documentRowsByType],
+      requiredDocumentTypeValues.filter((type) =>
+        isDocumentApproved(documentRowsByType.get(type)?.documentStatus),
+      ),
+    [documentRowsByType, requiredDocumentTypeValues],
   );
 
   const rejectedDocumentTypes = useMemo(
     () =>
-      Array.from(documentRowsByType.entries())
-        .filter(([, file]) => isDocumentRejected(file.documentStatus))
-        .map(([type]) => type),
-    [documentRowsByType],
+      requiredDocumentTypeValues.filter((type) =>
+        isDocumentRejected(documentRowsByType.get(type)?.documentStatus),
+      ),
+    [documentRowsByType, requiredDocumentTypeValues],
   );
 
   const pendingDocumentTypes = useMemo(
     () =>
-      Array.from(documentRowsByType.entries())
-        .filter(([, file]) => normalizeDocumentStatus(file.documentStatus) === 'Pending')
-        .map(([type]) => type),
-    [documentRowsByType],
+      requiredDocumentTypeValues.filter(
+        (type) =>
+          normalizeDocumentStatus(documentRowsByType.get(type)?.documentStatus) === 'Pending',
+      ),
+    [documentRowsByType, requiredDocumentTypeValues],
   );
 
   const missingDocumentTypes = useMemo(
     () =>
-      documentTypes
-        .map((item) => item.value)
-        .filter((type) => !approvedDocumentTypes.includes(type)),
-    [approvedDocumentTypes],
+      requiredDocumentTypeValues.filter(
+        (type) => !approvedDocumentTypes.includes(type),
+      ),
+    [approvedDocumentTypes, requiredDocumentTypeValues],
   );
 
-  const documentProgress = Math.round(
-    (approvedDocumentTypes.length / documentTypes.length) * 100,
-  );
+  const documentProgress = requiredDocumentTypes.length
+    ? Math.round(
+        (approvedDocumentTypes.length / requiredDocumentTypes.length) * 100,
+      )
+    : 0;
 
-  const isComplete = approvedDocumentTypes.length === documentTypes.length;
+  const isComplete =
+    requiredDocumentTypes.length > 0 &&
+    approvedDocumentTypes.length === requiredDocumentTypes.length;
 
   const loadClientFiles = async (idValue = uniqueId) => {
     if (!idValue.trim()) {
@@ -749,12 +833,14 @@ export default function ClientDashboard() {
       return;
     }
 
+    const selectedDocumentType = normalizeDocumentTypeValue(documentType);
+
     if (!newFiles?.length) {
       alert('Please choose file/s.');
       return;
     }
 
-    const currentDocument = documentRowsByType.get(documentType);
+    const currentDocument = documentRowsByType.get(selectedDocumentType);
 
     if (currentDocument && isDocumentApproved(currentDocument.documentStatus)) {
       alert('This document type is already approved. Please contact the admin if you need to replace it.');
@@ -766,6 +852,30 @@ export default function ClientDashboard() {
 
     if (!clientRecord) {
       alert('Client information is still loading. Please click Refresh My Files, then upload again.');
+      return;
+    }
+
+    const allowedDocumentTypes = getDocumentTypesForTransaction(
+      clientRecord.transactionType,
+    );
+
+    if (allowedDocumentTypes.length === 0) {
+      alert(
+        'This client does not have a supported Transaction Type. Please contact the administrator before uploading.',
+      );
+      return;
+    }
+
+    if (
+      !allowedDocumentTypes.some(
+        (document) => document.value === selectedDocumentType,
+      )
+    ) {
+      alert(
+        `The selected document type is not valid for ${clientRecord.transactionType}. Please select a document from the current checklist.`,
+      );
+      setDocumentType('');
+      setNewFiles(null);
       return;
     }
 
@@ -843,7 +953,7 @@ export default function ClientDashboard() {
         appendValue(formData, 'referrerPhone', clientRecord.referrer?.phone);
         appendValue(formData, 'referrerEmail', clientRecord.referrer?.email);
 
-        appendValue(formData, 'documentType', documentType);
+        appendValue(formData, 'documentType', selectedDocumentType);
         formData.append('file', file);
 
         const controller = new AbortController();
@@ -921,12 +1031,21 @@ export default function ClientDashboard() {
       return;
     }
 
+    const selectedDocumentType = normalizeDocumentTypeValue(file.documentType);
+
+    if (!requiredDocumentTypeValues.includes(selectedDocumentType)) {
+      alert(
+        'This document is not part of the current transaction checklist. Please refresh your files or contact the administrator.',
+      );
+      return;
+    }
+
     if (!isDocumentRejected(file.documentStatus)) {
       alert('Only rejected documents can be re-uploaded here.');
       return;
     }
 
-    setDocumentType(file.documentType);
+    setDocumentType(selectedDocumentType);
 
     window.setTimeout(() => {
       document
@@ -1172,7 +1291,7 @@ export default function ClientDashboard() {
                       {currentSource}
                     </span>
                     <span className="rounded-full bg-white/12 px-3 py-1 text-xs font-bold text-white ring-1 ring-white/15">
-                      {approvedDocumentTypes.length}/{documentTypes.length} approved
+                      {approvedDocumentTypes.length}/{requiredDocumentTypes.length} approved
                     </span>
                     <span
                       className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${
@@ -1244,7 +1363,7 @@ export default function ClientDashboard() {
           />
           <StatCard
             label="Required Docs"
-            value={`${approvedDocumentTypes.length}/${documentTypes.length}`}
+            value={`${approvedDocumentTypes.length}/${requiredDocumentTypes.length}`}
             className="border-slate-200/80 bg-white text-slate-900"
             icon={<FaFileAlt />}
           />
@@ -1472,7 +1591,9 @@ export default function ClientDashboard() {
                     Document Checklist
                   </h2>
                   <p className="text-sm text-slate-500">
-                    Outstanding and submitted documents for your portal.
+                    {selectedClient?.transactionType
+                      ? `Required documents for ${selectedClient.transactionType}.`
+                      : 'The checklist will appear after a Transaction Type is assigned.'}
                   </p>
                 </div>
 
@@ -1483,7 +1604,11 @@ export default function ClientDashboard() {
                       : 'bg-red-100 text-red-700'
                   }`}
                 >
-                  {isComplete ? 'Complete' : 'Incomplete'}
+                  {requiredDocumentTypes.length === 0
+                    ? 'Unavailable'
+                    : isComplete
+                      ? 'Complete'
+                      : 'Incomplete'}
                 </span>
               </div>
 
@@ -1514,7 +1639,11 @@ export default function ClientDashboard() {
                   </h3>
 
                   <div className="space-y-2">
-                    {missingDocumentTypes.length > 0 ? (
+                    {requiredDocumentTypes.length === 0 ? (
+                      <p className="rounded-xl bg-white px-4 py-3 text-sm font-bold text-red-700">
+                        Transaction Type is missing or unsupported.
+                      </p>
+                    ) : missingDocumentTypes.length > 0 ? (
                       missingDocumentTypes.map((type) => (
                         <p
                           key={type}
@@ -1874,6 +2003,17 @@ export default function ClientDashboard() {
               </div>
 
               <div className="mb-4">
+                {selectedClient?.transactionType ? (
+                  <div className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
+                    Showing the required documents for{' '}
+                    <strong>{selectedClient.transactionType}</strong>.
+                  </div>
+                ) : (
+                  <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                    Transaction Type is missing. Document uploads are unavailable until the client record is updated.
+                  </div>
+                )}
+
                 <label className="mb-2 block text-sm font-bold text-slate-700">
                   Document Type
                 </label>
@@ -1881,10 +2021,15 @@ export default function ClientDashboard() {
                 <select
                   value={documentType}
                   onChange={(event) => setDocumentType(event.target.value)}
+                  disabled={requiredDocumentTypes.length === 0}
                   className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-100"
                 >
-                  <option value="">Select document type</option>
-                  {documentTypes.map((type) => {
+                  <option value="">
+                    {requiredDocumentTypes.length > 0
+                      ? 'Select document type'
+                      : 'No document types available'}
+                  </option>
+                  {requiredDocumentTypes.map((type) => {
                     const file = documentRowsByType.get(type.value);
                     const status = file ? normalizeDocumentStatus(file.documentStatus) : 'Missing';
                     const isApproved = status === 'Approved';
@@ -1892,7 +2037,13 @@ export default function ClientDashboard() {
                     return (
                       <option key={type.value} value={type.value} disabled={isApproved}>
                         {type.label}
-                        {isApproved ? ' (Approved)' : status === 'Rejected' ? ' (Rejected - re-upload)' : ''}
+                        {isApproved
+                          ? ' (Approved)'
+                          : status === 'Rejected'
+                            ? ' (Rejected - re-upload)'
+                            : status === 'Pending'
+                              ? ' (Pending Review)'
+                              : ''}
                       </option>
                     );
                   })}
@@ -1922,6 +2073,8 @@ export default function ClientDashboard() {
                 <input
                   type="file"
                   multiple
+                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                  disabled={!documentType || requiredDocumentTypes.length === 0}
                   onChange={(event) => setNewFiles(event.target.files)}
                   className="hidden"
                 />
@@ -1949,7 +2102,12 @@ export default function ClientDashboard() {
               <button
                 type="button"
                 onClick={handleUpload}
-                disabled={loading}
+                disabled={
+                  loading ||
+                  requiredDocumentTypes.length === 0 ||
+                  !documentType ||
+                  !newFiles?.length
+                }
                 className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:bg-slate-300"
               >
                 <FaCloudUploadAlt />

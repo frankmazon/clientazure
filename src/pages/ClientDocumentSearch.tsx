@@ -26,13 +26,101 @@ const CLIENTS_API = `${API_BASE}/clients`;
 const FILE_URL_API = `${API_BASE}/file-url`;
 const DOCUMENTS_API = `${API_BASE}/documents`;
 
-const requiredDocuments = [
-  'id',
-  'property-documents',
-  'credit-history',
-  'income-documents',
-  'other',
+type DocumentOption = {
+  label: string;
+  value: string;
+};
+
+type NormalizedTransactionType = 'alt_doc' | 'full_doc';
+
+const sharedDocumentTypes: DocumentOption[] = [
+  {
+    label: 'Last 6 Months Mortgage Statements',
+    value: 'last-6-months-mortgage-statements',
+  },
+  { label: 'Council Rates Notice', value: 'council-rates-notice' },
 ];
+
+const transactionDocumentTypes: Record<NormalizedTransactionType, DocumentOption[]> = {
+  alt_doc: [
+    { label: 'BAS from ATO Portal', value: 'bas-from-ato-portal' },
+    {
+      label: 'Business Banking Statements',
+      value: 'business-banking-statements',
+    },
+    ...sharedDocumentTypes,
+  ],
+  full_doc: [
+    { label: 'Payslip', value: 'payslip' },
+    {
+      label: 'Management Reports / Financial Statements',
+      value: 'management-reports-financial-statements',
+    },
+    {
+      label: 'Group Certificate / Payment Summary',
+      value: 'group-certificate-payment-summary',
+    },
+    { label: 'Company Tax Returns', value: 'company-tax-returns' },
+    { label: 'Individual Tax Returns', value: 'individual-tax-returns' },
+    ...sharedDocumentTypes,
+  ],
+};
+
+const allDocumentTypes = Object.values(transactionDocumentTypes).flat();
+
+const documentTypeLabels = Object.fromEntries(
+  allDocumentTypes.map((document) => [document.value, document.label]),
+) as Record<string, string>;
+
+const normalizeTransactionType = (transactionType?: string): NormalizedTransactionType | '' => {
+  const normalized = (transactionType || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  if (normalized === 'alt' || normalized === 'alt_doc' || normalized === 'altdoc') {
+    return 'alt_doc';
+  }
+
+  if (normalized === 'full' || normalized === 'full_doc' || normalized === 'fulldoc') {
+    return 'full_doc';
+  }
+
+  return '';
+};
+
+const getRequiredDocuments = (transactionType?: string): string[] => {
+  const normalizedTransactionType = normalizeTransactionType(transactionType);
+
+  return normalizedTransactionType
+    ? transactionDocumentTypes[normalizedTransactionType].map(
+        (document) => document.value,
+      )
+    : [];
+};
+
+const normalizeDocumentTypeValue = (documentType?: string) =>
+  (documentType || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-')
+    .replace(/-+/g, '-');
+
+const formatDocumentType = (documentType?: string) => {
+  if (!documentType) return 'Document';
+
+  const normalizedType = normalizeDocumentTypeValue(documentType);
+
+  return (
+    documentTypeLabels[normalizedType] ||
+    documentType
+      .split(/[-_\s]+/)
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
+  );
+};
 
 type Client = {
   id: number;
@@ -109,22 +197,15 @@ type ClientFolder = {
   uniqueId: string;
   client: Client;
   files: Client[];
+  requiredDocuments: string[];
   uploadedDocuments: string[];
   verifiedDocuments: string[];
   rejectedDocuments: string[];
   pendingDocuments: string[];
   missingDocuments: string[];
+  hasSupportedTransaction: boolean;
   isComplete: boolean;
   progress: number;
-};
-
-const documentTypeLabels: Record<string, string> = {
-  id: 'ID',
-  ID: 'ID',
-  'property-documents': 'Property Documents',
-  'credit-history': 'Credit History',
-  'income-documents': 'Income Documents',
-  other: 'Other',
 };
 
 const normalizeDocumentStatus = (status?: string) => {
@@ -380,18 +461,6 @@ export default function ClientDocumentSearch() {
       .replace(/\s+/g, ' ')
       .trim();
 
-  const formatDocumentType = (type?: string) => {
-    if (!type) return 'Document';
-
-    return (
-      documentTypeLabels[type] ||
-      type
-        .split('-')
-        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ')
-    );
-  };
-
   const formatSource = (type?: string) => {
     const rawValue = (type || '').trim();
     const value = rawValue.toLowerCase().replace(/[_\s]+/g, '-');
@@ -535,7 +604,8 @@ export default function ClientDocumentSearch() {
         (getReferrerPhone(client) || '').toLowerCase().includes(keyword);
 
       const matchesType =
-        selectedType === 'all' || client.documentType === selectedType;
+        selectedType === 'all' ||
+        normalizeDocumentTypeValue(client.documentType) === selectedType;
 
       const matchesSource =
         selectedSource === 'all' || source === selectedSource;
@@ -551,8 +621,15 @@ export default function ClientDocumentSearch() {
 
   const documentTypes = useMemo(() => {
     return Array.from(
-      new Set(clients.map((client) => client.documentType).filter(Boolean)),
-    ) as string[];
+      new Set([
+        ...allDocumentTypes.map((document) => document.value),
+        ...clients
+          .map((client) => normalizeDocumentTypeValue(client.documentType))
+          .filter(Boolean),
+      ]),
+    ).sort((first, second) =>
+      formatDocumentType(first).localeCompare(formatDocumentType(second)),
+    );
   }, [clients]);
 
   const statuses = useMemo(() => {
@@ -566,74 +643,100 @@ export default function ClientDocumentSearch() {
 
   const clientFolders = useMemo<ClientFolder[]>(() => {
     const map = new Map<string, Client[]>();
+    const matchingClientKeys = new Set(
+      filteredClients.map(
+        (client) => client.uniqueId || String(client.clientId || client.id),
+      ),
+    );
 
-    filteredClients.forEach((client) => {
+    clients.forEach((client) => {
       const key = client.uniqueId || String(client.clientId || client.id);
 
+      if (!matchingClientKeys.has(key)) return;
       if (!map.has(key)) map.set(key, []);
       map.get(key)?.push(client);
     });
 
-    return Array.from(map.entries()).map(([uniqueId, files]) => {
-      const uploadedDocuments = Array.from(
-        new Set(
-          files
-            .map((file) => file.documentType?.toLowerCase())
-            .filter(Boolean) as string[],
-        ),
+    return Array.from(map.entries()).map(([uniqueId, clientRows]) => {
+      const client =
+        clientRows.find((row) => row.classificationType || row.transactionType) ||
+        clientRows[0];
+
+      const files = clientRows.filter(
+        (row) => Boolean(row.documentType || row.fileName || row.fileUrl),
       );
 
-      const verifiedDocuments = Array.from(
-        new Set(
-          files
-            .filter((file) => getDocumentStatus(file) === 'Verified')
-            .map((file) => file.documentType?.toLowerCase())
-            .filter(Boolean) as string[],
-        ),
+      const requiredDocuments = getRequiredDocuments(client.transactionType);
+      const hasSupportedTransaction = requiredDocuments.length > 0;
+      const statusByDocument = new Map<string, string>();
+      const statusPriority: Record<string, number> = {
+        Verified: 3,
+        Pending: 2,
+        Rejected: 1,
+      };
+
+      files.forEach((file) => {
+        const documentType = normalizeDocumentTypeValue(file.documentType);
+        if (!documentType || !requiredDocuments.includes(documentType)) return;
+
+        const nextStatus = getDocumentStatus(file);
+        const currentStatus = statusByDocument.get(documentType);
+
+        if (
+          !currentStatus ||
+          (statusPriority[nextStatus] || 0) >
+            (statusPriority[currentStatus] || 0)
+        ) {
+          statusByDocument.set(documentType, nextStatus);
+        }
+      });
+
+      const uploadedDocuments = requiredDocuments.filter((document) =>
+        statusByDocument.has(document),
       );
 
-      const rejectedDocuments = Array.from(
-        new Set(
-          files
-            .filter((file) => getDocumentStatus(file) === 'Rejected')
-            .map((file) => file.documentType?.toLowerCase())
-            .filter(Boolean) as string[],
-        ),
+      const verifiedDocuments = requiredDocuments.filter(
+        (document) => statusByDocument.get(document) === 'Verified',
       );
 
-      const pendingDocuments = Array.from(
-        new Set(
-          files
-            .filter((file) => getDocumentStatus(file) === 'Pending')
-            .map((file) => file.documentType?.toLowerCase())
-            .filter(Boolean) as string[],
-        ),
+      const rejectedDocuments = requiredDocuments.filter(
+        (document) => statusByDocument.get(document) === 'Rejected',
+      );
+
+      const pendingDocuments = requiredDocuments.filter(
+        (document) => statusByDocument.get(document) === 'Pending',
       );
 
       const missingDocuments = requiredDocuments.filter(
-        (doc) => !uploadedDocuments.includes(doc),
+        (document) => !statusByDocument.has(document),
       );
 
-      const isComplete = requiredDocuments.every((doc) =>
-        verifiedDocuments.includes(doc),
-      );
+      const isComplete =
+        hasSupportedTransaction &&
+        requiredDocuments.every((document) =>
+          verifiedDocuments.includes(document),
+        );
 
       return {
         uniqueId,
-        client: files[0],
+        client,
         files,
+        requiredDocuments,
         uploadedDocuments,
         verifiedDocuments,
         rejectedDocuments,
         pendingDocuments,
         missingDocuments,
+        hasSupportedTransaction,
         isComplete,
-        progress: Math.round(
-          (verifiedDocuments.length / requiredDocuments.length) * 100,
-        ),
+        progress: hasSupportedTransaction
+          ? Math.round(
+              (verifiedDocuments.length / requiredDocuments.length) * 100,
+            )
+          : 0,
       };
     });
-  }, [filteredClients]);
+  }, [clients, filteredClients]);
 
   const incompleteCount = clientFolders.filter((folder) => !folder.isComplete).length;
   const completeCount = clientFolders.filter((folder) => folder.isComplete).length;
@@ -929,6 +1032,7 @@ export default function ClientDocumentSearch() {
                 rejectedDocuments,
                 pendingDocuments,
                 missingDocuments,
+                hasSupportedTransaction,
                 isComplete,
                 progress,
               }) => {
@@ -1003,12 +1107,18 @@ export default function ClientDocumentSearch() {
 
                         <span
                           className={`rounded-full px-3 py-2 text-xs font-black sm:px-4 sm:text-sm ${
-                            isComplete
+                            !hasSupportedTransaction
+                              ? 'bg-slate-200 text-slate-700 ring-1 ring-slate-300'
+                              : isComplete
                               ? 'bg-green-100 text-green-700 ring-1 ring-green-200'
                               : 'bg-red-100 text-red-700 ring-1 ring-red-200'
                           }`}
                         >
-                          {isComplete ? 'Complete' : 'Incomplete'}
+                          {!hasSupportedTransaction
+                            ? 'Checklist unavailable'
+                            : isComplete
+                              ? 'Complete'
+                              : 'Incomplete'}
                         </span>
                       </div>
                     </div>
@@ -1153,7 +1263,11 @@ export default function ClientDocumentSearch() {
                             Missing Documents
                           </p>
                           <div className="flex flex-wrap gap-2">
-                            {missingDocuments.length > 0 ? (
+                            {!hasSupportedTransaction ? (
+                              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                                Transaction Type missing or unsupported
+                              </span>
+                            ) : missingDocuments.length > 0 ? (
                               missingDocuments.map((doc) => (
                                 <span
                                   key={doc}
@@ -1217,7 +1331,11 @@ export default function ClientDocumentSearch() {
                     </div>
 
                     <div className="grid gap-4 p-4 sm:p-5 md:grid-cols-2 2xl:grid-cols-3">
-                      {files.map((file) => (
+                      {files.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm font-bold text-slate-500 md:col-span-2 2xl:col-span-3">
+                          No documents have been uploaded for this client yet.
+                        </div>
+                      ) : files.map((file) => (
                         <div
                           key={`${file.id}-${file.fileName}`}
                           className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:bg-white hover:shadow-md"

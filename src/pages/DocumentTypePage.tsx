@@ -17,8 +17,10 @@ import {
 import DashboardLayout from '../components/layout/layout';
 
 const API_BASE =
-  import.meta.env.VITE_API_BASE_URL ||
-  'https://docsuploadpythonapi.azurewebsites.net/api';
+  (
+    import.meta.env.VITE_API_BASE_URL ||
+    'https://docsuploadpythonapi.azurewebsites.net/api'
+  ).replace(/\/+$/, '');
 
 const CLIENTS_API = `${API_BASE}/clients`;
 const FILE_URL_API = `${API_BASE}/file-url`;
@@ -71,11 +73,6 @@ type Client = {
   fileName?: string;
   fileUrl?: string;
   submittedAt?: string;
-  sssNumber?: string;
-  hdmfNumber?: string;
-  philhealthNumber?: string;
-  tinNumber?: string;
-  licenseNumber?: string;
 };
 
 type ClientFolder = {
@@ -84,13 +81,87 @@ type ClientFolder = {
   files: Client[];
 };
 
-const documentTypeLabels: Record<string, string> = {
-  id: 'ID',
-  ID: 'ID',
-  'property-documents': 'Property Documents',
-  'credit-history': 'Credit History',
-  'income-documents': 'Income Documents',
-  other: 'Other',
+type DocumentOption = {
+  label: string;
+  value: string;
+};
+
+type NormalizedTransactionType = 'alt_doc' | 'full_doc';
+
+const sharedDocumentTypes: DocumentOption[] = [
+  {
+    label: 'Last 6 Months Mortgage Statements',
+    value: 'last-6-months-mortgage-statements',
+  },
+  { label: 'Council Rates Notice', value: 'council-rates-notice' },
+];
+
+const transactionDocumentTypes: Record<
+  NormalizedTransactionType,
+  DocumentOption[]
+> = {
+  alt_doc: [
+    { label: 'BAS from ATO Portal', value: 'bas-from-ato-portal' },
+    {
+      label: 'Business Banking Statements',
+      value: 'business-banking-statements',
+    },
+    ...sharedDocumentTypes,
+  ],
+  full_doc: [
+    { label: 'Payslip', value: 'payslip' },
+    {
+      label: 'Management Reports / Financial Statements',
+      value: 'management-reports-financial-statements',
+    },
+    {
+      label: 'Group Certificate / Payment Summary',
+      value: 'group-certificate-payment-summary',
+    },
+    { label: 'Company Tax Returns', value: 'company-tax-returns' },
+    { label: 'Individual Tax Returns', value: 'individual-tax-returns' },
+    ...sharedDocumentTypes,
+  ],
+};
+
+const allDocumentTypes = Array.from(
+  new Map(
+    Object.values(transactionDocumentTypes)
+      .flat()
+      .map((document) => [document.value, document]),
+  ).values(),
+);
+
+const documentTypeLabels: Record<string, string> = Object.fromEntries(
+  allDocumentTypes.map((document) => [document.value, document.label]),
+);
+
+const normalizeDocumentTypeValue = (value?: string) =>
+  (value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-')
+    .replace(/-+/g, '-');
+
+const formatTransactionType = (value?: string) => {
+  const normalized = (value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+
+  if (normalized === 'alt' || normalized === 'altdoc' || normalized === 'alt_doc') {
+    return 'Alt Doc';
+  }
+
+  if (
+    normalized === 'full' ||
+    normalized === 'fulldoc' ||
+    normalized === 'full_doc'
+  ) {
+    return 'Full Doc';
+  }
+
+  return value || 'N/A';
 };
 
 const panelClass =
@@ -238,16 +309,13 @@ const normalizeClient = (rawClient: Client): Client => {
         getStringValue(raw, ['referrerEmail', 'ReferrerEmail', 'referrer_email']),
     },
 
-    documentType: getStringValue(raw, ['documentType', 'DocumentType', 'document_type']),
+    documentType: normalizeDocumentTypeValue(
+      getStringValue(raw, ['documentType', 'DocumentType', 'document_type']),
+    ),
     fileName: getStringValue(raw, ['fileName', 'FileName', 'file_name']),
     fileUrl: getStringValue(raw, ['fileUrl', 'FileUrl', 'file_url', 'blobUrl', 'BlobUrl']),
     submittedAt: getStringValue(raw, ['submittedAt', 'SubmittedAt', 'submitted_at', 'uploadedAt', 'UploadedAt']),
 
-    sssNumber: getStringValue(raw, ['sssNumber', 'SSSNumber', 'SssNumber', 'sss_number']),
-    hdmfNumber: getStringValue(raw, ['hdmfNumber', 'HDMFNumber', 'HdmfNumber', 'hdmf_number']),
-    philhealthNumber: getStringValue(raw, ['philhealthNumber', 'PhilhealthNumber', 'PhilHealthNumber', 'philhealth_number']),
-    tinNumber: getStringValue(raw, ['tinNumber', 'TINNumber', 'TinNumber', 'tin_number']),
-    licenseNumber: getStringValue(raw, ['licenseNumber', 'LicenseNumber', 'license_number']),
   };
 };
 
@@ -262,9 +330,14 @@ export default function DocumentTypePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const selectedDocumentType = normalizeDocumentTypeValue(type);
+  const isSupportedDocumentType = Boolean(
+    documentTypeLabels[selectedDocumentType],
+  );
+
   const pageTitle =
-    documentTypeLabels[type || ''] ||
-    type
+    documentTypeLabels[selectedDocumentType] ||
+    selectedDocumentType
       ?.split('-')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ') ||
@@ -292,8 +365,14 @@ export default function DocumentTypePage() {
         setLoading(true);
         setError('');
 
+        if (!isSupportedDocumentType) {
+          throw new Error(
+            'This document type is no longer supported. Please select an Alt Doc or Full Doc requirement.',
+          );
+        }
+
         const response = await fetch(
-          `${CLIENTS_API}?documentType=${encodeURIComponent(type || '')}`,
+          `${CLIENTS_API}?documentType=${encodeURIComponent(selectedDocumentType)}`,
         );
 
         const result = await response.json();
@@ -302,7 +381,16 @@ export default function DocumentTypePage() {
           throw new Error(result.message || 'Failed to load documents.');
         }
 
-        setClients((result.clients || []).map(normalizeClient));
+        setClients(
+          (result.clients || [])
+            .map(normalizeClient)
+            .filter(
+              (client: Client) =>
+                Boolean(
+                  client.documentType || client.fileName || client.fileUrl,
+                ) && client.documentType === selectedDocumentType,
+            ),
+        );
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Failed to load documents.',
@@ -313,8 +401,14 @@ export default function DocumentTypePage() {
       }
     };
 
-    if (type) loadDocuments();
-  }, [type]);
+    if (selectedDocumentType) {
+      loadDocuments();
+    } else {
+      setClients([]);
+      setError('No document type was selected.');
+      setLoading(false);
+    }
+  }, [isSupportedDocumentType, selectedDocumentType]);
 
   const getFullName = (client: Client) =>
     (
@@ -543,9 +637,6 @@ export default function DocumentTypePage() {
               const isOpen = openFolders[key];
               const fullName = getFullName(client);
               const sourceLabel = formatSource(client.source || client.leadType);
-              const isIdDocument =
-                client.documentType === 'id' || client.documentType === 'ID';
-
               return (
                 <div
                   key={key}
@@ -656,7 +747,7 @@ export default function DocumentTypePage() {
                           <InfoBox label="Purpose" value={client.purpose} />
                           <InfoBox
                             label="Transaction Type"
-                            value={client.transactionType}
+                            value={formatTransactionType(client.transactionType)}
                           />
                           <InfoBox
                             label="With Borrowers / Guarantors?"
@@ -833,50 +924,6 @@ export default function DocumentTypePage() {
                                 </button>
                               </div>
 
-                              {isIdDocument && (
-                                <div className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-4">
-                                  <h5 className="mb-3 text-sm font-black text-slate-900">
-                                    ID Information
-                                  </h5>
-
-                                  <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
-                                    <p>
-                                      <span className="font-semibold text-slate-800">
-                                        SSS Number:
-                                      </span>{' '}
-                                      {file.sssNumber || 'N/A'}
-                                    </p>
-
-                                    <p>
-                                      <span className="font-semibold text-slate-800">
-                                        HDMF / Pag-IBIG:
-                                      </span>{' '}
-                                      {file.hdmfNumber || 'N/A'}
-                                    </p>
-
-                                    <p>
-                                      <span className="font-semibold text-slate-800">
-                                        PhilHealth:
-                                      </span>{' '}
-                                      {file.philhealthNumber || 'N/A'}
-                                    </p>
-
-                                    <p>
-                                      <span className="font-semibold text-slate-800">
-                                        TIN:
-                                      </span>{' '}
-                                      {file.tinNumber || 'N/A'}
-                                    </p>
-
-                                    <p>
-                                      <span className="font-semibold text-slate-800">
-                                        License Number:
-                                      </span>{' '}
-                                      {file.licenseNumber || 'N/A'}
-                                    </p>
-                                  </div>
-                                </div>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -956,7 +1003,7 @@ export default function DocumentTypePage() {
                   <InfoBox label="Purpose" value={previewFile.purpose} />
                   <InfoBox
                     label="Transaction Type"
-                    value={previewFile.transactionType}
+                    value={formatTransactionType(previewFile.transactionType)}
                   />
                   <InfoBox
                     label="With Borrowers / Guarantors?"
