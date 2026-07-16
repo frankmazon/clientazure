@@ -15,7 +15,7 @@ import DashboardLayout from "../components/layout/layout";
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ||
-  "https://docsuploadpythonapi.azurewebsites.net/api"
+  "https://docsuploadpythonapi-flex.azurewebsites.net/api"
 ).replace(/\/+$/, "");
 const CLIENTS_API = `${API_BASE}/clients`;
 const FILE_URL_API = `${API_BASE}/file-url`;

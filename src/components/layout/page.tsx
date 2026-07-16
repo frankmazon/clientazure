@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 const ENV_API_BASE = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '');
 const LOCAL_API_BASE = 'http://localhost:7071/api';
-const PRODUCTION_API_BASE = 'https://docsuploadpythonapi.azurewebsites.net/api';
+const PRODUCTION_API_BASE = 'https://docsuploadpythonapi-flex.azurewebsites.net/api';
 
 const isLocalDevelopment =
   typeof window !== 'undefined' &&
