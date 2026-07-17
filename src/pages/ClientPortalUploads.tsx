@@ -28,6 +28,8 @@ type DocumentOption = {
 type NormalizedTransactionType = "alt_doc" | "full_doc";
 
 const sharedDocumentTypes: DocumentOption[] = [
+  { label: "ID", value: "id" },
+  { label: "Passport", value: "passport" },
   {
     label: "Last 6 Months Mortgage Statements",
     value: "last-6-months-mortgage-statements",
@@ -35,7 +37,10 @@ const sharedDocumentTypes: DocumentOption[] = [
   { label: "Council Rates Notice", value: "council-rates-notice" },
 ];
 
-const transactionDocumentTypes: Record<NormalizedTransactionType, DocumentOption[]> = {
+const transactionDocumentTypes: Record<
+  NormalizedTransactionType,
+  DocumentOption[]
+> = {
   alt_doc: [
     { label: "BAS from ATO Portal", value: "bas-from-ato-portal" },
     {
@@ -66,18 +71,28 @@ const documentLabels = Object.fromEntries(
   allDocumentTypes.map((document) => [document.value, document.label]),
 ) as Record<string, string>;
 
-const normalizeTransactionType = (transactionType?: string): NormalizedTransactionType | "" => {
+const normalizeTransactionType = (
+  transactionType?: string,
+): NormalizedTransactionType | "" => {
   const normalized = (transactionType || "")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
 
-  if (normalized === "alt" || normalized === "alt_doc" || normalized === "altdoc") {
+  if (
+    normalized === "alt" ||
+    normalized === "alt_doc" ||
+    normalized === "altdoc"
+  ) {
     return "alt_doc";
   }
 
-  if (normalized === "full" || normalized === "full_doc" || normalized === "fulldoc") {
+  if (
+    normalized === "full" ||
+    normalized === "full_doc" ||
+    normalized === "fulldoc"
+  ) {
     return "full_doc";
   }
 
@@ -101,6 +116,36 @@ const normalizeDocumentTypeValue = (documentType?: string) =>
     .replace(/[_\s]+/g, "-")
     .replace(/-+/g, "-");
 
+const normalizeDocumentList = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return Array.from(
+      new Set(
+        value
+          .map((item) => normalizeDocumentTypeValue(String(item || "")))
+          .filter(Boolean),
+      ),
+    );
+  }
+
+  if (typeof value !== "string" || !value.trim()) return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return normalizeDocumentList(parsed);
+  } catch {
+    // Older responses may return comma- or line-separated values.
+  }
+
+  return Array.from(
+    new Set(
+      value
+        .split(/[\n,]+/)
+        .map((item) => normalizeDocumentTypeValue(item))
+        .filter(Boolean),
+    ),
+  );
+};
+
 const formatDocumentType = (documentType?: string) => {
   if (!documentType) return "Document";
 
@@ -114,6 +159,13 @@ const formatDocumentType = (documentType?: string) => {
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ")
   );
+};
+
+const formatDocumentList = (value: unknown) => {
+  const documents = normalizeDocumentList(value);
+  return documents.length > 0
+    ? documents.map((document) => formatDocumentType(document)).join(", ")
+    : "None";
 };
 
 type DocumentStatus = "approved" | "pending" | "rejected";
@@ -182,6 +234,7 @@ type Client = {
   documentStatus?: string;
   verificationStatus?: string;
   remarks?: string;
+  waivedDocuments?: string[];
   [key: string]: unknown;
 };
 
@@ -192,6 +245,7 @@ type ClientGroup = {
   requiredDocuments: string[];
   uploadedDocuments: string[];
   missingDocuments: string[];
+  waivedDocuments: string[];
   statusCounts: Record<DocumentStatus, number>;
   hasSupportedTransaction: boolean;
   progress: number;
@@ -494,8 +548,8 @@ export default function Clients() {
 
     return Array.from(map.entries()).map(([key, clientRows]) => {
       const client = mergeClientRows(clientRows);
-      const files = clientRows.filter(
-        (row) => Boolean(row.documentType || row.fileName || row.fileUrl),
+      const files = clientRows.filter((row) =>
+        Boolean(row.documentType || row.fileName || row.fileUrl),
       );
       const requiredDocuments = getRequiredDocuments(
         getStringValue(client, [
@@ -505,6 +559,19 @@ export default function Clients() {
         ]),
       );
       const hasSupportedTransaction = requiredDocuments.length > 0;
+      const waivedDocuments = Array.from(
+        new Set(
+          clientRows
+            .flatMap((row) =>
+              normalizeDocumentList(
+                row.waivedDocuments ??
+                  row.WaivedDocuments ??
+                  row.waived_documents,
+              ),
+            )
+            .filter((document) => requiredDocuments.includes(document)),
+        ),
+      );
       const statusByDocument = new Map<string, DocumentStatus>();
       const statusPriority: Record<DocumentStatus, number> = {
         approved: 3,
@@ -534,7 +601,9 @@ export default function Clients() {
         (document) => statusByDocument.get(document) === "approved",
       );
       const missingDocuments = requiredDocuments.filter(
-        (document) => !statusByDocument.has(document),
+        (document) =>
+          !statusByDocument.has(document) &&
+          !waivedDocuments.includes(document),
       );
       const statusCounts = Array.from(statusByDocument.values()).reduce<
         Record<DocumentStatus, number>
@@ -547,7 +616,9 @@ export default function Clients() {
       );
       const progress = hasSupportedTransaction
         ? Math.round(
-            (approvedDocuments.length / requiredDocuments.length) * 100,
+            ((approvedDocuments.length + waivedDocuments.length) /
+              requiredDocuments.length) *
+              100,
           )
         : 0;
 
@@ -558,12 +629,14 @@ export default function Clients() {
         requiredDocuments,
         uploadedDocuments,
         missingDocuments,
+        waivedDocuments,
         statusCounts,
         hasSupportedTransaction,
         progress,
         isComplete:
           hasSupportedTransaction &&
-          approvedDocuments.length === requiredDocuments.length,
+          approvedDocuments.length + waivedDocuments.length ===
+            requiredDocuments.length,
       };
     });
   }, [clients]);
@@ -713,7 +786,9 @@ export default function Clients() {
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-black uppercase tracking-wide opacity-70">{label}</p>
+          <p className="text-xs font-black uppercase tracking-wide opacity-70">
+            {label}
+          </p>
           <p className="mt-3 text-3xl font-black leading-none">{value}</p>
         </div>
 
@@ -741,7 +816,8 @@ export default function Clients() {
               Search Client Portal Uploads
             </h2>
             <p className="mt-2 max-w-4xl text-sm leading-6 text-white/75">
-              Search by unique ID, contact details, source, team status, loan fields, or uploaded file name.
+              Search by unique ID, contact details, source, team status, loan
+              fields, or uploaded file name.
             </p>
           </div>
 
@@ -760,7 +836,9 @@ export default function Clients() {
         </div>
 
         {loading && (
-          <div className={`${panelClass} p-10 text-center font-bold text-slate-500`}>
+          <div
+            className={`${panelClass} p-10 text-center font-bold text-slate-500`}
+          >
             Loading clients from Azure...
           </div>
         )}
@@ -818,9 +896,8 @@ export default function Clients() {
               <StatCard
                 label="Checklist Unavailable"
                 value={
-                  clientGroups.filter(
-                    (group) => !group.hasSupportedTransaction,
-                  ).length
+                  clientGroups.filter((group) => !group.hasSupportedTransaction)
+                    .length
                 }
                 icon={<FaExclamationTriangle />}
                 className="border-slate-200 bg-slate-50 text-slate-700"
@@ -946,28 +1023,36 @@ export default function Clients() {
 
                           <td className="px-5 py-6 text-sm leading-6 text-slate-600">
                             <p>
-                              <span className="font-black text-slate-700">Class:</span>{" "}
+                              <span className="font-black text-slate-700">
+                                Class:
+                              </span>{" "}
                               {getLoanValue(group.client, [
                                 "classificationType",
                                 "classification_type",
                               ])}
                             </p>
                             <p>
-                              <span className="font-black text-slate-700">Borrower:</span>{" "}
+                              <span className="font-black text-slate-700">
+                                Borrower:
+                              </span>{" "}
                               {getLoanValue(group.client, [
                                 "borrowerType",
                                 "borrower_type",
                               ])}
                             </p>
                             <p>
-                              <span className="font-black text-slate-700">Objective:</span>{" "}
+                              <span className="font-black text-slate-700">
+                                Objective:
+                              </span>{" "}
                               {getLoanValue(group.client, [
                                 "objective",
                                 "Objective",
                               ])}
                             </p>
                             <p>
-                              <span className="font-black text-slate-700">Loan:</span>{" "}
+                              <span className="font-black text-slate-700">
+                                Loan:
+                              </span>{" "}
                               {getLoanValue(group.client, [
                                 "loanType",
                                 "loan_type",
@@ -987,8 +1072,8 @@ export default function Clients() {
                                 !group.hasSupportedTransaction
                                   ? "bg-slate-200 text-slate-700"
                                   : group.isComplete
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-red-100 text-red-700"
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-red-100 text-red-700"
                               }`}
                             >
                               {group.isComplete ? (
@@ -1006,7 +1091,7 @@ export default function Clients() {
 
                           <td className="px-5 py-6">
                             <div className="space-y-3">
-                              <div className="grid grid-cols-3 gap-1 text-[11px] font-black">
+                              <div className="grid grid-cols-4 gap-1 text-[11px] font-black">
                                 <span className="rounded-lg bg-green-50 px-2 py-1 text-center text-green-700">
                                   A {group.statusCounts.approved}
                                 </span>
@@ -1015,6 +1100,9 @@ export default function Clients() {
                                 </span>
                                 <span className="rounded-lg bg-red-50 px-2 py-1 text-center text-red-700">
                                   R {group.statusCounts.rejected}
+                                </span>
+                                <span className="rounded-lg bg-violet-50 px-2 py-1 text-center text-violet-700">
+                                  W {group.waivedDocuments.length}
                                 </span>
                               </div>
                               <p className="text-xs font-black text-slate-500">
@@ -1025,6 +1113,40 @@ export default function Clients() {
                                   className="h-full rounded-full bg-[linear-gradient(90deg,#259b8f,#EE6521)]"
                                   style={{ width: `${group.progress}%` }}
                                 />
+                              </div>
+
+                              <div>
+                                <p className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-slate-400">
+                                  Submitted Documents
+                                </p>
+                                <div className="flex flex-wrap gap-1">
+                                  {group.uploadedDocuments.length > 0 &&
+                                    group.uploadedDocuments.map((doc) => (
+                                      <span
+                                        key={`desktop-uploaded-${doc}`}
+                                        className="rounded-md bg-green-50 px-1.5 py-1 text-[10px] font-bold leading-tight text-green-700"
+                                      >
+                                        {formatDocumentType(doc)}
+                                      </span>
+                                    ))}
+
+                                  {group.waivedDocuments.length > 0 &&
+                                    group.waivedDocuments.map((doc) => (
+                                      <span
+                                        key={`desktop-waived-${doc}`}
+                                        className="rounded-md bg-amber-100 px-1.5 py-1 text-[10px] font-bold leading-tight text-amber-700 ring-1 ring-amber-200"
+                                      >
+                                        {formatDocumentType(doc)} — Waived
+                                      </span>
+                                    ))}
+
+                                  {group.uploadedDocuments.length === 0 &&
+                                  group.waivedDocuments.length === 0 ? (
+                                    <span className="text-[10px] font-bold text-slate-400">
+                                      None submitted
+                                    </span>
+                                  ) : null}
+                                </div>
                               </div>
                             </div>
                           </td>
@@ -1052,10 +1174,7 @@ export default function Clients() {
                 const sourceLabel = getSourceLabel(group.client);
 
                 return (
-                  <div
-                    key={group.key}
-                    className={`${panelClass} p-5`}
-                  >
+                  <div key={group.key} className={`${panelClass} p-5`}>
                     <div className="mb-5 flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-xs font-bold uppercase text-slate-400">
@@ -1088,7 +1207,9 @@ export default function Clients() {
 
                     <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-sm leading-6 text-slate-600">
                       <p>
-                        <strong className="text-slate-700">Classification:</strong>{" "}
+                        <strong className="text-slate-700">
+                          Classification:
+                        </strong>{" "}
                         {getLoanValue(group.client, [
                           "classificationType",
                           "classification_type",
@@ -1136,8 +1257,8 @@ export default function Clients() {
                           !group.hasSupportedTransaction
                             ? "bg-slate-200 text-slate-700"
                             : group.isComplete
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-700"
                         }`}
                       >
                         {!group.hasSupportedTransaction
@@ -1154,7 +1275,7 @@ export default function Clients() {
                     </div>
 
                     <div className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-white p-4">
-                      <div className="grid grid-cols-3 gap-2 text-xs font-black">
+                      <div className="grid grid-cols-4 gap-2 text-xs font-black">
                         <p className="rounded-lg bg-green-50 px-2 py-2 text-center text-green-700">
                           Approved {group.statusCounts.approved}
                         </p>
@@ -1163,6 +1284,9 @@ export default function Clients() {
                         </p>
                         <p className="rounded-lg bg-red-50 px-2 py-2 text-center text-red-700">
                           Rejected {group.statusCounts.rejected}
+                        </p>
+                        <p className="rounded-lg bg-violet-50 px-2 py-2 text-center text-violet-700">
+                          Waived {group.waivedDocuments.length}
                         </p>
                       </div>
 
@@ -1183,10 +1307,10 @@ export default function Clients() {
                     <div className="mb-4 grid gap-3">
                       <div>
                         <p className="mb-2 text-xs font-bold uppercase text-slate-400">
-                          Uploaded
+                          Submitted Documents
                         </p>
                         <div className="flex flex-wrap gap-2">
-                          {group.uploadedDocuments.length > 0 ? (
+                          {group.uploadedDocuments.length > 0 &&
                             group.uploadedDocuments.map((doc) => (
                               <span
                                 key={doc}
@@ -1194,12 +1318,24 @@ export default function Clients() {
                               >
                                 {formatDocumentType(doc)}
                               </span>
-                            ))
-                          ) : (
+                            ))}
+
+                          {group.waivedDocuments.length > 0 &&
+                            group.waivedDocuments.map((doc) => (
+                              <span
+                                key={`waived-${doc}`}
+                                className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-200"
+                              >
+                                {formatDocumentType(doc)} — Waived
+                              </span>
+                            ))}
+
+                          {group.uploadedDocuments.length === 0 &&
+                          group.waivedDocuments.length === 0 ? (
                             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                              None uploaded
+                              None submitted
                             </span>
-                          )}
+                          ) : null}
                         </div>
                       </div>
 
@@ -1261,7 +1397,9 @@ export default function Clients() {
               })}
 
               {filteredGroups.length === 0 && (
-                <div className={`${panelClass} p-10 text-center text-sm text-slate-500`}>
+                <div
+                  className={`${panelClass} p-10 text-center text-sm text-slate-500`}
+                >
                   No clients found.
                 </div>
               )}
@@ -1317,6 +1455,14 @@ export default function Clients() {
                   <InfoCard
                     label="Document Type"
                     value={formatDocumentType(selectedClient.documentType)}
+                  />
+                  <InfoCard
+                    label="Waived Documents"
+                    value={formatDocumentList(
+                      selectedClient.waivedDocuments ??
+                        selectedClient.WaivedDocuments ??
+                        selectedClient.waived_documents,
+                    )}
                   />
                   <InfoCard label="File Name" value={selectedClient.fileName} />
                   <InfoCard

@@ -103,7 +103,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </div>
 
           <nav className="flex-1 space-y-2 overflow-y-auto px-4 py-6">
-            <NavLink
+            {/* <NavLink
               to="/dashboard"
               end
               onClick={onClose}
@@ -111,7 +111,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             >
               <FaTachometerAlt />
               Client Summary
-            </NavLink>
+            </NavLink> */}
 
             <div className="rounded-2xl bg-white/[0.04] p-2">
               <button
@@ -147,7 +147,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     <span>Search Client</span>
                   </NavLink>
 
-                  {documentTypes.map((type) => (
+                  {/* {documentTypes.map((type) => (
                     <NavLink
                       key={type.value}
                       to={`/dashboard/documents/${type.value}`}
@@ -157,7 +157,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                       <FaFolder className="mt-0.5 shrink-0 text-orange-400" />
                       <span>{type.label}</span>
                     </NavLink>
-                  ))}
+                  ))} */}
                 </div>
               )}
             </div>

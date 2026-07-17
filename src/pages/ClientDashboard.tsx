@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from "react";
 import {
   FaBriefcase,
   FaCheckCircle,
@@ -23,7 +23,16 @@ import {
   FaUser,
   FaRedoAlt,
   FaUserFriends,
-} from 'react-icons/fa';
+} from "react-icons/fa";
+
+type CoBorrower = {
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  phoneCountryCode?: string;
+  phone?: string;
+  email?: string;
+};
 
 type Submission = {
   [key: string]: unknown;
@@ -47,6 +56,7 @@ type Submission = {
   purpose?: string;
   transactionType?: string;
   withBorrowersGuarantors?: string;
+  coBorrowers?: CoBorrower[];
   anticipatedSettlementDate?: string;
 
   vedaIssues?: string;
@@ -76,6 +86,7 @@ type Submission = {
   verifiedBy?: string;
   verifiedDate?: string;
   remarks?: string;
+  waivedDocuments?: string[];
 };
 
 type ClientLoginUser = {
@@ -96,8 +107,8 @@ type ClientLoginUser = {
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ||
-  'https://docsuploadpythonapi-flex.azurewebsites.net/api'
-).replace(/\/$/, '');
+  "https://docsuploadpythonapi-flex.azurewebsites.net/api"
+).replace(/\/$/, "");
 
 const CLIENTS_API = `${API_BASE}/clients`;
 const UPLOAD_API = `${API_BASE}/uploadclient`;
@@ -110,62 +121,79 @@ type DocumentOption = {
   value: string;
 };
 
-type NormalizedTransactionType = 'alt_doc' | 'full_doc';
+type NormalizedTransactionType = "alt_doc" | "full_doc";
 
 const sharedDocumentTypes: DocumentOption[] = [
+  { label: "ID", value: "id" },
+  { label: "Passport", value: "passport" },
   {
-    label: 'Last 6 Months Mortgage Statements',
-    value: 'last-6-months-mortgage-statements',
+    label: "Last 6 Months Mortgage Statements",
+    value: "last-6-months-mortgage-statements",
   },
-  { label: 'Council Rates Notice', value: 'council-rates-notice' },
+  { label: "Council Rates Notice", value: "council-rates-notice" },
 ];
 
-const transactionDocumentTypes: Record<NormalizedTransactionType, DocumentOption[]> = {
+const transactionDocumentTypes: Record<
+  NormalizedTransactionType,
+  DocumentOption[]
+> = {
   alt_doc: [
-    { label: 'BAS from ATO Portal', value: 'bas-from-ato-portal' },
+    { label: "BAS from ATO Portal", value: "bas-from-ato-portal" },
     {
-      label: 'Business Banking Statements',
-      value: 'business-banking-statements',
+      label: "Business Banking Statements",
+      value: "business-banking-statements",
     },
     ...sharedDocumentTypes,
   ],
   full_doc: [
-    { label: 'Payslip', value: 'payslip' },
+    { label: "Payslip", value: "payslip" },
     {
-      label: 'Management Reports / Financial Statements',
-      value: 'management-reports-financial-statements',
+      label: "Management Reports / Financial Statements",
+      value: "management-reports-financial-statements",
     },
     {
-      label: 'Group Certificate / Payment Summary',
-      value: 'group-certificate-payment-summary',
+      label: "Group Certificate / Payment Summary",
+      value: "group-certificate-payment-summary",
     },
-    { label: 'Company Tax Returns', value: 'company-tax-returns' },
-    { label: 'Individual Tax Returns', value: 'individual-tax-returns' },
+    { label: "Company Tax Returns", value: "company-tax-returns" },
+    { label: "Individual Tax Returns", value: "individual-tax-returns" },
     ...sharedDocumentTypes,
   ],
 };
 
 const allDocumentTypes = Object.values(transactionDocumentTypes).flat();
 
-const normalizeTransactionType = (transactionType?: string): NormalizedTransactionType | '' => {
-  const normalized = (transactionType || '')
+const normalizeTransactionType = (
+  transactionType?: string,
+): NormalizedTransactionType | "" => {
+  const normalized = (transactionType || "")
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 
-  if (normalized === 'alt' || normalized === 'alt_doc' || normalized === 'altdoc') {
-    return 'alt_doc';
+  if (
+    normalized === "alt" ||
+    normalized === "alt_doc" ||
+    normalized === "altdoc"
+  ) {
+    return "alt_doc";
   }
 
-  if (normalized === 'full' || normalized === 'full_doc' || normalized === 'fulldoc') {
-    return 'full_doc';
+  if (
+    normalized === "full" ||
+    normalized === "full_doc" ||
+    normalized === "fulldoc"
+  ) {
+    return "full_doc";
   }
 
-  return '';
+  return "";
 };
 
-const getDocumentTypesForTransaction = (transactionType?: string): DocumentOption[] => {
+const getDocumentTypesForTransaction = (
+  transactionType?: string,
+): DocumentOption[] => {
   const normalizedTransactionType = normalizeTransactionType(transactionType);
 
   return normalizedTransactionType
@@ -174,24 +202,54 @@ const getDocumentTypesForTransaction = (transactionType?: string): DocumentOptio
 };
 
 const normalizeDocumentTypeValue = (documentType?: string) =>
-  (documentType || '')
+  (documentType || "")
     .trim()
     .toLowerCase()
-    .replace(/[_\s]+/g, '-')
-    .replace(/-+/g, '-');
+    .replace(/[_\s]+/g, "-")
+    .replace(/-+/g, "-");
+
+const normalizeDocumentList = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return Array.from(
+      new Set(
+        value
+          .map((item) => normalizeDocumentTypeValue(String(item || "")))
+          .filter(Boolean),
+      ),
+    );
+  }
+
+  if (typeof value !== "string" || !value.trim()) return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return normalizeDocumentList(parsed);
+  } catch {
+    // Older API responses may use comma- or line-separated values.
+  }
+
+  return Array.from(
+    new Set(
+      value
+        .split(/[\n,]+/)
+        .map((item) => normalizeDocumentTypeValue(item))
+        .filter(Boolean),
+    ),
+  );
+};
 
 const specialists = {
   giulio: {
-    name: 'Giulio Avian',
-    phone: '03 8696 6300',
-    email: 'giulio@fundsnational.com',
-    booking: 'https://calendly.com/giulio-4',
+    name: "Giulio Avian",
+    phone: "03 8696 6300",
+    email: "giulio@fundsnational.com",
+    booking: "https://calendly.com/giulio-4",
   },
   leo: {
-    name: 'Leo Iermano',
-    phone: '03 8696 6300',
-    email: 'leo@sbrassist.com.au',
-    booking: 'https://calendly.com/leo-sbrassist/',
+    name: "Leo Iermano",
+    phone: "03 8696 6300",
+    email: "leo@sbrassist.com.au",
+    booking: "https://calendly.com/leo-sbrassist/",
   },
 };
 
@@ -201,188 +259,409 @@ const getAliasValue = (
   record: Record<string, unknown> | null | undefined,
   aliases: string[],
 ) => {
-  if (!record) return '';
+  if (!record) return "";
 
   for (const key of aliases) {
     const value = record[key];
 
-    if (value !== undefined && value !== null && String(value).trim() !== '') {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
       return value;
     }
   }
 
-  return '';
+  return "";
 };
 
 const toText = (value: unknown) => {
-  if (value === null || value === undefined) return '';
+  if (value === null || value === undefined) return "";
   return String(value).trim();
 };
+
+const normalizeCoBorrowers = (value: unknown): CoBorrower[] => {
+  let entries: unknown[] = [];
+
+  if (Array.isArray(value)) {
+    entries = value;
+  } else if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      entries = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  } else if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const nested =
+      record.coBorrowers ||
+      record.CoBorrowers ||
+      record.co_borrowers ||
+      record.additionalCoBorrowers;
+
+    if (nested !== value) return normalizeCoBorrowers(nested);
+  }
+
+  const readValue = (record: Record<string, unknown>, aliases: string[]) => {
+    const normalizedRecord = Object.entries(record).reduce<
+      Record<string, unknown>
+    >((result, [key, item]) => {
+      result[key.replace(/[^a-zA-Z0-9]+/g, "").toLowerCase()] = item;
+      return result;
+    }, {});
+
+    for (const alias of aliases) {
+      const item =
+        record[alias] ||
+        normalizedRecord[alias.replace(/[^a-zA-Z0-9]+/g, "").toLowerCase()];
+      if (item !== undefined && item !== null && String(item).trim()) {
+        return String(item).trim();
+      }
+    }
+
+    return "";
+  };
+
+  return entries
+    .filter(
+      (entry): entry is Record<string, unknown> =>
+        Boolean(entry) && typeof entry === "object",
+    )
+    .map((entry) => ({
+      firstName: readValue(entry, ["firstName", "FirstName", "first_name"]),
+      middleName: readValue(entry, ["middleName", "MiddleName", "middle_name"]),
+      lastName: readValue(entry, ["lastName", "LastName", "last_name"]),
+      phoneCountryCode: readValue(entry, [
+        "phoneCountryCode",
+        "PhoneCountryCode",
+        "phone_country_code",
+      ]),
+      phone: readValue(entry, ["phone", "Phone", "mobile", "Mobile"]),
+      email: readValue(entry, ["email", "Email"]),
+    }))
+    .filter(
+      (coBorrower) =>
+        coBorrower.firstName ||
+        coBorrower.lastName ||
+        coBorrower.phone ||
+        coBorrower.email,
+    );
+};
+
+const getCoBorrowerKey = (coBorrower: CoBorrower) =>
+  [
+    coBorrower.email?.toLowerCase(),
+    coBorrower.phone?.replace(/\D/g, ""),
+    coBorrower.firstName?.toLowerCase(),
+    coBorrower.middleName?.toLowerCase(),
+    coBorrower.lastName?.toLowerCase(),
+  ]
+    .filter(Boolean)
+    .join("|");
 
 const normalizeNumberText = (value: unknown) => {
   const cleanValue = toText(value);
   return cleanValue;
 };
 
-type DocumentStatusType = 'Approved' | 'Rejected' | 'Pending' | 'Missing';
+type DocumentStatusType = "Approved" | "Rejected" | "Pending" | "Missing";
 
-const approvedStatusValues = ['approved', 'verified', 'complete', 'completed'];
-const rejectedStatusValues = ['rejected', 'declined', 'failed'];
+const approvedStatusValues = ["approved", "verified", "complete", "completed"];
+const rejectedStatusValues = ["rejected", "declined", "failed"];
 
-const normalizeDocumentStatus = (status?: string | number | null): DocumentStatusType => {
-  const normalized = toText(status).toLowerCase().replace(/_/g, '-').trim();
+const normalizeDocumentStatus = (
+  status?: string | number | null,
+): DocumentStatusType => {
+  const normalized = toText(status).toLowerCase().replace(/_/g, "-").trim();
 
-  if (approvedStatusValues.includes(normalized)) return 'Approved';
-  if (rejectedStatusValues.includes(normalized)) return 'Rejected';
-  if (!normalized || normalized === 'missing' || normalized === 'not-uploaded') return 'Missing';
+  if (approvedStatusValues.includes(normalized)) return "Approved";
+  if (rejectedStatusValues.includes(normalized)) return "Rejected";
+  if (!normalized || normalized === "missing" || normalized === "not-uploaded")
+    return "Missing";
 
-  return 'Pending';
+  return "Pending";
 };
 
 const getStatusStyles = (status: DocumentStatusType) => {
-  if (status === 'Approved') {
-    return 'border-[#6CBF51]/25 bg-[#6CBF51]/10 text-[#3f8430]';
+  if (status === "Approved") {
+    return "border-[#6CBF51]/25 bg-[#6CBF51]/10 text-[#3f8430]";
   }
 
-  if (status === 'Rejected') {
-    return 'border-red-200 bg-red-50 text-red-700';
+  if (status === "Rejected") {
+    return "border-red-200 bg-red-50 text-red-700";
   }
 
-  if (status === 'Pending') {
-    return 'border-[#EE6521]/25 bg-[#EE6521]/10 text-[#c74f16]';
+  if (status === "Pending") {
+    return "border-[#EE6521]/25 bg-[#EE6521]/10 text-[#c74f16]";
   }
 
-  return 'border-slate-200 bg-slate-50 text-slate-500';
+  return "border-slate-200 bg-slate-50 text-slate-500";
 };
 
 const getStatusIcon = (status: DocumentStatusType) => {
-  if (status === 'Approved') return <FaCheckCircle />;
-  if (status === 'Rejected') return <FaExclamationTriangle />;
-  if (status === 'Pending') return <FaClock />;
+  if (status === "Approved") return <FaCheckCircle />;
+  if (status === "Rejected") return <FaExclamationTriangle />;
+  if (status === "Pending") return <FaClock />;
   return <FaFileAlt />;
 };
 
 const isDocumentApproved = (status?: string | number | null) =>
-  normalizeDocumentStatus(status) === 'Approved';
+  normalizeDocumentStatus(status) === "Approved";
 
 const isDocumentRejected = (status?: string | number | null) =>
-  normalizeDocumentStatus(status) === 'Rejected';
-
+  normalizeDocumentStatus(status) === "Rejected";
 
 const normalizeSourceValue = (value: unknown) => {
   const cleanValue = toText(value);
 
-  if (!cleanValue) return '';
+  if (!cleanValue) return "";
 
-  const normalized = cleanValue.toLowerCase().replace(/_/g, '-').trim();
+  const normalized = cleanValue.toLowerCase().replace(/_/g, "-").trim();
 
-  if (normalized === 'broker') return 'Broker';
-  if (normalized === 'referral' || normalized === 'referrer') return 'Referral';
-  if (normalized === 'direct-client' || normalized === 'direct client' || normalized === 'directclient') {
-    return 'Direct Client';
+  if (normalized === "broker") return "Broker";
+  if (normalized === "referral" || normalized === "referrer") return "Referral";
+  if (
+    normalized === "direct-client" ||
+    normalized === "direct client" ||
+    normalized === "directclient"
+  ) {
+    return "Direct Client";
   }
 
-  if (normalized === 'business-owner' || normalized === 'business owner') {
-    return 'Broker';
+  if (normalized === "business-owner" || normalized === "business owner") {
+    return "Broker";
   }
 
   return cleanValue
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
     .trim()
     .replace(/\b\w/g, (character) => character.toUpperCase());
 };
 
 const normalizeClientRecord = (client: Submission): Submission => {
   const source = normalizeSourceValue(
-    getAliasValue(client, ['source', 'Source', 'applicationSource', 'ApplicationSource', 'leadType', 'LeadType']),
+    getAliasValue(client, [
+      "source",
+      "Source",
+      "applicationSource",
+      "ApplicationSource",
+      "leadType",
+      "LeadType",
+    ]),
   );
 
-  const referrer = (client.referrer || client.Referrer || {}) as Record<string, unknown>;
+  const referrer = (client.referrer || client.Referrer || {}) as Record<
+    string,
+    unknown
+  >;
 
   return {
     ...client,
-    id: Number(getAliasValue(client, ['id', 'Id', 'documentId', 'DocumentId', 'clientId', 'ClientId']) || client.id || 0),
-    clientId: Number(getAliasValue(client, ['clientId', 'ClientId']) || client.clientId || client.id || 0),
-    uniqueId: toText(getAliasValue(client, ['uniqueId', 'UniqueId'])),
-    firstName: toText(getAliasValue(client, ['firstName', 'FirstName'])),
-    middleName: toText(getAliasValue(client, ['middleName', 'MiddleName'])),
-    lastName: toText(getAliasValue(client, ['lastName', 'LastName'])),
-    name: toText(getAliasValue(client, ['name', 'Name', 'fullName', 'FullName'])),
-    email: toText(getAliasValue(client, ['email', 'Email'])),
-    phone: toText(getAliasValue(client, ['phone', 'Phone', 'mobile', 'Mobile'])),
-    leadType: normalizeSourceValue(getAliasValue(client, ['leadType', 'LeadType', 'source', 'Source'])),
+    id: Number(
+      getAliasValue(client, [
+        "id",
+        "Id",
+        "documentId",
+        "DocumentId",
+        "clientId",
+        "ClientId",
+      ]) ||
+        client.id ||
+        0,
+    ),
+    clientId: Number(
+      getAliasValue(client, ["clientId", "ClientId"]) ||
+        client.clientId ||
+        client.id ||
+        0,
+    ),
+    uniqueId: toText(getAliasValue(client, ["uniqueId", "UniqueId"])),
+    firstName: toText(getAliasValue(client, ["firstName", "FirstName"])),
+    middleName: toText(getAliasValue(client, ["middleName", "MiddleName"])),
+    lastName: toText(getAliasValue(client, ["lastName", "LastName"])),
+    name: toText(
+      getAliasValue(client, ["name", "Name", "fullName", "FullName"]),
+    ),
+    email: toText(getAliasValue(client, ["email", "Email"])),
+    phone: toText(
+      getAliasValue(client, ["phone", "Phone", "mobile", "Mobile"]),
+    ),
+    leadType: normalizeSourceValue(
+      getAliasValue(client, ["leadType", "LeadType", "source", "Source"]),
+    ),
     source,
-    status: toText(getAliasValue(client, ['status', 'Status'])) || 'Pending Team Call',
+    status:
+      toText(getAliasValue(client, ["status", "Status"])) ||
+      "Pending Team Call",
 
-    classificationType: toText(getAliasValue(client, ['classificationType', 'ClassificationType', 'classification_type'])),
-    borrowerType: toText(getAliasValue(client, ['borrowerType', 'BorrowerType', 'borrower_type'])),
-    objective: toText(getAliasValue(client, ['objective', 'Objective'])),
-    loanType: toText(getAliasValue(client, ['loanType', 'LoanType', 'loan_type'])),
-    purpose: toText(getAliasValue(client, ['purpose', 'Purpose'])),
-    transactionType: toText(getAliasValue(client, ['transactionType', 'TransactionType', 'transaction_type'])),
+    classificationType: toText(
+      getAliasValue(client, [
+        "classificationType",
+        "ClassificationType",
+        "classification_type",
+      ]),
+    ),
+    borrowerType: toText(
+      getAliasValue(client, ["borrowerType", "BorrowerType", "borrower_type"]),
+    ),
+    objective: toText(getAliasValue(client, ["objective", "Objective"])),
+    loanType: toText(
+      getAliasValue(client, ["loanType", "LoanType", "loan_type"]),
+    ),
+    purpose: toText(getAliasValue(client, ["purpose", "Purpose"])),
+    transactionType: toText(
+      getAliasValue(client, [
+        "transactionType",
+        "TransactionType",
+        "transaction_type",
+      ]),
+    ),
     withBorrowersGuarantors: toText(
       getAliasValue(client, [
-        'withBorrowersGuarantors',
-        'WithBorrowersGuarantors',
-        'with_borrowers_guarantors',
-        'with_borrowers__guarantors',
+        "withBorrowersGuarantors",
+        "WithBorrowersGuarantors",
+        "with_borrowers_guarantors",
+        "with_borrowers__guarantors",
+      ]),
+    ),
+    coBorrowers: normalizeCoBorrowers(
+      getAliasValue(client, [
+        "coBorrowers",
+        "CoBorrowers",
+        "co_borrowers",
+        "coBorrowersJson",
+        "CoBorrowersJson",
+        "additionalCoBorrowers",
+        "AdditionalCoBorrowers",
+        "additional_co_borrowers",
       ]),
     ),
     anticipatedSettlementDate: toText(
       getAliasValue(client, [
-        'anticipatedSettlementDate',
-        'AnticipatedSettlementDate',
-        'anticipated_settlement_date',
-        'settlementDate',
-        'SettlementDate',
+        "anticipatedSettlementDate",
+        "AnticipatedSettlementDate",
+        "anticipated_settlement_date",
+        "settlementDate",
+        "SettlementDate",
       ]),
     ),
 
-    vedaIssues: toText(getAliasValue(client, ['vedaIssues', 'VedaIssues', 'veda_issues'])),
-    conductIssues: toText(getAliasValue(client, ['conductIssues', 'ConductIssues', 'conduct_issues'])),
+    vedaIssues: toText(
+      getAliasValue(client, ["vedaIssues", "VedaIssues", "veda_issues"]),
+    ),
+    conductIssues: toText(
+      getAliasValue(client, [
+        "conductIssues",
+        "ConductIssues",
+        "conduct_issues",
+      ]),
+    ),
     clientNeedsObjectives: toText(
       getAliasValue(client, [
-        'clientNeedsObjectives',
-        'ClientNeedsObjectives',
-        'client_needs_objectives',
-        'clientNeedsAndObjectives',
+        "clientNeedsObjectives",
+        "ClientNeedsObjectives",
+        "client_needs_objectives",
+        "clientNeedsAndObjectives",
       ]),
     ),
-    applicantBackground: toText(getAliasValue(client, ['applicantBackground', 'ApplicantBackground', 'applicant_background'])),
-    explanationOfIncome: toText(
-      getAliasValue(client, ['explanationOfIncome', 'ExplanationOfIncome', 'explanation_of_income']),
+    applicantBackground: toText(
+      getAliasValue(client, [
+        "applicantBackground",
+        "ApplicantBackground",
+        "applicant_background",
+      ]),
     ),
-    security: toText(getAliasValue(client, ['security', 'Security'])),
-    loanAmount: normalizeNumberText(getAliasValue(client, ['loanAmount', 'LoanAmount', 'loan_amount'])),
-    securityValue: normalizeNumberText(getAliasValue(client, ['securityValue', 'SecurityValue', 'security_value'])),
-    lvr: normalizeNumberText(getAliasValue(client, ['lvr', 'Lvr', 'LVR'])),
-    specialNotes: toText(getAliasValue(client, ['specialNotes', 'SpecialNotes', 'special_notes'])),
+    explanationOfIncome: toText(
+      getAliasValue(client, [
+        "explanationOfIncome",
+        "ExplanationOfIncome",
+        "explanation_of_income",
+      ]),
+    ),
+    security: toText(getAliasValue(client, ["security", "Security"])),
+    loanAmount: normalizeNumberText(
+      getAliasValue(client, ["loanAmount", "LoanAmount", "loan_amount"]),
+    ),
+    securityValue: normalizeNumberText(
+      getAliasValue(client, [
+        "securityValue",
+        "SecurityValue",
+        "security_value",
+      ]),
+    ),
+    lvr: normalizeNumberText(getAliasValue(client, ["lvr", "Lvr", "LVR"])),
+    specialNotes: toText(
+      getAliasValue(client, ["specialNotes", "SpecialNotes", "special_notes"]),
+    ),
 
     referrer: {
-      firstName: toText(getAliasValue(referrer, ['firstName', 'FirstName']) || getAliasValue(client, ['referrerFirstName', 'ReferrerFirstName'])),
-      middleName: toText(getAliasValue(referrer, ['middleName', 'MiddleName']) || getAliasValue(client, ['referrerMiddleName', 'ReferrerMiddleName'])),
-      lastName: toText(getAliasValue(referrer, ['lastName', 'LastName']) || getAliasValue(client, ['referrerLastName', 'ReferrerLastName'])),
-      phone: toText(getAliasValue(referrer, ['phone', 'Phone']) || getAliasValue(client, ['referrerPhone', 'ReferrerPhone'])),
-      email: toText(getAliasValue(referrer, ['email', 'Email']) || getAliasValue(client, ['referrerEmail', 'ReferrerEmail'])),
+      firstName: toText(
+        getAliasValue(referrer, ["firstName", "FirstName"]) ||
+          getAliasValue(client, ["referrerFirstName", "ReferrerFirstName"]),
+      ),
+      middleName: toText(
+        getAliasValue(referrer, ["middleName", "MiddleName"]) ||
+          getAliasValue(client, ["referrerMiddleName", "ReferrerMiddleName"]),
+      ),
+      lastName: toText(
+        getAliasValue(referrer, ["lastName", "LastName"]) ||
+          getAliasValue(client, ["referrerLastName", "ReferrerLastName"]),
+      ),
+      phone: toText(
+        getAliasValue(referrer, ["phone", "Phone"]) ||
+          getAliasValue(client, ["referrerPhone", "ReferrerPhone"]),
+      ),
+      email: toText(
+        getAliasValue(referrer, ["email", "Email"]) ||
+          getAliasValue(client, ["referrerEmail", "ReferrerEmail"]),
+      ),
     },
 
-    documentType: toText(getAliasValue(client, ['documentType', 'DocumentType'])),
-    fileName: toText(getAliasValue(client, ['fileName', 'FileName'])),
-    fileUrl: toText(getAliasValue(client, ['fileUrl', 'FileUrl', 'blobUrl', 'BlobUrl'])),
-    submittedAt: toText(getAliasValue(client, ['submittedAt', 'SubmittedAt', 'uploadedAt', 'UploadedAt'])),
-    documentStatus: toText(
+    documentType: toText(
+      getAliasValue(client, ["documentType", "DocumentType"]),
+    ),
+    fileName: toText(getAliasValue(client, ["fileName", "FileName"])),
+    fileUrl: toText(
+      getAliasValue(client, ["fileUrl", "FileUrl", "blobUrl", "BlobUrl"]),
+    ),
+    submittedAt: toText(
       getAliasValue(client, [
-        'documentStatus',
-        'DocumentStatus',
-        'document_status',
-        'verificationStatus',
-        'VerificationStatus',
+        "submittedAt",
+        "SubmittedAt",
+        "uploadedAt",
+        "UploadedAt",
       ]),
-    ) || 'Pending',
-    verifiedBy: toText(getAliasValue(client, ['verifiedBy', 'VerifiedBy', 'verified_by'])),
-    verifiedDate: toText(getAliasValue(client, ['verifiedDate', 'VerifiedDate', 'verified_date'])),
-    remarks: toText(getAliasValue(client, ['remarks', 'Remarks', 'adminRemarks', 'AdminRemarks'])),
+    ),
+    documentStatus:
+      toText(
+        getAliasValue(client, [
+          "documentStatus",
+          "DocumentStatus",
+          "document_status",
+          "verificationStatus",
+          "VerificationStatus",
+        ]),
+      ) || "Pending",
+    verifiedBy: toText(
+      getAliasValue(client, ["verifiedBy", "VerifiedBy", "verified_by"]),
+    ),
+    verifiedDate: toText(
+      getAliasValue(client, ["verifiedDate", "VerifiedDate", "verified_date"]),
+    ),
+    remarks: toText(
+      getAliasValue(client, [
+        "remarks",
+        "Remarks",
+        "adminRemarks",
+        "AdminRemarks",
+      ]),
+    ),
+    waivedDocuments: normalizeDocumentList(
+      getAliasValue(client, [
+        "waivedDocuments",
+        "WaivedDocuments",
+        "waived_documents",
+      ]),
+    ),
   };
 };
 
@@ -409,27 +688,30 @@ const normalizeLoggedClient = (client: ClientLoginUser): ClientLoginUser => {
 };
 
 export default function ClientDashboard() {
-  const [loginUniqueId, setLoginUniqueId] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
+  const [loginUniqueId, setLoginUniqueId] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
-  const [loggedClient, setLoggedClient] = useState<ClientLoginUser | null>(null);
+  const [loggedClient, setLoggedClient] = useState<ClientLoginUser | null>(
+    null,
+  );
 
-  const [uniqueId, setUniqueId] = useState('');
-  const [fileSearch, setFileSearch] = useState('');
-  const [documentType, setDocumentType] = useState('');
+  const [uniqueId, setUniqueId] = useState("");
+  const [fileSearch, setFileSearch] = useState("");
+  const [documentType, setDocumentType] = useState("");
   const [newFiles, setNewFiles] = useState<FileList | null>(null);
   const [clientFiles, setClientFiles] = useState<Submission[]>([]);
   const [previewFile, setPreviewFile] = useState<Submission | null>(null);
-  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewUrl, setPreviewUrl] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [selectedSpecialist, setSelectedSpecialist] = useState<SpecialistKey>('giulio');
+  const [selectedSpecialist, setSelectedSpecialist] =
+    useState<SpecialistKey>("giulio");
 
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -438,9 +720,26 @@ export default function ClientDashboard() {
   const specialist = specialists[selectedSpecialist];
 
   const selectedClient =
-    clientFiles.find((client) => client.uniqueId && client.classificationType) ||
+    clientFiles.find(
+      (client) => client.uniqueId && client.classificationType,
+    ) ||
     clientFiles.find((client) => client.uniqueId) ||
     null;
+
+  const coBorrowerDetails = useMemo(() => {
+    const uniqueCoBorrowers = new Map<string, CoBorrower>();
+
+    clientFiles.forEach((client) => {
+      (client.coBorrowers || []).forEach((coBorrower, index) => {
+        const key = getCoBorrowerKey(coBorrower) || `co-borrower-${index}`;
+        if (!uniqueCoBorrowers.has(key)) {
+          uniqueCoBorrowers.set(key, coBorrower);
+        }
+      });
+    });
+
+    return Array.from(uniqueCoBorrowers.values());
+  }, [clientFiles]);
 
   const requiredDocumentTypes = useMemo(
     () => getDocumentTypesForTransaction(selectedClient?.transactionType),
@@ -464,7 +763,7 @@ export default function ClientDashboard() {
   );
 
   const getSecureFileUrl = async (fileUrl?: string) => {
-    if (!fileUrl) throw new Error('No file URL available.');
+    if (!fileUrl) throw new Error("No file URL available.");
 
     const response = await fetch(
       `${FILE_URL_API}?blobUrl=${encodeURIComponent(fileUrl)}`,
@@ -473,7 +772,7 @@ export default function ClientDashboard() {
     const result = await response.json();
 
     if (!response.ok || !result.success) {
-      throw new Error(result.message || 'Failed to generate secure file URL.');
+      throw new Error(result.message || "Failed to generate secure file URL.");
     }
 
     return result.url as string;
@@ -482,21 +781,22 @@ export default function ClientDashboard() {
   const getFullName = (client: Submission | ClientLoginUser) =>
     (
       client.name ||
-      `${client.firstName || ''} ${client.middleName || ''} ${client.lastName || ''}`
+      `${client.firstName || ""} ${client.middleName || ""} ${client.lastName || ""}`
     )
-      .replace(/\s+/g, ' ')
+      .replace(/\s+/g, " ")
       .trim();
 
   const formatDocumentType = (type?: string) =>
     allDocumentTypes.find(
       (item) => item.value === normalizeDocumentTypeValue(type),
     )?.label ||
-    (type || 'document')
-      .split('-')
+    (type || "document")
+      .split("-")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
+      .join(" ");
 
-  const formatLeadType = (type?: string | number | null) => normalizeSourceValue(type);
+  const formatLeadType = (type?: string | number | null) =>
+    normalizeSourceValue(type);
 
   const currentSource =
     formatLeadType(
@@ -504,15 +804,15 @@ export default function ClientDashboard() {
         selectedClient?.leadType ||
         loggedClient?.source ||
         loggedClient?.leadType,
-    ) || 'N/A';
+    ) || "N/A";
 
   const showBrokerOrReferrer =
-    currentSource === 'Broker' || currentSource === 'Referral';
+    currentSource === "Broker" || currentSource === "Referral";
 
-  const detailLabel = currentSource === 'Broker' ? 'Broker' : 'Referrer';
+  const detailLabel = currentSource === "Broker" ? "Broker" : "Referrer";
 
   const displayValue = (value?: string | number | null) => {
-    if (value === null || value === undefined || value === '') return 'N/A';
+    if (value === null || value === undefined || value === "") return "N/A";
     return String(value);
   };
 
@@ -557,7 +857,8 @@ export default function ClientDashboard() {
   }, [uploadedFileRows]);
 
   const uploadedDocumentTypes = useMemo(
-    () => requiredDocumentTypeValues.filter((type) => documentRowsByType.has(type)),
+    () =>
+      requiredDocumentTypeValues.filter((type) => documentRowsByType.has(type)),
     [documentRowsByType, requiredDocumentTypeValues],
   );
 
@@ -567,6 +868,22 @@ export default function ClientDashboard() {
         isDocumentApproved(documentRowsByType.get(type)?.documentStatus),
       ),
     [documentRowsByType, requiredDocumentTypeValues],
+  );
+
+  const waivedDocumentTypes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          clientFiles.flatMap((file) =>
+            normalizeDocumentList(
+              file.waivedDocuments ??
+                file.WaivedDocuments ??
+                file.waived_documents,
+            ),
+          ),
+        ),
+      ).filter((type) => requiredDocumentTypeValues.includes(type)),
+    [clientFiles, requiredDocumentTypeValues],
   );
 
   const rejectedDocumentTypes = useMemo(
@@ -581,7 +898,9 @@ export default function ClientDashboard() {
     () =>
       requiredDocumentTypeValues.filter(
         (type) =>
-          normalizeDocumentStatus(documentRowsByType.get(type)?.documentStatus) === 'Pending',
+          normalizeDocumentStatus(
+            documentRowsByType.get(type)?.documentStatus,
+          ) === "Pending",
       ),
     [documentRowsByType, requiredDocumentTypeValues],
   );
@@ -589,24 +908,32 @@ export default function ClientDashboard() {
   const missingDocumentTypes = useMemo(
     () =>
       requiredDocumentTypeValues.filter(
-        (type) => !approvedDocumentTypes.includes(type),
+        (type) =>
+          !approvedDocumentTypes.includes(type) &&
+          !waivedDocumentTypes.includes(type),
       ),
-    [approvedDocumentTypes, requiredDocumentTypeValues],
+    [approvedDocumentTypes, requiredDocumentTypeValues, waivedDocumentTypes],
+  );
+
+  const satisfiedDocumentTypes = useMemo(
+    () =>
+      Array.from(new Set([...approvedDocumentTypes, ...waivedDocumentTypes])),
+    [approvedDocumentTypes, waivedDocumentTypes],
   );
 
   const documentProgress = requiredDocumentTypes.length
     ? Math.round(
-        (approvedDocumentTypes.length / requiredDocumentTypes.length) * 100,
+        (satisfiedDocumentTypes.length / requiredDocumentTypes.length) * 100,
       )
     : 0;
 
   const isComplete =
     requiredDocumentTypes.length > 0 &&
-    approvedDocumentTypes.length === requiredDocumentTypes.length;
+    satisfiedDocumentTypes.length === requiredDocumentTypes.length;
 
   const loadClientFiles = async (idValue = uniqueId) => {
     if (!idValue.trim()) {
-      alert('Please enter your Client ID.');
+      alert("Please enter your Client ID.");
       return;
     }
 
@@ -620,13 +947,13 @@ export default function ClientDashboard() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || 'Failed to load files.');
+        throw new Error(result.message || "Failed to load files.");
       }
 
       setClientFiles((result.clients || []).map(normalizeClientRecord));
-      setFileSearch('');
+      setFileSearch("");
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to load files.');
+      alert(error instanceof Error ? error.message : "Failed to load files.");
     } finally {
       setLoading(false);
     }
@@ -636,12 +963,12 @@ export default function ClientDashboard() {
     event.preventDefault();
 
     if (!loginUniqueId.trim()) {
-      alert('Please enter your Client ID.');
+      alert("Please enter your Client ID.");
       return;
     }
 
     if (!loginPassword.trim()) {
-      alert('Please enter your password.');
+      alert("Please enter your password.");
       return;
     }
 
@@ -649,8 +976,8 @@ export default function ClientDashboard() {
       setLoading(true);
 
       const response = await fetch(CLIENT_LOGIN_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           uniqueId: loginUniqueId.trim(),
           password: loginPassword.trim(),
@@ -660,7 +987,7 @@ export default function ClientDashboard() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || 'Invalid Client ID or password.');
+        throw new Error(result.message || "Invalid Client ID or password.");
       }
 
       const normalizedClient = normalizeLoggedClient(result.client);
@@ -677,7 +1004,7 @@ export default function ClientDashboard() {
       setCurrentPassword(loginPassword.trim());
       await loadClientFiles(normalizedClient.uniqueId);
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Client login failed.');
+      alert(error instanceof Error ? error.message : "Client login failed.");
     } finally {
       setLoading(false);
     }
@@ -685,27 +1012,27 @@ export default function ClientDashboard() {
 
   const handleLogout = () => {
     setLoggedClient(null);
-    setLoginUniqueId('');
-    setLoginPassword('');
+    setLoginUniqueId("");
+    setLoginPassword("");
     setShowLoginPassword(false);
-    setUniqueId('');
-    setFileSearch('');
-    setDocumentType('');
+    setUniqueId("");
+    setFileSearch("");
+    setDocumentType("");
     setNewFiles(null);
     setClientFiles([]);
     setPreviewFile(null);
-    setPreviewUrl('');
+    setPreviewUrl("");
     setShowChangePassword(false);
     setMustChangePassword(false);
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
   };
 
   const resetPasswordForm = () => {
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
     setShowCurrentPassword(false);
     setShowNewPassword(false);
     setShowConfirmPassword(false);
@@ -723,47 +1050,47 @@ export default function ClientDashboard() {
     event.preventDefault();
 
     if (!loggedClient) {
-      alert('Please log in again.');
+      alert("Please log in again.");
       return;
     }
 
     if (!currentPassword.trim()) {
-      alert('Please enter your current password.');
+      alert("Please enter your current password.");
       return;
     }
 
     if (newPassword.length < 8) {
-      alert('Your new password must contain at least 8 characters.');
+      alert("Your new password must contain at least 8 characters.");
       return;
     }
 
     if (!/[A-Z]/.test(newPassword)) {
-      alert('Your new password must contain at least one uppercase letter.');
+      alert("Your new password must contain at least one uppercase letter.");
       return;
     }
 
     if (!/[a-z]/.test(newPassword)) {
-      alert('Your new password must contain at least one lowercase letter.');
+      alert("Your new password must contain at least one lowercase letter.");
       return;
     }
 
     if (!/\d/.test(newPassword)) {
-      alert('Your new password must contain at least one number.');
+      alert("Your new password must contain at least one number.");
       return;
     }
 
     if (!/[^A-Za-z0-9]/.test(newPassword)) {
-      alert('Your new password must contain at least one special character.');
+      alert("Your new password must contain at least one special character.");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      alert('The new passwords do not match.');
+      alert("The new passwords do not match.");
       return;
     }
 
     if (currentPassword === newPassword) {
-      alert('Your new password must be different from your current password.');
+      alert("Your new password must be different from your current password.");
       return;
     }
 
@@ -771,8 +1098,8 @@ export default function ClientDashboard() {
       setPasswordLoading(true);
 
       const response = await fetch(CLIENT_CHANGE_PASSWORD_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           uniqueId: loggedClient.uniqueId,
           currentPassword: currentPassword.trim(),
@@ -783,7 +1110,7 @@ export default function ClientDashboard() {
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || 'Unable to change password.');
+        throw new Error(result.message || "Unable to change password.");
       }
 
       setMustChangePassword(false);
@@ -792,14 +1119,12 @@ export default function ClientDashboard() {
 
       alert(
         result.emailNotificationSent
-          ? 'Password changed successfully. A confirmation email has been sent.'
-          : 'Password changed successfully.',
+          ? "Password changed successfully. A confirmation email has been sent."
+          : "Password changed successfully.",
       );
     } catch (error) {
       alert(
-        error instanceof Error
-          ? error.message
-          : 'Unable to change password.',
+        error instanceof Error ? error.message : "Unable to change password.",
       );
     } finally {
       setPasswordLoading(false);
@@ -811,7 +1136,10 @@ export default function ClientDashboard() {
     key: string,
     value: string | number | undefined | null,
   ) => {
-    formData.append(key, value === undefined || value === null ? '' : String(value));
+    formData.append(
+      key,
+      value === undefined || value === null ? "" : String(value),
+    );
   };
 
   const handleUpload = async () => {
@@ -819,31 +1147,42 @@ export default function ClientDashboard() {
     const clientRecord = selectedClient;
 
     if (!loggedClient) {
-      alert('Please login first.');
+      alert("Please login first.");
       return;
     }
 
     if (!cleanUniqueId) {
-      alert('Client ID is missing.');
+      alert("Client ID is missing.");
       return;
     }
 
     if (!documentType) {
-      alert('Please select document type.');
+      alert("Please select document type.");
       return;
     }
 
     const selectedDocumentType = normalizeDocumentTypeValue(documentType);
 
+    if (waivedDocumentTypes.includes(selectedDocumentType)) {
+      alert(
+        "This document requirement was waived by the administrator and no upload is required.",
+      );
+      setDocumentType("");
+      setNewFiles(null);
+      return;
+    }
+
     if (!newFiles?.length) {
-      alert('Please choose file/s.');
+      alert("Please choose file/s.");
       return;
     }
 
     const currentDocument = documentRowsByType.get(selectedDocumentType);
 
     if (currentDocument && isDocumentApproved(currentDocument.documentStatus)) {
-      alert('This document type is already approved. Please contact the admin if you need to replace it.');
+      alert(
+        "This document type is already approved. Please contact the admin if you need to replace it.",
+      );
       return;
     }
 
@@ -851,7 +1190,9 @@ export default function ClientDashboard() {
       currentDocument && isDocumentRejected(currentDocument.documentStatus);
 
     if (!clientRecord) {
-      alert('Client information is still loading. Please click Refresh My Files, then upload again.');
+      alert(
+        "Client information is still loading. Please click Refresh My Files, then upload again.",
+      );
       return;
     }
 
@@ -861,7 +1202,7 @@ export default function ClientDashboard() {
 
     if (allowedDocumentTypes.length === 0) {
       alert(
-        'This client does not have a supported Transaction Type. Please contact the administrator before uploading.',
+        "This client does not have a supported Transaction Type. Please contact the administrator before uploading.",
       );
       return;
     }
@@ -874,21 +1215,27 @@ export default function ClientDashboard() {
       alert(
         `The selected document type is not valid for ${clientRecord.transactionType}. Please select a document from the current checklist.`,
       );
-      setDocumentType('');
+      setDocumentType("");
       setNewFiles(null);
       return;
     }
 
     const requiredIntakeValues = [
-      ['Phone', clientRecord.phone || loggedClient.phone],
-      ['Source', clientRecord.source || clientRecord.leadType || loggedClient.source || loggedClient.leadType],
-      ['Classification Type', clientRecord.classificationType],
-      ['Borrower Type', clientRecord.borrowerType],
-      ['Objective', clientRecord.objective],
-      ['Loan Type', clientRecord.loanType],
-      ['Purpose', clientRecord.purpose],
-      ['Transaction Type', clientRecord.transactionType],
-      ['Anticipated Settlement Date', clientRecord.anticipatedSettlementDate],
+      ["Phone", clientRecord.phone || loggedClient.phone],
+      [
+        "Source",
+        clientRecord.source ||
+          clientRecord.leadType ||
+          loggedClient.source ||
+          loggedClient.leadType,
+      ],
+      ["Classification Type", clientRecord.classificationType],
+      ["Borrower Type", clientRecord.borrowerType],
+      ["Objective", clientRecord.objective],
+      ["Loan Type", clientRecord.loanType],
+      ["Purpose", clientRecord.purpose],
+      ["Transaction Type", clientRecord.transactionType],
+      ["Anticipated Settlement Date", clientRecord.anticipatedSettlementDate],
     ];
 
     const missingIntakeValues = requiredIntakeValues
@@ -898,7 +1245,7 @@ export default function ClientDashboard() {
     if (missingIntakeValues.length > 0) {
       alert(
         `Cannot upload yet because this client record is missing: ${missingIntakeValues.join(
-          ', ',
+          ", ",
         )}. Please refresh the page or check the original client submission.`,
       );
       return;
@@ -910,58 +1257,114 @@ export default function ClientDashboard() {
       for (const file of Array.from(newFiles)) {
         const formData = new FormData();
 
-        appendValue(formData, 'uniqueId', cleanUniqueId);
+        appendValue(formData, "uniqueId", cleanUniqueId);
         appendValue(
           formData,
-          'leadType',
+          "leadType",
           clientRecord.leadType || loggedClient.leadType || currentSource,
         );
         appendValue(
           formData,
-          'source',
+          "source",
           clientRecord.source || loggedClient.source || currentSource,
         );
-        appendValue(formData, 'phone', clientRecord.phone || loggedClient.phone || '');
-        appendValue(formData, 'firstName', clientRecord.firstName || loggedClient.firstName || '');
-        appendValue(formData, 'middleName', clientRecord.middleName || loggedClient.middleName || '');
-        appendValue(formData, 'lastName', clientRecord.lastName || loggedClient.lastName || '');
-        appendValue(formData, 'email', clientRecord.email || loggedClient.email || '');
+        appendValue(
+          formData,
+          "phone",
+          clientRecord.phone || loggedClient.phone || "",
+        );
+        appendValue(
+          formData,
+          "firstName",
+          clientRecord.firstName || loggedClient.firstName || "",
+        );
+        appendValue(
+          formData,
+          "middleName",
+          clientRecord.middleName || loggedClient.middleName || "",
+        );
+        appendValue(
+          formData,
+          "lastName",
+          clientRecord.lastName || loggedClient.lastName || "",
+        );
+        appendValue(
+          formData,
+          "email",
+          clientRecord.email || loggedClient.email || "",
+        );
 
-        appendValue(formData, 'classificationType', clientRecord.classificationType);
-        appendValue(formData, 'borrowerType', clientRecord.borrowerType);
-        appendValue(formData, 'objective', clientRecord.objective);
-        appendValue(formData, 'loanType', clientRecord.loanType);
-        appendValue(formData, 'purpose', clientRecord.purpose);
-        appendValue(formData, 'transactionType', clientRecord.transactionType);
-        appendValue(formData, 'withBorrowersGuarantors', clientRecord.withBorrowersGuarantors);
-        appendValue(formData, 'anticipatedSettlementDate', clientRecord.anticipatedSettlementDate);
+        appendValue(
+          formData,
+          "classificationType",
+          clientRecord.classificationType,
+        );
+        appendValue(formData, "borrowerType", clientRecord.borrowerType);
+        appendValue(formData, "objective", clientRecord.objective);
+        appendValue(formData, "loanType", clientRecord.loanType);
+        appendValue(formData, "purpose", clientRecord.purpose);
+        appendValue(formData, "transactionType", clientRecord.transactionType);
+        appendValue(
+          formData,
+          "withBorrowersGuarantors",
+          clientRecord.withBorrowersGuarantors,
+        );
+        appendValue(
+          formData,
+          "anticipatedSettlementDate",
+          clientRecord.anticipatedSettlementDate,
+        );
 
-        appendValue(formData, 'vedaIssues', clientRecord.vedaIssues);
-        appendValue(formData, 'conductIssues', clientRecord.conductIssues);
-        appendValue(formData, 'clientNeedsObjectives', clientRecord.clientNeedsObjectives);
-        appendValue(formData, 'applicantBackground', clientRecord.applicantBackground);
-        appendValue(formData, 'explanationOfIncome', clientRecord.explanationOfIncome);
-        appendValue(formData, 'security', clientRecord.security);
-        appendValue(formData, 'loanAmount', clientRecord.loanAmount);
-        appendValue(formData, 'securityValue', clientRecord.securityValue);
-        appendValue(formData, 'lvr', clientRecord.lvr);
-        appendValue(formData, 'specialNotes', clientRecord.specialNotes);
+        appendValue(formData, "vedaIssues", clientRecord.vedaIssues);
+        appendValue(formData, "conductIssues", clientRecord.conductIssues);
+        appendValue(
+          formData,
+          "clientNeedsObjectives",
+          clientRecord.clientNeedsObjectives,
+        );
+        appendValue(
+          formData,
+          "applicantBackground",
+          clientRecord.applicantBackground,
+        );
+        appendValue(
+          formData,
+          "explanationOfIncome",
+          clientRecord.explanationOfIncome,
+        );
+        appendValue(formData, "security", clientRecord.security);
+        appendValue(formData, "loanAmount", clientRecord.loanAmount);
+        appendValue(formData, "securityValue", clientRecord.securityValue);
+        appendValue(formData, "lvr", clientRecord.lvr);
+        appendValue(formData, "specialNotes", clientRecord.specialNotes);
 
-        appendValue(formData, 'referrerFirstName', clientRecord.referrer?.firstName);
-        appendValue(formData, 'referrerMiddleName', clientRecord.referrer?.middleName);
-        appendValue(formData, 'referrerLastName', clientRecord.referrer?.lastName);
-        appendValue(formData, 'referrerPhone', clientRecord.referrer?.phone);
-        appendValue(formData, 'referrerEmail', clientRecord.referrer?.email);
+        appendValue(
+          formData,
+          "referrerFirstName",
+          clientRecord.referrer?.firstName,
+        );
+        appendValue(
+          formData,
+          "referrerMiddleName",
+          clientRecord.referrer?.middleName,
+        );
+        appendValue(
+          formData,
+          "referrerLastName",
+          clientRecord.referrer?.lastName,
+        );
+        appendValue(formData, "referrerPhone", clientRecord.referrer?.phone);
+        appendValue(formData, "referrerEmail", clientRecord.referrer?.email);
 
-        appendValue(formData, 'documentType', selectedDocumentType);
-        formData.append('file', file);
+        appendValue(formData, "documentType", selectedDocumentType);
+        formData.append("file", file);
 
         const controller = new AbortController();
         const timeout = window.setTimeout(() => controller.abort(), 90000);
 
         try {
           const response = await fetch(UPLOAD_API, {
-            method: 'POST',
+            method: "POST",
             body: formData,
             signal: controller.signal,
           });
@@ -969,7 +1372,7 @@ export default function ClientDashboard() {
           const result = await response.json().catch(() => ({}));
 
           if (!response.ok || !result.success) {
-            throw new Error(result.message || 'Upload failed.');
+            throw new Error(result.message || "Upload failed.");
           }
         } finally {
           window.clearTimeout(timeout);
@@ -977,23 +1380,26 @@ export default function ClientDashboard() {
       }
 
       setNewFiles(null);
-      setDocumentType('');
+      setDocumentType("");
 
-      const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
-      if (fileInput) fileInput.value = '';
+      const fileInput =
+        document.querySelector<HTMLInputElement>('input[type="file"]');
+      if (fileInput) fileInput.value = "";
 
       await loadClientFiles(cleanUniqueId);
 
       alert(
         isRejectedReupload
-          ? 'Rejected file replaced successfully. The new uploaded file is now Pending Review.'
-          : 'File uploaded successfully to Azure.',
+          ? "Rejected file replaced successfully. The new uploaded file is now Pending Review."
+          : "File uploaded successfully to Azure.",
       );
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        alert('Upload timed out. Please check Azure/SQL if the file was saved, then try Refresh My Files.');
+      if (error instanceof DOMException && error.name === "AbortError") {
+        alert(
+          "Upload timed out. Please check Azure/SQL if the file was saved, then try Refresh My Files.",
+        );
       } else {
-        alert(error instanceof Error ? error.message : 'Upload failed.');
+        alert(error instanceof Error ? error.message : "Upload failed.");
       }
     } finally {
       setLoading(false);
@@ -1003,13 +1409,13 @@ export default function ClientDashboard() {
   const handlePreview = async (file: Submission) => {
     try {
       setPreviewFile(file);
-      setPreviewUrl('');
+      setPreviewUrl("");
       setPreviewLoading(true);
 
       const secureUrl = await getSecureFileUrl(file.fileUrl);
       setPreviewUrl(secureUrl);
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to open file.');
+      alert(error instanceof Error ? error.message : "Failed to open file.");
       setPreviewFile(null);
     } finally {
       setPreviewLoading(false);
@@ -1019,15 +1425,17 @@ export default function ClientDashboard() {
   const handleDownload = async (file: Submission) => {
     try {
       const secureUrl = await getSecureFileUrl(file.fileUrl);
-      window.open(secureUrl, '_blank');
+      window.open(secureUrl, "_blank");
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to download file.');
+      alert(
+        error instanceof Error ? error.message : "Failed to download file.",
+      );
     }
   };
 
   const handleStartReupload = (file: Submission) => {
     if (!file.documentType) {
-      alert('Document type is missing for this rejected file.');
+      alert("Document type is missing for this rejected file.");
       return;
     }
 
@@ -1035,13 +1443,13 @@ export default function ClientDashboard() {
 
     if (!requiredDocumentTypeValues.includes(selectedDocumentType)) {
       alert(
-        'This document is not part of the current transaction checklist. Please refresh your files or contact the administrator.',
+        "This document is not part of the current transaction checklist. Please refresh your files or contact the administrator.",
       );
       return;
     }
 
     if (!isDocumentRejected(file.documentStatus)) {
-      alert('Only rejected documents can be re-uploaded here.');
+      alert("Only rejected documents can be re-uploaded here.");
       return;
     }
 
@@ -1049,14 +1457,14 @@ export default function ClientDashboard() {
 
     window.setTimeout(() => {
       document
-        .getElementById('client-upload-files-card')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        .getElementById("client-upload-files-card")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
   };
 
   const handleClosePreview = () => {
     setPreviewFile(null);
-    setPreviewUrl('');
+    setPreviewUrl("");
   };
 
   const filteredFiles = uploadedFileRows.filter((file) => {
@@ -1070,16 +1478,17 @@ export default function ClientDashboard() {
     );
   });
 
-  const isImageFile =
-    previewFile?.fileName?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/);
+  const isImageFile = previewFile?.fileName
+    ?.toLowerCase()
+    .match(/\.(jpg|jpeg|png|gif|webp)$/);
 
-  const isPdfFile = previewFile?.fileName?.toLowerCase().endsWith('.pdf');
+  const isPdfFile = previewFile?.fileName?.toLowerCase().endsWith(".pdf");
 
   const sectionClass =
-    'rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-[0_18px_45px_rgba(15,23,42,0.06)] sm:p-6';
+    "rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-[0_18px_45px_rgba(15,23,42,0.06)] sm:p-6";
 
   const fieldCardClass =
-    'min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 p-4 transition hover:border-[#259b8f]/25 hover:bg-white';
+    "min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 p-4 transition hover:border-[#259b8f]/25 hover:bg-white";
 
   const StatCard = ({
     label,
@@ -1136,14 +1545,17 @@ export default function ClientDashboard() {
                   Your documents, neatly in one place.
                 </h1>
                 <p className="mt-4 text-sm leading-6 text-slate-300">
-                  Sign in to review your checklist, upload missing files, and track document status.
+                  Sign in to review your checklist, upload missing files, and
+                  track document status.
                 </p>
               </div>
             </div>
 
             <div className="grid gap-3">
               <div className="rounded-2xl bg-white/10 p-4 ring-1 ring-white/10">
-                <p className="text-sm font-bold text-white">Secure upload access</p>
+                <p className="text-sm font-bold text-white">
+                  Secure upload access
+                </p>
                 <p className="mt-1 text-xs leading-5 text-slate-300">
                   Files are linked to your verified Client ID.
                 </p>
@@ -1171,9 +1583,7 @@ export default function ClientDashboard() {
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-[#259b8f]">
                   Client Portal
                 </p>
-                <h1 className="text-2xl font-black text-slate-950">
-                  Sign in
-                </h1>
+                <h1 className="text-2xl font-black text-slate-950">Sign in</h1>
               </div>
             </div>
 
@@ -1216,7 +1626,7 @@ export default function ClientDashboard() {
                   <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
 
                   <input
-                    type={showLoginPassword ? 'text' : 'password'}
+                    type={showLoginPassword ? "text" : "password"}
                     value={loginPassword}
                     onChange={(event) => setLoginPassword(event.target.value)}
                     placeholder="Enter your password"
@@ -1227,7 +1637,9 @@ export default function ClientDashboard() {
                     type="button"
                     onClick={() => setShowLoginPassword((value) => !value)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                    aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                    aria-label={
+                      showLoginPassword ? "Hide password" : "Show password"
+                    }
                   >
                     {showLoginPassword ? <FaEyeSlash /> : <FaEye />}
                   </button>
@@ -1239,7 +1651,7 @@ export default function ClientDashboard() {
                 disabled={loading}
                 className="h-12 w-full rounded-xl bg-[#259b8f] text-sm font-black text-white shadow-[0_14px_24px_rgba(37,155,143,0.24)] transition hover:bg-[#1f887d] disabled:bg-[#259b8f]/40"
               >
-                {loading ? 'Signing in...' : 'Login'}
+                {loading ? "Signing in..." : "Login"}
               </button>
             </form>
 
@@ -1248,7 +1660,8 @@ export default function ClientDashboard() {
                 First time signing in?
               </p>
               <p className="mt-1 text-sm leading-6 text-slate-600">
-                Your temporary password is usually your last name. You can change it after login.
+                Your temporary password is usually your last name. You can
+                change it after login.
               </p>
             </div>
           </div>
@@ -1283,7 +1696,8 @@ export default function ClientDashboard() {
                   </h1>
 
                   <p className="mt-3 break-words text-sm font-medium text-white/75 sm:text-base">
-                    You are logged in as {getFullName(loggedClient) || uniqueId}.
+                    You are logged in as {getFullName(loggedClient) || uniqueId}
+                    .
                   </p>
 
                   <div className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
@@ -1291,16 +1705,17 @@ export default function ClientDashboard() {
                       {currentSource}
                     </span>
                     <span className="rounded-full bg-white/12 px-3 py-1 text-xs font-bold text-white ring-1 ring-white/15">
-                      {approvedDocumentTypes.length}/{requiredDocumentTypes.length} approved
+                      {satisfiedDocumentTypes.length}/
+                      {requiredDocumentTypes.length} satisfied
                     </span>
                     <span
                       className={`rounded-full px-3 py-1 text-xs font-bold ring-1 ${
                         isComplete
-                          ? 'bg-[#6CBF51]/20 text-[#d9ffd1] ring-[#6CBF51]/30'
-                          : 'bg-[#EE6521]/20 text-orange-100 ring-[#EE6521]/30'
+                          ? "bg-[#6CBF51]/20 text-[#d9ffd1] ring-[#6CBF51]/30"
+                          : "bg-[#EE6521]/20 text-orange-100 ring-[#EE6521]/30"
                       }`}
                     >
-                      {isComplete ? 'Complete' : 'Action needed'}
+                      {isComplete ? "Complete" : "Action needed"}
                     </span>
                   </div>
                 </div>
@@ -1310,9 +1725,9 @@ export default function ClientDashboard() {
                 <button
                   type="button"
                   onClick={() => {
-                    setCurrentPassword('');
-                    setNewPassword('');
-                    setConfirmPassword('');
+                    setCurrentPassword("");
+                    setNewPassword("");
+                    setConfirmPassword("");
                     setShowChangePassword(true);
                   }}
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white px-5 text-sm font-bold text-slate-950 shadow-sm hover:bg-slate-100"
@@ -1340,7 +1755,7 @@ export default function ClientDashboard() {
             value={currentSource}
             className="border-cyan-200/80 bg-white text-cyan-700"
             icon={
-              currentSource === 'Referral' ? <FaUserFriends /> : <FaBriefcase />
+              currentSource === "Referral" ? <FaUserFriends /> : <FaBriefcase />
             }
           />
           <StatCard
@@ -1363,7 +1778,7 @@ export default function ClientDashboard() {
           />
           <StatCard
             label="Required Docs"
-            value={`${approvedDocumentTypes.length}/${requiredDocumentTypes.length}`}
+            value={`${satisfiedDocumentTypes.length}/${requiredDocumentTypes.length}`}
             className="border-slate-200/80 bg-white text-slate-900"
             icon={<FaFileAlt />}
           />
@@ -1416,7 +1831,7 @@ export default function ClientDashboard() {
                   className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-6 font-bold text-white shadow-sm hover:bg-slate-800 disabled:bg-slate-300 md:w-fit"
                 >
                   <FaFolderOpen />
-                  {loading ? 'Loading...' : 'Refresh My Files'}
+                  {loading ? "Loading..." : "Refresh My Files"}
                 </button>
               </div>
             </section>
@@ -1433,15 +1848,18 @@ export default function ClientDashboard() {
                   </h2>
 
                   <p className="mt-1 break-words text-sm text-slate-500">
-                    Client ID: {selectedClient?.uniqueId || loggedClient.uniqueId}
+                    Client ID:{" "}
+                    {selectedClient?.uniqueId || loggedClient.uniqueId}
                   </p>
 
                   <p className="break-words text-sm text-slate-500">
-                    Email: {selectedClient?.email || loggedClient.email || 'N/A'}
+                    Email:{" "}
+                    {selectedClient?.email || loggedClient.email || "N/A"}
                   </p>
 
                   <p className="break-words text-sm text-slate-500">
-                    Phone: {selectedClient?.phone || loggedClient.phone || 'N/A'}
+                    Phone:{" "}
+                    {selectedClient?.phone || loggedClient.phone || "N/A"}
                   </p>
                 </div>
               </div>
@@ -1455,26 +1873,23 @@ export default function ClientDashboard() {
 
                 <div className="grid gap-4 md:grid-cols-2">
                   {[
-                    ['Source', currentSource],
-                    ['Classification Type', selectedClient.classificationType],
-                    ['Borrower Type', selectedClient.borrowerType],
-                    ['Objective', selectedClient.objective],
-                    ['Loan Type', selectedClient.loanType],
-                    ['Purpose', selectedClient.purpose],
-                    ['Transaction Type', selectedClient.transactionType],
+                    ["Source", currentSource],
+                    ["Classification Type", selectedClient.classificationType],
+                    ["Borrower Type", selectedClient.borrowerType],
+                    ["Objective", selectedClient.objective],
+                    ["Loan Type", selectedClient.loanType],
+                    ["Purpose", selectedClient.purpose],
+                    ["Transaction Type", selectedClient.transactionType],
                     [
-                      'With borrowers / guarantors?',
+                      "With Co-Borrowers?",
                       selectedClient.withBorrowersGuarantors,
                     ],
                     [
-                      'Anticipated Settlement Date',
+                      "Anticipated Settlement Date",
                       selectedClient.anticipatedSettlementDate,
                     ],
                   ].map(([label, value]) => (
-                    <div
-                      key={label}
-                      className={fieldCardClass}
-                    >
+                    <div key={label} className={fieldCardClass}>
                       <p className="text-xs font-bold uppercase text-slate-400">
                         {label}
                       </p>
@@ -1485,6 +1900,67 @@ export default function ClientDashboard() {
                   ))}
                 </div>
 
+                {(coBorrowerDetails.length > 0 ||
+                  selectedClient.withBorrowersGuarantors
+                    ?.trim()
+                    .toLowerCase() === "yes") && (
+                  <div className="mt-5 rounded-2xl border border-cyan-200 bg-cyan-50/70 p-4">
+                    <div className="mb-4 flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-cyan-700 shadow-sm ring-1 ring-cyan-100">
+                        <FaUserFriends />
+                      </span>
+                      <div>
+                        <h3 className="font-black text-slate-900">
+                          Additional Co-Borrowers
+                        </h3>
+                        <p className="text-xs text-slate-500">
+                          Co-borrowers included in this application.
+                        </p>
+                      </div>
+                    </div>
+
+                    {coBorrowerDetails.length > 0 ? (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {coBorrowerDetails.map((coBorrower, index) => {
+                          const fullName = [
+                            coBorrower.firstName,
+                            coBorrower.middleName,
+                            coBorrower.lastName,
+                          ]
+                            .filter(Boolean)
+                            .join(" ");
+
+                          return (
+                            <div
+                              key={getCoBorrowerKey(coBorrower) || index}
+                              className="rounded-xl border border-cyan-100 bg-white p-4 shadow-sm"
+                            >
+                              <p className="text-xs font-black uppercase tracking-wide text-cyan-700">
+                                Co-Borrower {index + 1}
+                              </p>
+                              <p className="mt-2 break-words font-black text-slate-900">
+                                {fullName || "Name not provided"}
+                              </p>
+                              <p className="mt-2 flex items-center gap-2 break-all text-sm text-slate-600">
+                                <FaPhoneAlt className="shrink-0 text-cyan-700" />
+                                {coBorrower.phone || "Phone not provided"}
+                              </p>
+                              <p className="mt-2 flex items-center gap-2 break-all text-sm text-slate-600">
+                                <FaEnvelope className="shrink-0 text-cyan-700" />
+                                {coBorrower.email || "Email not provided"}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="rounded-xl border border-dashed border-cyan-200 bg-white/80 px-4 py-3 text-sm font-semibold text-slate-600">
+                        No co-borrower details are available yet.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className="mt-6 border-t border-slate-200 pt-6">
                   <h3 className="mb-4 text-lg font-black uppercase tracking-wide text-slate-600">
                     Scenario Details
@@ -1492,23 +1968,23 @@ export default function ClientDashboard() {
 
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                     {[
-                      ['Veda Issues', selectedClient.vedaIssues],
-                      ['Conduct Issues', selectedClient.conductIssues],
+                      ["Veda Issues", selectedClient.vedaIssues],
+                      ["Conduct Issues", selectedClient.conductIssues],
                       [
-                        'Client Needs & Objectives',
+                        "Client Needs & Objectives",
                         selectedClient.clientNeedsObjectives,
                       ],
-                      ['Applicant Background', selectedClient.applicantBackground],
                       [
-                        'Explanation of Income',
+                        "Applicant Background",
+                        selectedClient.applicantBackground,
+                      ],
+                      [
+                        "Explanation of Income",
                         selectedClient.explanationOfIncome,
                       ],
-                      ['Security', selectedClient.security],
+                      ["Security", selectedClient.security],
                     ].map(([label, value]) => (
-                      <div
-                        key={label}
-                        className={fieldCardClass}
-                      >
+                      <div key={label} className={fieldCardClass}>
                         <p className="text-xs font-bold uppercase text-slate-400">
                           {label}
                         </p>
@@ -1527,19 +2003,16 @@ export default function ClientDashboard() {
 
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     {[
-                      ['Loan Amount', selectedClient.loanAmount],
-                      ['Security Value', selectedClient.securityValue],
-                      ['LVR', selectedClient.lvr],
+                      ["Loan Amount", selectedClient.loanAmount],
+                      ["Security Value", selectedClient.securityValue],
+                      ["LVR", selectedClient.lvr],
                       [
-                        'Anticipated Settlement Date',
+                        "Anticipated Settlement Date",
                         selectedClient.anticipatedSettlementDate,
                       ],
-                      ['Special Notes', selectedClient.specialNotes],
+                      ["Special Notes", selectedClient.specialNotes],
                     ].map(([label, value]) => (
-                      <div
-                        key={label}
-                        className={fieldCardClass}
-                      >
+                      <div key={label} className={fieldCardClass}>
                         <p className="text-xs font-bold uppercase text-slate-400">
                           {label}
                         </p>
@@ -1559,24 +2032,24 @@ export default function ClientDashboard() {
 
                     <div className="grid gap-4 md:grid-cols-2">
                       <p className="break-words text-sm text-slate-700">
-                        <strong>Name:</strong>{' '}
+                        <strong>Name:</strong>{" "}
                         {[
                           selectedClient.referrer?.firstName,
                           selectedClient.referrer?.middleName,
                           selectedClient.referrer?.lastName,
                         ]
                           .filter(Boolean)
-                          .join(' ') || 'N/A'}
+                          .join(" ") || "N/A"}
                       </p>
 
                       <p className="break-words text-sm text-slate-700">
-                        <strong>Phone:</strong>{' '}
-                        {selectedClient.referrer?.phone || 'N/A'}
+                        <strong>Phone:</strong>{" "}
+                        {selectedClient.referrer?.phone || "N/A"}
                       </p>
 
                       <p className="break-words text-sm text-slate-700 md:col-span-2">
-                        <strong>Email:</strong>{' '}
-                        {selectedClient.referrer?.email || 'N/A'}
+                        <strong>Email:</strong>{" "}
+                        {selectedClient.referrer?.email || "N/A"}
                       </p>
                     </div>
                   </div>
@@ -1593,22 +2066,22 @@ export default function ClientDashboard() {
                   <p className="text-sm text-slate-500">
                     {selectedClient?.transactionType
                       ? `Required documents for ${selectedClient.transactionType}.`
-                      : 'The checklist will appear after a Transaction Type is assigned.'}
+                      : "The checklist will appear after a Transaction Type is assigned."}
                   </p>
                 </div>
 
                 <span
                   className={`w-fit rounded-full px-4 py-2 text-xs font-extrabold ${
                     isComplete
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-red-100 text-red-700'
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
                   }`}
                 >
                   {requiredDocumentTypes.length === 0
-                    ? 'Unavailable'
+                    ? "Unavailable"
                     : isComplete
-                      ? 'Complete'
-                      : 'Incomplete'}
+                      ? "Complete"
+                      : "Incomplete"}
                 </span>
               </div>
 
@@ -1619,7 +2092,7 @@ export default function ClientDashboard() {
                 />
               </div>
 
-              <div className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:grid-cols-3">
+              <div className="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-4">
                 <p className="rounded-xl bg-white px-3 py-2 text-sm font-black text-green-700 shadow-sm">
                   Approved: {approvedDocumentTypes.length}
                 </p>
@@ -1629,9 +2102,12 @@ export default function ClientDashboard() {
                 <p className="rounded-xl bg-white px-3 py-2 text-sm font-black text-red-700 shadow-sm">
                   Rejected: {rejectedDocumentTypes.length}
                 </p>
+                <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-black text-amber-700 shadow-sm ring-1 ring-amber-200">
+                  Waived: {waivedDocumentTypes.length}
+                </p>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
                 <div className="rounded-2xl border border-orange-200 bg-orange-50/90 p-4">
                   <h3 className="mb-3 flex items-center gap-2 font-black text-orange-700">
                     <FaExclamationTriangle />
@@ -1684,8 +2160,32 @@ export default function ClientDashboard() {
                   </div>
                 </div>
 
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/90 p-4">
+                  <h3 className="mb-3 flex items-center gap-2 font-black text-amber-700">
+                    <FaCheckCircle />
+                    Waived Documents
+                  </h3>
+
+                  <div className="space-y-2">
+                    {waivedDocumentTypes.length > 0 ? (
+                      waivedDocumentTypes.map((type) => (
+                        <p
+                          key={type}
+                          className="rounded-xl bg-white px-4 py-3 text-sm font-bold text-amber-700 ring-1 ring-amber-200"
+                        >
+                          {formatDocumentType(type)} — Waived by Admin
+                        </p>
+                      ))
+                    ) : (
+                      <p className="rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-500">
+                        No documents waived.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
                 {rejectedDocumentTypes.length > 0 && (
-                  <div className="rounded-2xl border border-red-200 bg-red-50/90 p-4 md:col-span-2">
+                  <div className="rounded-2xl border border-red-200 bg-red-50/90 p-4 md:col-span-3">
                     <h3 className="mb-3 flex items-center gap-2 font-extrabold text-red-700">
                       <FaExclamationTriangle />
                       Rejected Documents - Re-upload Required
@@ -1706,7 +2206,9 @@ export default function ClientDashboard() {
                               {rejectedFile && (
                                 <button
                                   type="button"
-                                  onClick={() => handleStartReupload(rejectedFile)}
+                                  onClick={() =>
+                                    handleStartReupload(rejectedFile)
+                                  }
                                   className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700"
                                 >
                                   <FaRedoAlt />
@@ -1747,7 +2249,7 @@ export default function ClientDashboard() {
                   {fileSearch && (
                     <button
                       type="button"
-                      onClick={() => setFileSearch('')}
+                      onClick={() => setFileSearch("")}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                     >
                       <FaTimes />
@@ -1770,7 +2272,7 @@ export default function ClientDashboard() {
                     </h2>
                     <p className="text-sm text-slate-500">
                       {filteredFiles.length} file
-                      {filteredFiles.length !== 1 ? 's' : ''} found.
+                      {filteredFiles.length !== 1 ? "s" : ""} found.
                     </p>
                   </div>
                 </div>
@@ -1812,7 +2314,7 @@ export default function ClientDashboard() {
 
                             <div className="min-w-0">
                               <p className="break-words font-black text-slate-900">
-                                {file.fileName || 'No file name'}
+                                {file.fileName || "No file name"}
                               </p>
                               <p className="break-words text-xs text-slate-500">
                                 ID: {file.uniqueId}
@@ -1829,14 +2331,18 @@ export default function ClientDashboard() {
 
                         <td className="block px-4 pb-3 md:table-cell md:px-6 md:py-4">
                           {(() => {
-                            const status = normalizeDocumentStatus(file.documentStatus);
+                            const status = normalizeDocumentStatus(
+                              file.documentStatus,
+                            );
                             return (
                               <div className="space-y-2">
                                 <span
                                   className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-extrabold ${getStatusStyles(status)}`}
                                 >
                                   {getStatusIcon(status)}
-                                  {status === 'Pending' ? 'Pending Review' : status}
+                                  {status === "Pending"
+                                    ? "Pending Review"
+                                    : status}
                                 </span>
 
                                 {file.remarks && (
@@ -1850,7 +2356,7 @@ export default function ClientDashboard() {
                         </td>
 
                         <td className="block px-4 pb-3 text-sm text-slate-600 md:table-cell md:px-6 md:py-4">
-                          {file.submittedAt || 'N/A'}
+                          {file.submittedAt || "N/A"}
                         </td>
 
                         <td className="block px-4 pb-4 md:table-cell md:px-6 md:py-4">
@@ -1937,9 +2443,9 @@ export default function ClientDashboard() {
                 <div className="mb-5 flex items-center gap-4">
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#259b8f,#0f172a)] text-xl font-black text-white shadow-sm">
                     {specialist.name
-                      .split(' ')
+                      .split(" ")
                       .map((namePart) => namePart.charAt(0))
-                      .join('')
+                      .join("")
                       .slice(0, 2)}
                   </div>
 
@@ -1955,7 +2461,7 @@ export default function ClientDashboard() {
 
                 <div className="space-y-3">
                   <a
-                    href={`tel:${specialist.phone.replace(/\s+/g, '')}`}
+                    href={`tel:${specialist.phone.replace(/\s+/g, "")}`}
                     className="flex min-w-0 items-center gap-3 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:text-cyan-700"
                   >
                     <FaPhoneAlt className="text-cyan-700" />
@@ -1997,7 +2503,8 @@ export default function ClientDashboard() {
                     Upload Files
                   </h2>
                   <p className="text-sm text-slate-500">
-                    Upload missing documents or replace rejected files under your Client ID.
+                    Upload missing documents or replace rejected files under
+                    your Client ID.
                   </p>
                 </div>
               </div>
@@ -2005,12 +2512,13 @@ export default function ClientDashboard() {
               <div className="mb-4">
                 {selectedClient?.transactionType ? (
                   <div className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
-                    Showing the required documents for{' '}
+                    Showing the required documents for{" "}
                     <strong>{selectedClient.transactionType}</strong>.
                   </div>
                 ) : (
                   <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
-                    Transaction Type is missing. Document uploads are unavailable until the client record is updated.
+                    Transaction Type is missing. Document uploads are
+                    unavailable until the client record is updated.
                   </div>
                 )}
 
@@ -2026,40 +2534,54 @@ export default function ClientDashboard() {
                 >
                   <option value="">
                     {requiredDocumentTypes.length > 0
-                      ? 'Select document type'
-                      : 'No document types available'}
+                      ? "Select document type"
+                      : "No document types available"}
                   </option>
                   {requiredDocumentTypes.map((type) => {
                     const file = documentRowsByType.get(type.value);
-                    const status = file ? normalizeDocumentStatus(file.documentStatus) : 'Missing';
-                    const isApproved = status === 'Approved';
+                    const status = file
+                      ? normalizeDocumentStatus(file.documentStatus)
+                      : "Missing";
+                    const isApproved = status === "Approved";
+                    const isWaived = waivedDocumentTypes.includes(type.value);
 
                     return (
-                      <option key={type.value} value={type.value} disabled={isApproved}>
+                      <option
+                        key={type.value}
+                        value={type.value}
+                        disabled={isApproved || isWaived}
+                      >
                         {type.label}
-                        {isApproved
-                          ? ' (Approved)'
-                          : status === 'Rejected'
-                            ? ' (Rejected - re-upload)'
-                            : status === 'Pending'
-                              ? ' (Pending Review)'
-                              : ''}
+                        {isWaived
+                          ? " (Waived by Admin)"
+                          : isApproved
+                            ? " (Approved)"
+                            : status === "Rejected"
+                              ? " (Rejected - re-upload)"
+                              : status === "Pending"
+                                ? " (Pending Review)"
+                                : ""}
                       </option>
                     );
                   })}
                 </select>
                 {documentType &&
-                  isDocumentRejected(documentRowsByType.get(documentType)?.documentStatus) && (
+                  isDocumentRejected(
+                    documentRowsByType.get(documentType)?.documentStatus,
+                  ) && (
                     <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
-                      This document was rejected. Choose a new file below to re-upload it.
+                      This document was rejected. Choose a new file below to
+                      re-upload it.
                     </p>
                   )}
 
-                {documentType && documentRowsByType.get(documentType)?.remarks && (
-                  <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
-                    Admin remarks: {documentRowsByType.get(documentType)?.remarks}
-                  </p>
-                )}
+                {documentType &&
+                  documentRowsByType.get(documentType)?.remarks && (
+                    <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                      Admin remarks:{" "}
+                      {documentRowsByType.get(documentType)?.remarks}
+                    </p>
+                  )}
               </div>
 
               <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/80 p-6 text-center transition hover:border-orange-400 hover:bg-orange-50 sm:p-8">
@@ -2112,11 +2634,13 @@ export default function ClientDashboard() {
               >
                 <FaCloudUploadAlt />
                 {loading
-                  ? 'Uploading...'
+                  ? "Uploading..."
                   : documentType &&
-                      isDocumentRejected(documentRowsByType.get(documentType)?.documentStatus)
-                    ? 'Re-upload Rejected Document'
-                    : 'Upload Documents'}
+                      isDocumentRejected(
+                        documentRowsByType.get(documentType)?.documentStatus,
+                      )
+                    ? "Re-upload Rejected Document"
+                    : "Upload Documents"}
               </button>
             </section>
           </aside>
@@ -2133,13 +2657,13 @@ export default function ClientDashboard() {
                 </div>
                 <h2 className="text-2xl font-black text-slate-950">
                   {mustChangePassword
-                    ? 'Create Your New Password'
-                    : 'Change Password'}
+                    ? "Create Your New Password"
+                    : "Change Password"}
                 </h2>
                 <p className="mt-2 text-sm leading-relaxed text-slate-500">
                   {mustChangePassword
-                    ? 'For your security, you must replace your temporary password before continuing.'
-                    : 'Use a strong password that you do not use on another account.'}
+                    ? "For your security, you must replace your temporary password before continuing."
+                    : "Use a strong password that you do not use on another account."}
                 </p>
               </div>
 
@@ -2156,7 +2680,10 @@ export default function ClientDashboard() {
               )}
             </div>
 
-            <form onSubmit={handleChangePassword} className="space-y-5 px-5 py-6 sm:px-7">
+            <form
+              onSubmit={handleChangePassword}
+              className="space-y-5 px-5 py-6 sm:px-7"
+            >
               <div>
                 <label className="mb-2 block text-sm font-black text-slate-700">
                   Current Password
@@ -2164,7 +2691,7 @@ export default function ClientDashboard() {
                 <div className="relative">
                   <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
-                    type={showCurrentPassword ? 'text' : 'password'}
+                    type={showCurrentPassword ? "text" : "password"}
                     value={currentPassword}
                     onChange={(event) => setCurrentPassword(event.target.value)}
                     autoComplete="current-password"
@@ -2175,7 +2702,9 @@ export default function ClientDashboard() {
                     type="button"
                     onClick={() => setShowCurrentPassword((value) => !value)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                    aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+                    aria-label={
+                      showCurrentPassword ? "Hide password" : "Show password"
+                    }
                   >
                     {showCurrentPassword ? <FaEyeSlash /> : <FaEye />}
                   </button>
@@ -2189,7 +2718,7 @@ export default function ClientDashboard() {
                 <div className="relative">
                   <FaKey className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
-                    type={showNewPassword ? 'text' : 'password'}
+                    type={showNewPassword ? "text" : "password"}
                     value={newPassword}
                     onChange={(event) => setNewPassword(event.target.value)}
                     autoComplete="new-password"
@@ -2200,7 +2729,9 @@ export default function ClientDashboard() {
                     type="button"
                     onClick={() => setShowNewPassword((value) => !value)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                    aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                    aria-label={
+                      showNewPassword ? "Hide password" : "Show password"
+                    }
                   >
                     {showNewPassword ? <FaEyeSlash /> : <FaEye />}
                   </button>
@@ -2214,7 +2745,7 @@ export default function ClientDashboard() {
                 <div className="relative">
                   <FaCheckCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
-                    type={showConfirmPassword ? 'text' : 'password'}
+                    type={showConfirmPassword ? "text" : "password"}
                     value={confirmPassword}
                     onChange={(event) => setConfirmPassword(event.target.value)}
                     autoComplete="new-password"
@@ -2225,7 +2756,9 @@ export default function ClientDashboard() {
                     type="button"
                     onClick={() => setShowConfirmPassword((value) => !value)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    aria-label={
+                      showConfirmPassword ? "Hide password" : "Show password"
+                    }
                   >
                     {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
                   </button>
@@ -2255,7 +2788,7 @@ export default function ClientDashboard() {
                   className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#259b8f] px-6 font-black text-white shadow-sm hover:bg-[#1f887d] disabled:bg-[#259b8f]/40"
                 >
                   <FaKey />
-                  {passwordLoading ? 'Updating...' : 'Update Password'}
+                  {passwordLoading ? "Updating..." : "Update Password"}
                 </button>
               </div>
             </form>
@@ -2268,7 +2801,7 @@ export default function ClientDashboard() {
           <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:rounded-3xl">
             <div className="flex items-center justify-between gap-3 border-b border-slate-200 p-4 sm:p-5">
               <h2 className="min-w-0 break-words text-lg font-extrabold text-slate-900 sm:text-xl">
-                {previewFile.fileName || 'File Preview'}
+                {previewFile.fileName || "File Preview"}
               </h2>
 
               <button
@@ -2290,7 +2823,7 @@ export default function ClientDashboard() {
               {!previewLoading && previewUrl && isImageFile && (
                 <img
                   src={previewUrl}
-                  alt={previewFile.fileName || 'Preview'}
+                  alt={previewFile.fileName || "Preview"}
                   className="mx-auto max-h-[68vh] rounded-2xl bg-white object-contain sm:max-h-[70vh]"
                 />
               )}
@@ -2314,7 +2847,7 @@ export default function ClientDashboard() {
                   </p>
                   <button
                     type="button"
-                    onClick={() => window.open(previewUrl, '_blank')}
+                    onClick={() => window.open(previewUrl, "_blank")}
                     className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-[#6CBF51] px-5 py-3 text-sm font-bold text-white hover:bg-[#5aa643]"
                   >
                     <FaDownload />

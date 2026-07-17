@@ -117,6 +117,7 @@ const formatDocumentType = (documentType?: string) => {
 };
 
 type DocumentStatus = 'approved' | 'pending' | 'rejected';
+type SummaryFilter = 'all' | 'complete' | 'incomplete';
 
 const approvedStatusValues = ['approved', 'verified', 'complete', 'completed'];
 const rejectedStatusValues = ['rejected', 'declined', 'failed'];
@@ -190,6 +191,7 @@ type ClientGroup = {
 
 export default function Clients() {
   const [search, setSearch] = useState('');
+  const [summaryFilter, setSummaryFilter] = useState<SummaryFilter>('all');
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -471,7 +473,7 @@ export default function Clients() {
       const source = getClientSource(client).toLowerCase();
       const status = getStatus(client).toLowerCase();
 
-      return (
+      const matchesSearch =
         !searchValue ||
         fullName.includes(searchValue) ||
         (client.email || '').toLowerCase().includes(searchValue) ||
@@ -499,49 +501,23 @@ export default function Clients() {
         getClientText(client, ['specialNotes', 'SpecialNotes', 'special_notes']).toLowerCase().includes(searchValue) ||
         group.files.some((file) =>
           (file.fileName || '').toLowerCase().includes(searchValue),
-        )
-      );
+        );
+
+      const matchesSummaryFilter =
+        summaryFilter === 'all' ||
+        (summaryFilter === 'complete' && group.isComplete) ||
+        (summaryFilter === 'incomplete' &&
+          group.hasSupportedTransaction &&
+          !group.isComplete);
+
+      return matchesSearch && matchesSummaryFilter;
     });
-  }, [clientGroups, search]);
+  }, [clientGroups, search, summaryFilter]);
 
   const completeCount = clientGroups.filter((group) => group.isComplete).length;
   const incompleteCount = clientGroups.filter(
     (group) => group.hasSupportedTransaction && !group.isComplete,
   ).length;
-
-  const unavailableChecklistCount = clientGroups.filter(
-    (group) => !group.hasSupportedTransaction,
-  ).length;
-
-  const brokerCount = clientGroups.filter(
-    (group) => getClientSource(group.client) === 'Broker',
-  ).length;
-
-  const referralCount = clientGroups.filter(
-    (group) =>
-      getClientSource(group.client) === 'Referral',
-  ).length;
-
-  const directClientCount = clientGroups.filter(
-    (group) =>
-      getClientSource(group.client) ===
-      'Direct Client',
-  ).length;
-
-  const approvedDocsCount = clientGroups.reduce(
-    (total, group) => total + group.statusCounts.approved,
-    0,
-  );
-
-  const pendingDocsCount = clientGroups.reduce(
-    (total, group) => total + group.statusCounts.pending,
-    0,
-  );
-
-  const rejectedDocsCount = clientGroups.reduce(
-    (total, group) => total + group.statusCounts.rejected,
-    0,
-  );
 
   const handlePreview = async (client: Client) => {
     try {
@@ -601,14 +577,23 @@ export default function Clients() {
     value,
     className,
     icon,
+    active = false,
+    onClick,
   }: {
     label: string;
     value: number;
     className: string;
     icon?: ReactNode;
+    active?: boolean;
+    onClick: () => void;
   }) => (
-    <div
-      className={`rounded-2xl border p-4 shadow-[0_14px_34px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.1)] ${className}`}
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`w-full rounded-2xl border p-4 text-left shadow-[0_14px_34px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.1)] focus:outline-none focus:ring-4 focus:ring-[#259b8f]/15 ${
+        active ? 'ring-2 ring-[#259b8f]' : ''
+      } ${className}`}
     >
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs font-black uppercase tracking-wide opacity-80">
@@ -621,7 +606,7 @@ export default function Clients() {
         )}
       </div>
       <p className="mt-4 text-2xl font-black leading-none sm:text-3xl">{value}</p>
-    </div>
+    </button>
   );
 
   return (
@@ -672,66 +657,30 @@ export default function Clients() {
 
         {!loading && !error && (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+            <div className="grid gap-4 sm:grid-cols-3">
               <StatCard
-                label="Clients"
+                label="Total Records"
                 value={clientGroups.length}
                 className="border-slate-200/80 bg-white text-slate-900"
                 icon={<FaFileAlt />}
-              />
-              <StatCard
-                label="Brokers"
-                value={brokerCount}
-                className="border-cyan-200/80 bg-white text-cyan-700"
-                icon={<FaBriefcase />}
-              />
-              <StatCard
-                label="Referrals"
-                value={referralCount}
-                className="border-[#259b8f]/30 bg-white text-[#259b8f]"
-                icon={<FaUserFriends />}
-              />
-              <StatCard
-                label="Direct Clients"
-                value={directClientCount}
-                className="border-sky-200/80 bg-white text-sky-700"
-                icon={<FaBriefcase />}
+                active={summaryFilter === 'all'}
+                onClick={() => setSummaryFilter('all')}
               />
               <StatCard
                 label="Complete"
                 value={completeCount}
                 className="border-green-200/80 bg-white text-green-700"
                 icon={<FaCheckCircle />}
+                active={summaryFilter === 'complete'}
+                onClick={() => setSummaryFilter('complete')}
               />
               <StatCard
                 label="Incomplete"
                 value={incompleteCount}
                 className="border-red-200/80 bg-white text-red-700"
                 icon={<FaExclamationTriangle />}
-              />
-              <StatCard
-                label="Checklist Unavailable"
-                value={unavailableChecklistCount}
-                className="border-slate-200/80 bg-white text-slate-700"
-                icon={<FaExclamationTriangle />}
-              />
-              <StatCard
-                label="Approved Docs"
-                value={approvedDocsCount}
-                className="border-emerald-200/80 bg-white text-emerald-700"
-                icon={<FaCheckCircle />}
-              />
-              <StatCard
-                label="Pending Docs"
-                value={pendingDocsCount}
-                className="border-orange-200/80 bg-white text-orange-700"
-                icon={<FaFileAlt />}
-              />
-              <StatCard
-                label="Rejected Docs"
-                value={rejectedDocsCount}
-                className="border-rose-200/80 bg-white text-rose-700"
-                icon={<FaExclamationTriangle />}
+                active={summaryFilter === 'incomplete'}
+                onClick={() => setSummaryFilter('incomplete')}
               />
             </div>
 
@@ -949,18 +898,18 @@ export default function Clients() {
                 <FaFileAlt className="text-3xl text-[#EE6521]" />
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[1280px] table-fixed">
+              <div className="overflow-x-auto overscroll-x-contain">
+                <table className="w-full min-w-[1640px] table-fixed border-collapse">
                   <colgroup>
-                    <col className="w-[8%]" />
-                    <col className="w-[10%]" />
-                    <col className="w-[11%]" />
-                    <col className="w-[16%]" />
-                    <col className="w-[15%]" />
-                    <col className="w-[10%]" />
-                    <col className="w-[10%]" />
-                    <col className="w-[11%]" />
-                    <col className="w-[9%]" />
+                    <col style={{ width: '150px' }} />
+                    <col style={{ width: '170px' }} />
+                    <col style={{ width: '190px' }} />
+                    <col style={{ width: '270px' }} />
+                    <col style={{ width: '260px' }} />
+                    <col style={{ width: '170px' }} />
+                    <col style={{ width: '160px' }} />
+                    <col style={{ width: '170px' }} />
+                    <col style={{ width: '130px' }} />
                   </colgroup>
                   <thead className="bg-slate-50/90">
                     <tr>
@@ -977,7 +926,7 @@ export default function Clients() {
                       ].map((header) => (
                         <th
                           key={header}
-                          className="px-5 py-6 text-left text-sm font-black uppercase tracking-wide text-slate-600"
+                          className="border-b border-slate-200 px-4 py-5 text-left align-middle text-xs font-black uppercase leading-5 tracking-wide text-slate-600"
                         >
                           {header}
                         </th>
@@ -990,16 +939,16 @@ export default function Clients() {
                       const sourceLabel = getClientSource(group.client);
 
                       return (
-                        <tr key={group.key} className="align-middle transition hover:bg-slate-50">
-                          <td className="px-5 py-9 text-base font-bold leading-tight text-slate-700">
-                            <span className="break-words">
+                        <tr key={group.key} className="align-top transition hover:bg-slate-50">
+                          <td className="px-4 py-6 align-top text-sm font-bold leading-5 text-slate-700">
+                            <span className="break-all">
                               {group.client.uniqueId || '-'}
                             </span>
                           </td>
 
-                          <td className="px-5 py-9">
+                          <td className="px-4 py-6 align-top">
                             <span
-                              className={`inline-flex max-w-full items-center gap-2 rounded-full px-3 py-2 text-xs font-black leading-tight ${
+                              className={`inline-flex max-w-full items-center gap-2 whitespace-normal rounded-full px-3 py-2 text-xs font-black leading-4 ${
                                 sourceLabel === 'Referral'
                                   ? 'bg-[#259b8f]/10 text-[#1f8178] ring-1 ring-[#259b8f]/20'
                                   : sourceLabel === 'Direct Client'
@@ -1016,48 +965,50 @@ export default function Clients() {
                             </span>
                           </td>
 
-                          <td className="px-5 py-9">
-                            <p className="break-words text-lg font-black leading-snug text-slate-900">
+                          <td className="px-4 py-6 align-top">
+                            <p className="break-words text-base font-black leading-6 text-slate-900">
                               {getFullName(group.client) || '-'}
                             </p>
                           </td>
 
-                          <td className="px-5 py-9 text-base text-slate-600">
-                            <p className="break-words">{group.client.email || '-'}</p>
-                            <p className="mt-2 flex items-center gap-2 text-sm text-slate-400">
-                              <FaPhone />
-                              {group.client.phone || 'No phone'}
+                          <td className="px-4 py-6 align-top text-sm leading-5 text-slate-600">
+                            <p className="break-all">{group.client.email || '-'}</p>
+                            <p className="mt-2 flex items-start gap-2 break-words text-sm text-slate-400">
+                              <FaPhone className="mt-0.5 shrink-0" />
+                              <span>{group.client.phone || 'No phone'}</span>
                             </p>
                           </td>
 
-                          <td className="px-5 py-9 text-base leading-snug text-slate-600">
-                            <p>
+                          <td className="px-4 py-6 align-top text-sm leading-5 text-slate-600">
+                            <div className="space-y-1">
+                            <p className="break-words">
                               <span className="font-black text-slate-700">Class:</span>{' '}
                               {displayValue(getClientValue(group.client, ['classificationType', 'ClassificationType', 'classification_type']))}
                             </p>
-                            <p>
+                            <p className="break-words">
                               <span className="font-black text-slate-700">Borrower:</span>{' '}
                               {displayValue(getClientValue(group.client, ['borrowerType', 'BorrowerType', 'borrower_type']))}
                             </p>
-                            <p>
+                            <p className="break-words">
                               <span className="font-black text-slate-700">Objective:</span>{' '}
                               {displayValue(getClientValue(group.client, ['objective', 'Objective']))}
                             </p>
-                            <p>
+                            <p className="break-words">
                               <span className="font-black text-slate-700">Loan:</span>{' '}
                               {displayValue(getClientValue(group.client, ['loanType', 'LoanType', 'loan_type']))}
                             </p>
+                            </div>
                           </td>
 
-                          <td className="px-5 py-9">
-                            <span className="inline-flex max-w-full rounded-2xl bg-orange-100 px-3 py-2 text-sm font-black leading-snug text-orange-700 ring-1 ring-orange-200">
+                          <td className="px-4 py-6 align-top">
+                            <span className="inline-flex max-w-full whitespace-normal rounded-2xl bg-orange-100 px-3 py-2 text-xs font-black leading-5 text-orange-700 ring-1 ring-orange-200">
                               {getStatus(group.client)}
                             </span>
                           </td>
 
-                          <td className="px-5 py-9">
+                          <td className="px-4 py-6 align-top">
                             <span
-                              className={`inline-flex max-w-full items-center gap-2 rounded-full px-3 py-2 text-xs font-black ${
+                              className={`inline-flex max-w-full items-center gap-2 whitespace-normal rounded-full px-3 py-2 text-xs font-black leading-4 ${
                                 !group.hasSupportedTransaction
                                   ? 'bg-slate-200 text-slate-700'
                                   : group.isComplete
@@ -1078,8 +1029,8 @@ export default function Clients() {
                             </span>
                           </td>
 
-                          <td className="px-5 py-9">
-                            <div className="space-y-2 text-sm font-black">
+                          <td className="px-4 py-6 align-top">
+                            <div className="space-y-2 whitespace-nowrap text-xs font-black">
                               <p className="text-green-700">
                                 Approved: {group.statusCounts.approved}
                               </p>
@@ -1092,8 +1043,8 @@ export default function Clients() {
                             </div>
                           </td>
 
-                          <td className="px-5 py-9">
-                            <div className="w-full max-w-[150px]">
+                          <td className="px-4 py-6 align-top">
+                            <div className="w-full min-w-[90px]">
                               <p className="mb-2 text-sm font-black text-slate-500">
                                 {group.progress}%
                               </p>
