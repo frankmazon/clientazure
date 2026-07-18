@@ -26,6 +26,7 @@ const API_BASE = (
 
 const CLIENTS_API = `${API_BASE}/clients`;
 const FILE_URL_API = `${API_BASE}/file-url`;
+const FILE_PREVIEW_API = `${API_BASE}/file-preview`;
 const DOCUMENTS_API = `${API_BASE}/documents`;
 
 type DocumentOption = {
@@ -1204,17 +1205,43 @@ export default function ClientDocumentSearch() {
     loadClients(search);
   };
 
+  const releasePreviewUrl = (url: string) => {
+    if (url.startsWith("blob:")) {
+      URL.revokeObjectURL(url);
+    }
+  };
+
   const handlePreview = async (file: Client) => {
     try {
+      releasePreviewUrl(previewUrl);
       setPreviewFile(file);
       setPreviewUrl("");
       setPreviewLoading(true);
 
       const secureUrl = await getSecureFileUrl(file.fileUrl);
+      const fileName = (file.fileName || "").toLowerCase();
+
+      if (/\.(pdf)$/.test(fileName)) {
+        setPreviewUrl(
+          `${FILE_PREVIEW_API}?blobUrl=${encodeURIComponent(file.fileUrl || "")}`,
+        );
+        return;
+      }
+
+      if (/\.(doc|docx|xls|xlsx|ppt|pptx)$/.test(fileName)) {
+        setPreviewUrl(
+          `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
+            secureUrl,
+          )}`,
+        );
+        return;
+      }
+
       setPreviewUrl(secureUrl);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to open file.");
       setPreviewFile(null);
+      setPreviewUrl("");
     } finally {
       setPreviewLoading(false);
     }
@@ -1230,15 +1257,22 @@ export default function ClientDocumentSearch() {
   };
 
   const handleClosePreview = () => {
+    releasePreviewUrl(previewUrl);
     setPreviewFile(null);
     setPreviewUrl("");
   };
 
-  const isImageFile = previewFile?.fileName
-    ?.toLowerCase()
-    .match(/\.(jpg|jpeg|png|gif|webp)$/);
+  const previewFileName = previewFile?.fileName?.toLowerCase() || "";
 
-  const isPdfFile = previewFile?.fileName?.toLowerCase().endsWith(".pdf");
+  const isImageFile = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/.test(
+    previewFileName,
+  );
+
+  const isPdfFile = previewFileName.endsWith(".pdf");
+
+  const isOfficeFile = /\.(doc|docx|xls|xlsx|ppt|pptx)$/.test(
+    previewFileName,
+  );
 
   const panelClass =
     "rounded-2xl border border-slate-200/80 bg-white/95 shadow-[0_18px_45px_rgba(15,23,42,0.06)]";
@@ -2000,311 +2034,176 @@ export default function ClientDocumentSearch() {
       </div>
 
       {previewFile && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 px-3 py-4 sm:px-4">
-          <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:rounded-3xl">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-[linear-gradient(135deg,#259b8f,#0f172a)] p-4 text-white sm:p-5">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 p-2 sm:p-4">
+          <div className="flex h-[96vh] w-full max-w-[1500px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:h-[94vh] sm:rounded-3xl">
+            <div className="relative flex shrink-0 flex-col gap-3 border-b border-slate-200 bg-[linear-gradient(135deg,#259b8f,#0f172a)] px-4 py-4 pr-16 text-white sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:pr-5">
               <div className="min-w-0">
-                <h2 className="break-words text-xl font-black text-white">
-                  Client File Details
-                </h2>
-                <p className="break-words text-sm text-white/70">
-                  {previewFile.fileName || "File Preview"}
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-white/60">
+                  Document Preview
                 </p>
+                <h2 className="mt-1 break-words text-lg font-black text-white sm:text-xl">
+                  {previewFile.fileName || "Uploaded Document"}
+                </h2>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-bold text-white/75">
+                  <span className="rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/15">
+                    {formatDocumentType(previewFile.documentType)}
+                  </span>
+
+                  <span
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 ${getDocumentStatusStyle(
+                      previewFile.documentStatus,
+                    )}`}
+                  >
+                    {getDocumentStatusIcon(previewFile.documentStatus)}
+                    {getDocumentStatus(previewFile)}
+                  </span>
+
+                  <span className="rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/15">
+                    Submitted: {previewFile.submittedAt || "N/A"}
+                  </span>
+                </div>
               </div>
 
               <button
                 type="button"
                 onClick={handleClosePreview}
-                className="shrink-0 rounded-xl bg-white/10 p-3 text-white ring-1 ring-white/15 hover:bg-white/15"
+                aria-label="Close file preview"
+                className="absolute right-4 top-4 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white ring-1 ring-white/15 transition hover:bg-white/20 sm:static"
               >
                 <FaTimes />
               </button>
             </div>
 
-            <div className="overflow-y-auto bg-slate-100 p-3 sm:p-4">
-              <div className="mb-4 rounded-2xl bg-white p-5">
-                <h3 className="mb-4 text-lg font-black text-slate-900">
-                  Client Information
-                </h3>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <InfoBox label="Unique ID" value={previewFile.uniqueId} />
-                  <InfoBox
-                    label="Source"
-                    value={getClientSource(previewFile)}
-                  />
-                  <InfoBox label="Team Status" value={getStatus(previewFile)} />
-                  <InfoBox label="Full Name" value={getFullName(previewFile)} />
-                  <InfoBox label="Email" value={previewFile.email} />
-                  <InfoBox label="Phone" value={previewFile.phone} />
-                  <InfoBox
-                    label="Document Type"
-                    value={formatDocumentType(previewFile.documentType)}
-                  />
-                  <InfoBox label="Submitted" value={previewFile.submittedAt} />
-                  <InfoBox
-                    label="Document Review Status"
-                    value={getDocumentStatus(previewFile)}
-                  />
-                  <InfoBox label="Verified By" value={previewFile.verifiedBy} />
-                  <InfoBox
-                    label="Verified Date"
-                    value={previewFile.verifiedDate}
-                  />
-                  <InfoBox label="Remarks" value={previewFile.remarks} />
-                </div>
-              </div>
-
-              <div className="mb-4 rounded-2xl bg-white p-5">
-                <h3 className="mb-4 text-lg font-black text-slate-900">
-                  Submitted Loan Information
-                </h3>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <InfoBox
-                    label="Classification Type"
-                    value={previewFile.classificationType}
-                  />
-                  <InfoBox
-                    label="Borrower Type"
-                    value={previewFile.borrowerType}
-                  />
-                  <InfoBox label="Objective" value={previewFile.objective} />
-                  <InfoBox label="Loan Type" value={previewFile.loanType} />
-                  <InfoBox label="Purpose" value={previewFile.purpose} />
-                  <InfoBox
-                    label="Transaction Type"
-                    value={previewFile.transactionType}
-                  />
-                  <InfoBox
-                    label="With Co-Borrowers?"
-                    value={previewFile.withBorrowersGuarantors}
-                  />
-                  <InfoBox
-                    label="Anticipated Settlement Date"
-                    value={previewFile.anticipatedSettlementDate}
-                  />
-                </div>
-
-                {((previewFile.coBorrowers?.length || 0) > 0 ||
-                  previewFile.withBorrowersGuarantors?.trim().toLowerCase() ===
-                    "yes") && (
-                  <div className="mt-4 rounded-2xl border border-cyan-200 bg-cyan-50/80 p-4">
-                    <div className="mb-3 flex items-center gap-2">
-                      <FaUserFriends className="text-cyan-700" />
-                      <p className="text-sm font-extrabold text-slate-900">
-                        Additional Co-Borrowers
-                      </p>
-                    </div>
-
-                    {previewFile.coBorrowers?.length ? (
-                      <div className="grid gap-3 md:grid-cols-2">
-                        {previewFile.coBorrowers.map((coBorrower, index) => (
-                          <div
-                            key={getCoBorrowerKey(coBorrower) || index}
-                            className="rounded-xl border border-cyan-100 bg-white p-4 shadow-sm"
-                          >
-                            <p className="text-xs font-black uppercase tracking-wide text-cyan-700">
-                              Co-Borrower {index + 1}
-                            </p>
-                            <div className="mt-3 grid gap-3">
-                              <InfoBox
-                                label="Name"
-                                value={[
-                                  coBorrower.firstName,
-                                  coBorrower.middleName,
-                                  coBorrower.lastName,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" ")}
-                              />
-                              <InfoBox label="Phone" value={coBorrower.phone} />
-                              <InfoBox label="Email" value={coBorrower.email} />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="rounded-xl border border-dashed border-cyan-200 bg-white/80 px-4 py-3 text-sm font-semibold text-slate-600">
-                        No co-borrower details are available yet.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {["Broker", "Referral"].includes(
-                getClientSource(previewFile),
-              ) && (
-                <div className="mb-4 rounded-2xl border border-cyan-200 bg-cyan-50/80 p-5">
-                  <h3 className="mb-4 text-lg font-black text-slate-900">
-                    {getDetailLabel(previewFile)} Details
-                  </h3>
-
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <InfoBox
-                      label={`${getDetailLabel(previewFile)} Name`}
-                      value={getReferrerName(previewFile)}
-                    />
-                    <InfoBox
-                      label={`${getDetailLabel(previewFile)} Phone`}
-                      value={getReferrerPhone(previewFile)}
-                    />
-                    <InfoBox
-                      label={`${getDetailLabel(previewFile)} Email`}
-                      value={getReferrerEmail(previewFile)}
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="mb-4 rounded-2xl bg-white p-5">
-                <h3 className="mb-4 text-lg font-black text-slate-900">
-                  Scenario Details
-                </h3>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <InfoBox label="Veda Issues" value={previewFile.vedaIssues} />
-                  <InfoBox
-                    label="Conduct Issues"
-                    value={previewFile.conductIssues}
-                  />
-                  <InfoBox
-                    label="Client Needs & Objectives"
-                    value={previewFile.clientNeedsObjectives}
-                  />
-                  <InfoBox
-                    label="Applicant Background"
-                    value={previewFile.applicantBackground}
-                  />
-                  <InfoBox
-                    label="Explanation of Income"
-                    value={previewFile.explanationOfIncome}
-                  />
-                  <InfoBox label="Security" value={previewFile.security} />
-                </div>
-              </div>
-
-              <div className="mb-4 rounded-2xl bg-white p-5">
-                <h3 className="mb-4 text-lg font-black text-slate-900">
-                  Loan Amount & Settlement
-                </h3>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <InfoBox label="Loan Amount" value={previewFile.loanAmount} />
-                  <InfoBox
-                    label="Security Value"
-                    value={previewFile.securityValue}
-                  />
-                  <InfoBox label="LVR" value={previewFile.lvr} />
-                  <InfoBox
-                    label="Anticipated Settlement Date"
-                    value={previewFile.anticipatedSettlementDate}
-                  />
-                  <InfoBox
-                    label="Special Notes"
-                    value={previewFile.specialNotes}
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-2xl bg-white p-4">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-4">
-                  <div className="min-w-0">
-                    <p className="break-all font-semibold text-slate-900">
-                      {previewFile.fileName || "No file selected"}
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      Submitted client file
-                    </p>
-                  </div>
-
-                  <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-3">
-                    <button
-                      type="button"
-                      onClick={() => handleDownload(previewFile)}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-2 text-sm font-semibold text-white hover:bg-green-600"
-                    >
-                      <FaDownload />
-                      Download
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateDocumentStatus(previewFile, "verify")
-                      }
-                      disabled={loading}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:bg-green-300"
-                    >
-                      <FaCheckCircle />
-                      Approve
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateDocumentStatus(previewFile, "reject")
-                      }
-                      disabled={loading}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:bg-red-300"
-                    >
-                      <FaExclamationTriangle />
-                      Reject
-                    </button>
-                  </div>
-                </div>
-
-                {previewLoading && (
-                  <div className="flex h-[68vh] items-center justify-center rounded-2xl bg-white text-center text-slate-500 sm:h-[70vh]">
-                    Loading secure preview...
-                  </div>
-                )}
-
-                {!previewLoading && previewUrl && isImageFile && (
-                  <img
-                    src={previewUrl}
-                    alt={previewFile.fileName || "Preview"}
-                    className="mx-auto max-h-[68vh] rounded-2xl bg-white object-contain sm:max-h-[70vh]"
-                  />
-                )}
-
-                {!previewLoading && previewUrl && isPdfFile && (
-                  <iframe
-                    src={previewUrl}
-                    title={previewFile.fileName}
-                    className="h-[68vh] w-full rounded-2xl bg-white sm:h-[70vh]"
-                  />
-                )}
-
-                {!previewLoading &&
-                  previewUrl &&
-                  !isImageFile &&
-                  !isPdfFile && (
-                    <div className="flex h-[68vh] flex-col items-center justify-center rounded-2xl bg-white px-4 text-center text-slate-500 sm:h-[70vh]">
-                      <FaFileAlt className="mb-4 text-5xl text-slate-300" />
-                      <p className="font-bold text-slate-700">
-                        Preview not available for this file type.
-                      </p>
-                      <p className="mt-1 text-sm">
-                        Please download the file to view it.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => window.open(previewUrl, "_blank")}
-                        className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-green-500 px-5 py-3 text-sm font-bold text-white hover:bg-green-600"
-                      >
-                        <FaDownload />
-                        Open / Download
-                      </button>
+            <div className="min-h-0 flex-1 bg-slate-100 p-2 sm:p-4">
+              <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="min-h-0 flex-1 overflow-auto bg-slate-200/70 p-2 sm:p-4">
+                  {previewLoading && (
+                    <div className="flex h-full min-h-[420px] items-center justify-center rounded-xl bg-white text-center text-sm font-bold text-slate-500">
+                      Loading secure preview...
                     </div>
                   )}
 
-                {!previewLoading && !previewUrl && (
-                  <div className="flex h-[68vh] items-center justify-center rounded-2xl bg-white text-center text-slate-500 sm:h-[70vh]">
-                    No preview available.
+                  {!previewLoading && previewUrl && isImageFile && (
+                    <div className="flex h-full min-h-[420px] items-center justify-center rounded-xl bg-white p-2 sm:p-4">
+                      <img
+                        src={previewUrl}
+                        alt={previewFile.fileName || "Preview"}
+                        className="max-h-full max-w-full rounded-xl object-contain"
+                      />
+                    </div>
+                  )}
+
+                  {!previewLoading && previewUrl && isPdfFile && (
+                    <iframe
+                      src={previewUrl}
+                      title={previewFile.fileName || "PDF preview"}
+                      className="h-full min-h-[520px] w-full rounded-xl bg-white"
+                    />
+                  )}
+
+                  {!previewLoading && previewUrl && isOfficeFile && (
+                    <iframe
+                      src={previewUrl}
+                      title={previewFile.fileName || "Office document preview"}
+                      className="h-full min-h-[520px] w-full rounded-xl bg-white"
+                      allowFullScreen
+                    />
+                  )}
+
+                  {!previewLoading &&
+                    previewUrl &&
+                    !isImageFile &&
+                    !isPdfFile &&
+                    !isOfficeFile && (
+                      <div className="flex h-full min-h-[420px] flex-col items-center justify-center rounded-xl bg-white px-4 text-center text-slate-500">
+                        <FaFileAlt className="mb-4 text-5xl text-slate-300" />
+                        <p className="font-black text-slate-700">
+                          Preview is not available for this file type.
+                        </p>
+                        <p className="mt-2 max-w-md text-sm leading-6">
+                          Download or open the file in a new tab to review it.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => window.open(previewUrl, "_blank")}
+                          className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-[#259b8f] px-5 py-3 text-sm font-black text-white transition hover:bg-[#1f8178]"
+                        >
+                          <FaDownload />
+                          Open File
+                        </button>
+                      </div>
+                    )}
+
+                  {!previewLoading && !previewUrl && (
+                    <div className="flex h-full min-h-[420px] items-center justify-center rounded-xl bg-white text-center text-sm font-bold text-slate-500">
+                      No preview available.
+                    </div>
+                  )}
+                </div>
+
+                <div className="shrink-0 border-t border-slate-200 bg-white p-3 sm:p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <p className="break-all text-sm font-black text-slate-900">
+                        {previewFile.fileName || "No file selected"}
+                      </p>
+
+                      {previewFile.remarks && (
+                        <p className="mt-1 break-words text-xs font-semibold leading-5 text-slate-500">
+                          Remarks: {previewFile.remarks}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="grid w-full gap-2 sm:grid-cols-2 lg:w-auto lg:grid-cols-4">
+                      <button
+                        type="button"
+                        onClick={() => handleDownload(previewFile)}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#259b8f] px-4 py-2 text-sm font-black text-white transition hover:bg-[#1f8178]"
+                      >
+                        <FaDownload />
+                        Download
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateDocumentStatus(previewFile, "verify")
+                        }
+                        disabled={loading}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-black text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
+                      >
+                        <FaCheckCircle />
+                        Approve
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateDocumentStatus(previewFile, "reject")
+                        }
+                        disabled={loading}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                      >
+                        <FaExclamationTriangle />
+                        Reject
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateDocumentStatus(previewFile, "pending")
+                        }
+                        disabled={loading}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#EE6521] px-4 py-2 text-sm font-black text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-orange-300"
+                      >
+                        <FaSyncAlt />
+                        Pending
+                      </button>
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
             </div>
           </div>

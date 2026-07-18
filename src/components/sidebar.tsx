@@ -191,26 +191,26 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     <span>Open Client Portal</span>
                   </NavLink>
 
-                  <NavLink
+                  {/* <NavLink
                     to="/dashboard/client-portal-uploads"
                     onClick={onClose}
                     className={childNavLinkClass}
                   >
                     <FaFolder className="mt-0.5 shrink-0 text-orange-400" />
                     <span>Client Portal Uploads</span>
-                  </NavLink>
+                  </NavLink> */}
                 </div>
               )}
             </div>
 
-            <NavLink
+            {/* <NavLink
               to="/dashboard/export-clients"
               onClick={onClose}
               className={navLinkClass}
             >
               <FaFileExport />
               Export Clients
-            </NavLink>
+            </NavLink> */}
           </nav>
 
           <div className="border-t border-white/10 p-4">
