@@ -464,9 +464,9 @@ export default function ClientDocumentSearch() {
       `${FILE_URL_API}?blobUrl=${encodeURIComponent(fileUrl)}`,
     );
 
-    const result = await response.json();
+    const result = await response.json().catch(() => ({}));
 
-    if (!response.ok || !result.success) {
+    if (!response.ok || !result.success || !result.url) {
       throw new Error(result.message || "Failed to generate secure file URL.");
     }
 
@@ -1264,11 +1264,15 @@ export default function ClientDocumentSearch() {
     if (!fileUrl) throw new Error("No file URL available.");
 
     const normalizedFileName = (fileName || "").toLowerCase();
-    const secureUrl = await getSecureFileUrl(fileUrl);
 
+    // Stream PDFs through the Function App. This avoids exposing a SAS URL in
+    // the browser and prevents signature mismatches for legacy blob names that
+    // contain literal values such as "%20".
     if (normalizedFileName.endsWith(".pdf")) {
       return `${FILE_PREVIEW_API}?blobUrl=${encodeURIComponent(fileUrl)}`;
     }
+
+    const secureUrl = await getSecureFileUrl(fileUrl);
 
     if (/\.(doc|docx|xls|xlsx|ppt|pptx)$/.test(normalizedFileName)) {
       return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(

@@ -6,7 +6,7 @@ const ENV_API_BASE = import.meta.env.VITE_API_BASE_URL?.trim().replace(
 );
 const LOCAL_API_BASE = "http://localhost:7071/api";
 const PRODUCTION_API_BASE =
-  "https://docsuploadpythonapi-flex.azurewebsites.net/api";
+  "https://docsuploadpythonapi.azurewebsites.net/api";
 
 const isLocalDevelopment =
   typeof window !== "undefined" &&
@@ -37,6 +37,9 @@ type UploadClientResponse = {
   status?: string;
   ghlSync?: GhlOperationResult;
   ghlSubmissionTrigger?: GhlOperationResult;
+  intake?: {
+    coBorrowers?: Array<Omit<CoBorrower, "id">>;
+  };
 };
 
 type DocumentOption = {
