@@ -1,4 +1,10 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type ChangeEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   FaBriefcase,
   FaChevronDown,
@@ -19,15 +25,48 @@ import {
 } from "react-icons/fa";
 import DashboardLayout from "../components/layout/layout";
 
+const DEFAULT_API_BASE = import.meta.env.DEV
+  ? "http://localhost:7071/api"
+  : "https://docsuploadpythonapi.azurewebsites.net/api";
+
 const API_BASE = (
-  import.meta.env.VITE_API_BASE_URL ||
-  "https://docsuploadpythonapi-flex.azurewebsites.net/api"
+  import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE
 ).replace(/\/$/, "");
 
 const CLIENTS_API = `${API_BASE}/clients`;
 const FILE_URL_API = `${API_BASE}/file-url`;
 const FILE_PREVIEW_API = `${API_BASE}/file-preview`;
 const DOCUMENTS_API = `${API_BASE}/documents`;
+
+type AdminReferenceFile = {
+  id: number;
+  clientId: number;
+  documentType: string;
+  fileName: string;
+  blobUrl: string;
+  uploadedBy?: string;
+  uploadedAt?: string;
+  previewUrl: string;
+};
+
+type DocumentComparisonResult = {
+  id: number;
+  documentId: number;
+  adminReferenceDocumentId: number;
+  result: "Matched" | "NotMatched" | "NeedsReview";
+  confidence: number;
+  confidencePercent: number;
+  exactMatch: boolean;
+  textSimilarity: number;
+  keywordScore: number;
+  layoutSimilarity: number;
+  predictedDocumentType?: string | null;
+  classifierConfidence?: number | null;
+  matchedKeywords: string[];
+  reasons: string[];
+  requiresHumanReview: boolean;
+  comparedAt?: string;
+};
 
 type DocumentOption = {
   label: string;
@@ -396,6 +435,16 @@ export default function ClientDocumentSearch() {
   const [previewFile, setPreviewFile] = useState<Client | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [adminReferenceFile, setAdminReferenceFile] =
+    useState<AdminReferenceFile | null>(null);
+  const [adminReferenceLoading, setAdminReferenceLoading] = useState(false);
+  const [adminReferenceUploading, setAdminReferenceUploading] = useState(false);
+  const [adminReferenceError, setAdminReferenceError] = useState("");
+  const [documentComparison, setDocumentComparison] =
+    useState<DocumentComparisonResult | null>(null);
+  const [documentComparisonLoading, setDocumentComparisonLoading] =
+    useState(false);
+  const [documentComparisonError, setDocumentComparisonError] = useState("");
   const [selectedType, setSelectedType] = useState<string>("all");
   const [selectedSource, setSelectedSource] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
@@ -1211,33 +1260,153 @@ export default function ClientDocumentSearch() {
     }
   };
 
+  const getFilePreviewUrl = async (fileName?: string, fileUrl?: string) => {
+    if (!fileUrl) throw new Error("No file URL available.");
+
+    const normalizedFileName = (fileName || "").toLowerCase();
+    const secureUrl = await getSecureFileUrl(fileUrl);
+
+    if (normalizedFileName.endsWith(".pdf")) {
+      return `${FILE_PREVIEW_API}?blobUrl=${encodeURIComponent(fileUrl)}`;
+    }
+
+    if (/\.(doc|docx|xls|xlsx|ppt|pptx)$/.test(normalizedFileName)) {
+      return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
+        secureUrl,
+      )}`;
+    }
+
+    return secureUrl;
+  };
+
+  const getAdminReferenceEndpoint = (file: Client) => {
+    const clientId = Number(file.clientId);
+    const documentType = normalizeDocumentTypeValue(file.documentType);
+
+    if (!clientId || !documentType) {
+      throw new Error(
+        "Client ID or document type is missing from the selected file.",
+      );
+    }
+
+    return `${CLIENTS_API}/${clientId}/admin-reference-documents/${encodeURIComponent(
+      documentType,
+    )}`;
+  };
+
+  const loadAdminReference = async (
+    file: Client,
+  ): Promise<AdminReferenceFile | null> => {
+    try {
+      setAdminReferenceLoading(true);
+      setAdminReferenceError("");
+      setAdminReferenceFile(null);
+
+      const response = await fetch(getAdminReferenceEndpoint(file));
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.message || "Failed to load the admin reference document.",
+        );
+      }
+
+      const reference = result.referenceDocument;
+
+      if (!reference) return null;
+
+      const referencePreviewUrl = await getFilePreviewUrl(
+        reference.fileName,
+        reference.blobUrl,
+      );
+
+      const normalizedReference: AdminReferenceFile = {
+        id: Number(reference.id),
+        clientId: Number(reference.clientId),
+        documentType: normalizeDocumentTypeValue(reference.documentType),
+        fileName: String(reference.fileName || "Admin reference document"),
+        blobUrl: String(reference.blobUrl || ""),
+        uploadedBy: reference.uploadedBy,
+        uploadedAt: reference.uploadedAt,
+        previewUrl: referencePreviewUrl,
+      };
+
+      setAdminReferenceFile(normalizedReference);
+      return normalizedReference;
+    } catch (err) {
+      setAdminReferenceError(
+        err instanceof Error
+          ? err.message
+          : "Failed to load the admin reference document.",
+      );
+      return null;
+    } finally {
+      setAdminReferenceLoading(false);
+    }
+  };
+
+  const runAutomaticComparison = async (file: Client, force = false) => {
+    if (!file.id) {
+      setDocumentComparisonError("The client document ID is missing.");
+      return;
+    }
+
+    const adminName =
+      localStorage.getItem("adminName") ||
+      localStorage.getItem("username") ||
+      "Admin";
+
+    try {
+      setDocumentComparisonLoading(true);
+      setDocumentComparisonError("");
+      setDocumentComparison(null);
+
+      const response = await fetch(`${DOCUMENTS_API}/${file.id}/compare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comparedBy: adminName, force }),
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.success || !result.comparison) {
+        throw new Error(
+          result.message || "Automatic document comparison failed.",
+        );
+      }
+
+      setDocumentComparison(result.comparison as DocumentComparisonResult);
+    } catch (err) {
+      setDocumentComparisonError(
+        err instanceof Error
+          ? err.message
+          : "Automatic document comparison failed.",
+      );
+    } finally {
+      setDocumentComparisonLoading(false);
+    }
+  };
+
   const handlePreview = async (file: Client) => {
     try {
       releasePreviewUrl(previewUrl);
       setPreviewFile(file);
       setPreviewUrl("");
+      setAdminReferenceFile(null);
+      setAdminReferenceError("");
+      setDocumentComparison(null);
+      setDocumentComparisonError("");
       setPreviewLoading(true);
 
-      const secureUrl = await getSecureFileUrl(file.fileUrl);
-      const fileName = (file.fileName || "").toLowerCase();
+      const clientPreviewUrl = await getFilePreviewUrl(
+        file.fileName,
+        file.fileUrl,
+      );
+      setPreviewUrl(clientPreviewUrl);
+      const reference = await loadAdminReference(file);
 
-      if (/\.(pdf)$/.test(fileName)) {
-        setPreviewUrl(
-          `${FILE_PREVIEW_API}?blobUrl=${encodeURIComponent(file.fileUrl || "")}`,
-        );
-        return;
+      if (reference) {
+        await runAutomaticComparison(file);
       }
-
-      if (/\.(doc|docx|xls|xlsx|ppt|pptx)$/.test(fileName)) {
-        setPreviewUrl(
-          `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
-            secureUrl,
-          )}`,
-        );
-        return;
-      }
-
-      setPreviewUrl(secureUrl);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to open file.");
       setPreviewFile(null);
@@ -1260,9 +1429,106 @@ export default function ClientDocumentSearch() {
     releasePreviewUrl(previewUrl);
     setPreviewFile(null);
     setPreviewUrl("");
+    setAdminReferenceFile(null);
+    setAdminReferenceError("");
+    setDocumentComparison(null);
+    setDocumentComparisonError("");
+  };
+
+  const handleAdminReferenceUpload = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const selectedFile = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!selectedFile || !previewFile) return;
+
+    const uploadedBy =
+      localStorage.getItem("adminName") ||
+      localStorage.getItem("username") ||
+      "Admin";
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+    formData.append("uploadedBy", uploadedBy);
+
+    try {
+      setAdminReferenceUploading(true);
+      setAdminReferenceError("");
+
+      const response = await fetch(getAdminReferenceEndpoint(previewFile), {
+        method: "POST",
+        body: formData,
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.message || "Failed to upload the admin reference document.",
+        );
+      }
+
+      const reference = await loadAdminReference(previewFile);
+
+      if (reference) {
+        await runAutomaticComparison(previewFile, true);
+      }
+      alert(result.message || "Admin reference document uploaded.");
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to upload the admin reference document.";
+      setAdminReferenceError(message);
+      alert(message);
+    } finally {
+      setAdminReferenceUploading(false);
+    }
+  };
+
+  const handleRemoveAdminReference = async () => {
+    if (!previewFile || !adminReferenceFile) return;
+
+    const confirmed = window.confirm(
+      "Remove this admin reference document? The file will also be deleted from Azure Blob Storage.",
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setAdminReferenceUploading(true);
+      setAdminReferenceError("");
+
+      const response = await fetch(getAdminReferenceEndpoint(previewFile), {
+        method: "DELETE",
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.message || "Failed to remove the admin reference document.",
+        );
+      }
+
+      setAdminReferenceFile(null);
+      setDocumentComparison(null);
+      setDocumentComparisonError("");
+      alert(result.message || "Admin reference document removed.");
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to remove the admin reference document.";
+      setAdminReferenceError(message);
+      alert(message);
+    } finally {
+      setAdminReferenceUploading(false);
+    }
   };
 
   const previewFileName = previewFile?.fileName?.toLowerCase() || "";
+
+  const adminReferenceFileName =
+    adminReferenceFile?.fileName.toLowerCase() || "";
 
   const isImageFile = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/.test(
     previewFileName,
@@ -1270,9 +1536,13 @@ export default function ClientDocumentSearch() {
 
   const isPdfFile = previewFileName.endsWith(".pdf");
 
-  const isOfficeFile = /\.(doc|docx|xls|xlsx|ppt|pptx)$/.test(
-    previewFileName,
+  const isOfficeFile = /\.(doc|docx|xls|xlsx|ppt|pptx)$/.test(previewFileName);
+
+  const isAdminReferenceImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/.test(
+    adminReferenceFileName,
   );
+
+  const isAdminReferencePdf = adminReferenceFileName.endsWith(".pdf");
 
   const panelClass =
     "rounded-2xl border border-slate-200/80 bg-white/95 shadow-[0_18px_45px_rgba(15,23,42,0.06)]";
@@ -1956,7 +2226,7 @@ export default function ClientDocumentSearch() {
                                     className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700"
                                   >
                                     <FaEye />
-                                    View
+                                    View & Compare
                                   </button>
 
                                   <button
@@ -2035,11 +2305,11 @@ export default function ClientDocumentSearch() {
 
       {previewFile && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 p-2 sm:p-4">
-          <div className="flex h-[96vh] w-full max-w-[1500px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:h-[94vh] sm:rounded-3xl">
+          <div className="flex h-[96vh] w-full max-w-[1900px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:h-[94vh] sm:rounded-3xl">
             <div className="relative flex shrink-0 flex-col gap-3 border-b border-slate-200 bg-[linear-gradient(135deg,#259b8f,#0f172a)] px-4 py-4 pr-16 text-white sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:pr-5">
               <div className="min-w-0">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-white/60">
-                  Document Preview
+                  Document Comparison
                 </p>
                 <h2 className="mt-1 break-words text-lg font-black text-white sm:text-xl">
                   {previewFile.fileName || "Uploaded Document"}
@@ -2078,68 +2348,440 @@ export default function ClientDocumentSearch() {
             <div className="min-h-0 flex-1 bg-slate-100 p-2 sm:p-4">
               <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="min-h-0 flex-1 overflow-auto bg-slate-200/70 p-2 sm:p-4">
-                  {previewLoading && (
-                    <div className="flex h-full min-h-[420px] items-center justify-center rounded-xl bg-white text-center text-sm font-bold text-slate-500">
-                      Loading secure preview...
-                    </div>
-                  )}
+                  <div
+                    className={`mb-4 rounded-2xl border px-4 py-3 shadow-sm ${
+                      documentComparisonLoading
+                        ? "border-cyan-200 bg-cyan-50"
+                        : documentComparison?.result === "Matched"
+                          ? "border-green-200 bg-green-50"
+                          : documentComparison?.result === "NotMatched"
+                            ? "border-red-200 bg-red-50"
+                            : documentComparison?.result === "NeedsReview"
+                              ? "border-amber-200 bg-amber-50"
+                              : documentComparisonError
+                                ? "border-red-200 bg-red-50"
+                                : "border-slate-200 bg-white"
+                    }`}
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-3">
+                        {documentComparisonLoading ? (
+                          <FaSyncAlt className="animate-spin text-xl text-cyan-600" />
+                        ) : documentComparison?.result === "Matched" ? (
+                          <FaCheckCircle className="text-xl text-green-600" />
+                        ) : documentComparison?.result === "NotMatched" ? (
+                          <FaExclamationTriangle className="text-xl text-red-600" />
+                        ) : documentComparison?.result === "NeedsReview" ? (
+                          <FaSyncAlt className="text-xl text-amber-600" />
+                        ) : documentComparisonError ? (
+                          <FaExclamationTriangle className="text-xl text-red-600" />
+                        ) : (
+                          <FaFileAlt className="text-xl text-slate-400" />
+                        )}
 
-                  {!previewLoading && previewUrl && isImageFile && (
-                    <div className="flex h-full min-h-[420px] items-center justify-center rounded-xl bg-white p-2 sm:p-4">
-                      <img
-                        src={previewUrl}
-                        alt={previewFile.fileName || "Preview"}
-                        className="max-h-full max-w-full rounded-xl object-contain"
-                      />
-                    </div>
-                  )}
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                            Automatic AI Comparison
+                          </p>
+                          <p className="mt-1 text-sm font-black text-slate-900">
+                            {documentComparisonLoading
+                              ? "Comparing both documents..."
+                              : documentComparison?.result === "Matched"
+                                ? `Likely Match — ${documentComparison.confidencePercent}% confidence`
+                                : documentComparison?.result === "NotMatched"
+                                  ? `Likely Not a Match — ${documentComparison.confidencePercent}% confidence`
+                                  : documentComparison?.result === "NeedsReview"
+                                    ? `Needs Admin Review — ${documentComparison.confidencePercent}% confidence`
+                                    : documentComparisonError
+                                      ? documentComparisonError
+                                      : adminReferenceFile
+                                        ? "Waiting to run comparison..."
+                                        : "Upload an admin reference document to compare."}
+                          </p>
+                        </div>
+                      </div>
 
-                  {!previewLoading && previewUrl && isPdfFile && (
-                    <iframe
-                      src={previewUrl}
-                      title={previewFile.fileName || "PDF preview"}
-                      className="h-full min-h-[520px] w-full rounded-xl bg-white"
-                    />
-                  )}
-
-                  {!previewLoading && previewUrl && isOfficeFile && (
-                    <iframe
-                      src={previewUrl}
-                      title={previewFile.fileName || "Office document preview"}
-                      className="h-full min-h-[520px] w-full rounded-xl bg-white"
-                      allowFullScreen
-                    />
-                  )}
-
-                  {!previewLoading &&
-                    previewUrl &&
-                    !isImageFile &&
-                    !isPdfFile &&
-                    !isOfficeFile && (
-                      <div className="flex h-full min-h-[420px] flex-col items-center justify-center rounded-xl bg-white px-4 text-center text-slate-500">
-                        <FaFileAlt className="mb-4 text-5xl text-slate-300" />
-                        <p className="font-black text-slate-700">
-                          Preview is not available for this file type.
-                        </p>
-                        <p className="mt-2 max-w-md text-sm leading-6">
-                          Download or open the file in a new tab to review it.
-                        </p>
+                      {adminReferenceFile && !documentComparisonLoading && (
                         <button
                           type="button"
-                          onClick={() => window.open(previewUrl, "_blank")}
-                          className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-[#259b8f] px-5 py-3 text-sm font-black text-white transition hover:bg-[#1f8178]"
+                          onClick={() =>
+                            runAutomaticComparison(previewFile, true)
+                          }
+                          className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white transition hover:bg-slate-700"
                         >
-                          <FaDownload />
-                          Open File
+                          <FaSyncAlt />
+                          Run Again
                         </button>
-                      </div>
-                    )}
-
-                  {!previewLoading && !previewUrl && (
-                    <div className="flex h-full min-h-[420px] items-center justify-center rounded-xl bg-white text-center text-sm font-bold text-slate-500">
-                      No preview available.
+                      )}
                     </div>
-                  )}
+                  </div>
+
+                  <div className="grid min-h-full gap-4 lg:grid-cols-2">
+                    <section className="flex min-h-[560px] min-w-0 flex-col overflow-hidden rounded-2xl border border-cyan-200 bg-white shadow-sm">
+                      <div className="shrink-0 border-b border-cyan-100 bg-cyan-50 px-4 py-3">
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-700">
+                          Client Submitted Document
+                        </p>
+                        <p className="mt-1 break-all text-sm font-bold text-slate-900">
+                          {previewFile.fileName || "Uploaded document"}
+                        </p>
+                      </div>
+
+                      <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-2">
+                        {previewLoading && (
+                          <div className="flex h-full min-h-[420px] items-center justify-center rounded-xl bg-white text-center text-sm font-bold text-slate-500">
+                            Loading secure preview...
+                          </div>
+                        )}
+
+                        {!previewLoading && previewUrl && isImageFile && (
+                          <div className="flex h-full min-h-[420px] items-center justify-center rounded-xl bg-white p-2 sm:p-4">
+                            <img
+                              src={previewUrl}
+                              alt={previewFile.fileName || "Preview"}
+                              className="max-h-full max-w-full rounded-xl object-contain"
+                            />
+                          </div>
+                        )}
+
+                        {!previewLoading && previewUrl && isPdfFile && (
+                          <iframe
+                            src={previewUrl}
+                            title={previewFile.fileName || "PDF preview"}
+                            className="h-full min-h-[520px] w-full rounded-xl bg-white"
+                          />
+                        )}
+
+                        {!previewLoading && previewUrl && isOfficeFile && (
+                          <iframe
+                            src={previewUrl}
+                            title={
+                              previewFile.fileName || "Office document preview"
+                            }
+                            className="h-full min-h-[520px] w-full rounded-xl bg-white"
+                            allowFullScreen
+                          />
+                        )}
+
+                        {!previewLoading &&
+                          previewUrl &&
+                          !isImageFile &&
+                          !isPdfFile &&
+                          !isOfficeFile && (
+                            <div className="flex h-full min-h-[420px] flex-col items-center justify-center rounded-xl bg-white px-4 text-center text-slate-500">
+                              <FaFileAlt className="mb-4 text-5xl text-slate-300" />
+                              <p className="font-black text-slate-700">
+                                Preview is not available for this file type.
+                              </p>
+                              <p className="mt-2 max-w-md text-sm leading-6">
+                                Download or open the file in a new tab to review
+                                it.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  window.open(previewUrl, "_blank")
+                                }
+                                className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-[#259b8f] px-5 py-3 text-sm font-black text-white transition hover:bg-[#1f8178]"
+                              >
+                                <FaDownload />
+                                Open File
+                              </button>
+                            </div>
+                          )}
+
+                        {!previewLoading && !previewUrl && (
+                          <div className="flex h-full min-h-[420px] items-center justify-center rounded-xl bg-white text-center text-sm font-bold text-slate-500">
+                            No preview available.
+                          </div>
+                        )}
+                      </div>
+                    </section>
+
+                    <section className="flex min-h-[560px] min-w-0 flex-col overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+                      <div className="flex shrink-0 flex-col gap-3 border-b border-amber-100 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
+                            Admin Reference Document
+                          </p>
+                          <p className="mt-1 break-all text-sm font-bold text-slate-900">
+                            {adminReferenceFile?.fileName ||
+                              "No reference file uploaded"}
+                          </p>
+                        </div>
+
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          <label
+                            className={`inline-flex min-h-9 cursor-pointer items-center justify-center gap-2 rounded-lg bg-amber-600 px-3 py-2 text-xs font-black text-white transition hover:bg-amber-700 ${
+                              adminReferenceUploading
+                                ? "pointer-events-none opacity-60"
+                                : ""
+                            }`}
+                          >
+                            <FaFileAlt />
+                            {adminReferenceUploading
+                              ? "Uploading..."
+                              : adminReferenceFile
+                                ? "Replace Reference"
+                                : "Upload Reference"}
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                              onChange={handleAdminReferenceUpload}
+                              disabled={adminReferenceUploading}
+                              className="hidden"
+                            />
+                          </label>
+
+                          {adminReferenceFile && (
+                            <button
+                              type="button"
+                              onClick={handleRemoveAdminReference}
+                              disabled={adminReferenceUploading}
+                              className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-black text-red-700 ring-1 ring-red-200 transition hover:bg-red-50 disabled:opacity-50"
+                            >
+                              <FaTimes />
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-2">
+                        {adminReferenceLoading && (
+                          <div className="flex h-full min-h-[420px] items-center justify-center rounded-xl bg-white text-center text-sm font-bold text-slate-500">
+                            Loading admin reference...
+                          </div>
+                        )}
+
+                        {!adminReferenceLoading && adminReferenceError && (
+                          <div className="flex h-full min-h-[420px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-red-200 bg-red-50 px-6 text-center">
+                            <FaExclamationTriangle className="mb-4 text-5xl text-red-300" />
+                            <p className="font-black text-red-800">
+                              Unable to load the admin reference.
+                            </p>
+                            <p className="mt-2 max-w-lg break-words text-sm leading-6 text-red-600">
+                              {adminReferenceError}
+                            </p>
+                          </div>
+                        )}
+
+                        {!adminReferenceLoading &&
+                          !adminReferenceError &&
+                          adminReferenceFile &&
+                          isAdminReferenceImage && (
+                            <div className="flex h-full min-h-[420px] items-center justify-center rounded-xl bg-white p-2 sm:p-4">
+                              <img
+                                src={adminReferenceFile.previewUrl}
+                                alt={adminReferenceFile.fileName}
+                                className="max-h-full max-w-full rounded-xl object-contain"
+                              />
+                            </div>
+                          )}
+
+                        {!adminReferenceLoading &&
+                          !adminReferenceError &&
+                          adminReferenceFile &&
+                          isAdminReferencePdf && (
+                            <iframe
+                              src={adminReferenceFile.previewUrl}
+                              title={`${adminReferenceFile.fileName} admin reference`}
+                              className="h-full min-h-[520px] w-full rounded-xl bg-white"
+                            />
+                          )}
+
+                        {!adminReferenceLoading &&
+                          !adminReferenceError &&
+                          adminReferenceFile &&
+                          !isAdminReferenceImage &&
+                          !isAdminReferencePdf && (
+                            <div className="flex h-full min-h-[420px] flex-col items-center justify-center rounded-xl bg-white px-4 text-center text-slate-500">
+                              <FaFileAlt className="mb-4 text-5xl text-slate-300" />
+                              <p className="font-black text-slate-700">
+                                Preview is not available for this reference
+                                file.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  window.open(
+                                    adminReferenceFile.previewUrl,
+                                    "_blank",
+                                  )
+                                }
+                                className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-sm font-black text-white transition hover:bg-amber-700"
+                              >
+                                <FaEye />
+                                Open Reference File
+                              </button>
+                            </div>
+                          )}
+
+                        {!adminReferenceLoading &&
+                          !adminReferenceError &&
+                          !adminReferenceFile && (
+                            <div className="flex h-full min-h-[420px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-amber-200 bg-amber-50/60 px-6 text-center">
+                              <FaFileAlt className="mb-4 text-5xl text-amber-300" />
+                              <p className="font-black text-slate-800">
+                                No admin reference for this document type.
+                              </p>
+                              <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+                                Use Upload Reference above. The file will be
+                                saved privately for this client and document
+                                type.
+                              </p>
+                            </div>
+                          )}
+                      </div>
+                    </section>
+                  </div>
+
+                  <section className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                          Automatic AI Comparison
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-slate-600">
+                          Document Intelligence checks type signals, text, and
+                          layout. An administrator still makes the final
+                          approval decision.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          runAutomaticComparison(previewFile, true)
+                        }
+                        disabled={
+                          documentComparisonLoading ||
+                          adminReferenceLoading ||
+                          !adminReferenceFile
+                        }
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                      >
+                        <FaSyncAlt
+                          className={
+                            documentComparisonLoading ? "animate-spin" : ""
+                          }
+                        />
+                        {documentComparisonLoading
+                          ? "Comparing..."
+                          : "Run Comparison"}
+                      </button>
+                    </div>
+
+                    <div className="p-4">
+                      {documentComparisonLoading && (
+                        <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-4 text-sm font-bold text-cyan-800">
+                          Extracting and comparing both documents. This can take
+                          several seconds.
+                        </div>
+                      )}
+
+                      {!documentComparisonLoading &&
+                        documentComparisonError && (
+                          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-sm font-semibold text-red-700">
+                            {documentComparisonError}
+                          </div>
+                        )}
+
+                      {!documentComparisonLoading && documentComparison && (
+                        <div
+                          className={`rounded-xl border px-4 py-4 ${
+                            documentComparison.result === "Matched"
+                              ? "border-green-200 bg-green-50"
+                              : documentComparison.result === "NotMatched"
+                                ? "border-red-200 bg-red-50"
+                                : "border-amber-200 bg-amber-50"
+                          }`}
+                        >
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-center gap-3">
+                              {documentComparison.result === "Matched" ? (
+                                <FaCheckCircle className="text-2xl text-green-600" />
+                              ) : documentComparison.result === "NotMatched" ? (
+                                <FaExclamationTriangle className="text-2xl text-red-600" />
+                              ) : (
+                                <FaSyncAlt className="text-2xl text-amber-600" />
+                              )}
+
+                              <div>
+                                <p className="text-base font-black text-slate-900">
+                                  {documentComparison.result === "Matched"
+                                    ? "Likely Match"
+                                    : documentComparison.result === "NotMatched"
+                                      ? "Likely Not a Match"
+                                      : "Needs Admin Review"}
+                                </p>
+                                <p className="text-sm font-semibold text-slate-600">
+                                  Confidence:{" "}
+                                  {documentComparison.confidencePercent}%
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                              <div className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-slate-200">
+                                <p className="font-black text-slate-900">
+                                  {Math.round(
+                                    documentComparison.keywordScore * 100,
+                                  )}
+                                  %
+                                </p>
+                                <p className="font-semibold text-slate-500">
+                                  Type
+                                </p>
+                              </div>
+                              <div className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-slate-200">
+                                <p className="font-black text-slate-900">
+                                  {Math.round(
+                                    documentComparison.textSimilarity * 100,
+                                  )}
+                                  %
+                                </p>
+                                <p className="font-semibold text-slate-500">
+                                  Text
+                                </p>
+                              </div>
+                              <div className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-slate-200">
+                                <p className="font-black text-slate-900">
+                                  {Math.round(
+                                    documentComparison.layoutSimilarity * 100,
+                                  )}
+                                  %
+                                </p>
+                                <p className="font-semibold text-slate-500">
+                                  Layout
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {documentComparison.reasons.length > 0 && (
+                            <ul className="mt-4 space-y-1 text-sm font-semibold leading-6 text-slate-700">
+                              {documentComparison.reasons.map(
+                                (reason, index) => (
+                                  <li key={`${reason}-${index}`}>• {reason}</li>
+                                ),
+                              )}
+                            </ul>
+                          )}
+                        </div>
+                      )}
+
+                      {!documentComparisonLoading &&
+                        !documentComparisonError &&
+                        !documentComparison && (
+                          <p className="text-sm font-semibold text-slate-500">
+                            {adminReferenceFile
+                              ? "The automatic comparison will run when both files are loaded."
+                              : "Upload an admin reference document to enable automatic comparison."}
+                          </p>
+                        )}
+                    </div>
+                  </section>
                 </div>
 
                 <div className="shrink-0 border-t border-slate-200 bg-white p-3 sm:p-4">
@@ -2171,11 +2813,20 @@ export default function ClientDocumentSearch() {
                         onClick={() =>
                           updateDocumentStatus(previewFile, "verify")
                         }
-                        disabled={loading}
+                        disabled={
+                          loading ||
+                          adminReferenceLoading ||
+                          !adminReferenceFile
+                        }
+                        title={
+                          adminReferenceFile
+                            ? "Mark the client document as matched and verified"
+                            : "Upload an admin reference before marking the documents as matched"
+                        }
                         className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-black text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
                       >
                         <FaCheckCircle />
-                        Approve
+                        Documents Match
                       </button>
 
                       <button
@@ -2187,7 +2838,7 @@ export default function ClientDocumentSearch() {
                         className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
                       >
                         <FaExclamationTriangle />
-                        Reject
+                        Does Not Match
                       </button>
 
                       <button
