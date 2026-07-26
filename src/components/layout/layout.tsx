@@ -4,6 +4,7 @@ import {
   FaBars,
   FaBell,
   FaCheckCircle,
+  FaCommentDots,
   FaExclamationTriangle,
   FaFileAlt,
   FaUserPlus,
@@ -14,6 +15,18 @@ interface DashboardLayoutProps {
   title: string;
   subtitle?: string;
   children: ReactNode;
+  messageCount?: number;
+  messageClients?: MessageClientItem[];
+  onMessagesOpen?: () => void;
+  onMessageClientClick?: (clientKey: string) => void;
+}
+
+export type MessageClientItem = {
+  clientKey: string;
+  clientName: string;
+  uniqueId?: string;
+  messageCount: number;
+  latestMessageAt?: string;
 }
 
 type NotificationItem = {
@@ -37,11 +50,16 @@ export default function DashboardLayout({
   title,
   subtitle,
   children,
+  messageCount = 0,
+  messageClients = [],
+  onMessagesOpen,
+  onMessageClientClick,
 }: DashboardLayoutProps) {
   const navigate = useNavigate();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarHidden, setIsSidebarHidden] = useState(false);
+  const [showMessages, setShowMessages] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
@@ -209,24 +227,121 @@ export default function DashboardLayout({
             </div>
           </div>
 
-          <div className="relative z-50 shrink-0">
-            <button
-              type="button"
-              onClick={() => setShowNotifications((prev) => !prev)}
-              className="relative rounded-xl border border-[#219688]/20 bg-white p-3 text-[#219688] shadow-sm transition hover:bg-[#219688]/10"
-              aria-label="Open notifications"
-            >
-              <FaBell className="text-lg" />
+          <div className="relative z-50 flex shrink-0 items-center gap-2">
+            {onMessageClientClick && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMessages((current) => {
+                      const willOpen = !current;
+                      if (willOpen) onMessagesOpen?.();
+                      return willOpen;
+                    });
+                    setShowNotifications(false);
+                  }}
+                  className={`relative rounded-xl border bg-white p-3 text-[#219688] transition hover:bg-[#219688]/10 ${
+                    messageCount > 0
+                      ? 'animate-pulse border-[#EE6521]/60 shadow-[0_0_0_4px_rgba(238,101,33,0.13),0_0_24px_rgba(238,101,33,0.35)]'
+                      : 'border-[#219688]/20 shadow-sm'
+                  }`}
+                  aria-label={`View client messages${
+                    messageCount > 0 ? ` (${messageCount})` : ''
+                  }`}
+                  aria-expanded={showMessages}
+                  title="View client messages"
+                >
+                  <FaCommentDots className="text-lg" />
 
-              {unreadCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#EE6521] px-1 text-[10px] font-bold text-white">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
+                  {messageCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#EE6521] px-1 text-[10px] font-bold text-white">
+                      {messageCount > 99 ? '99+' : messageCount}
+                    </span>
+                  )}
+                </button>
 
-            {showNotifications && (
-              <div className="absolute right-0 top-full z-[9999] mt-3 w-[330px] overflow-hidden rounded-2xl border border-[#219688]/15 bg-white shadow-2xl sm:w-96">
+                {showMessages && (
+                  <div className="absolute right-0 top-full z-[9999] mt-3 w-[330px] overflow-hidden rounded-2xl border border-[#219688]/15 bg-white shadow-2xl sm:w-96">
+                    <div className="border-b border-[#219688]/10 px-5 py-4">
+                      <h3 className="font-bold text-slate-900">
+                        Client Messages
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        {messageClients.length}{' '}
+                        {messageClients.length === 1 ? 'client has' : 'clients have'} messages
+                      </p>
+                    </div>
+
+                    <div className="max-h-[400px] overflow-y-auto">
+                      {messageClients.length > 0 ? (
+                        messageClients.map((item) => (
+                          <button
+                            type="button"
+                            key={item.clientKey}
+                            onClick={() => {
+                              setShowMessages(false);
+                              onMessageClientClick(item.clientKey);
+                            }}
+                            className="flex w-full items-center gap-3 border-b border-slate-100 px-5 py-4 text-left transition last:border-b-0 hover:bg-[#219688]/5"
+                          >
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#219688]/10 text-[#219688]">
+                              <FaCommentDots />
+                            </span>
+
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-bold text-slate-900">
+                                {item.clientName}
+                              </span>
+                              <span className="mt-0.5 block truncate text-xs text-slate-500">
+                                {item.uniqueId || 'Client'}
+                                {item.latestMessageAt
+                                  ? ` · ${item.latestMessageAt}`
+                                  : ''}
+                              </span>
+                            </span>
+
+                            <span className="inline-flex min-w-6 items-center justify-center rounded-full bg-[#EE6521] px-2 py-1 text-[10px] font-black text-white">
+                              {item.messageCount > 99
+                                ? '99+'
+                                : item.messageCount}
+                            </span>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-5 py-10 text-center">
+                          <FaCommentDots className="mx-auto mb-3 text-2xl text-[#219688]/40" />
+                          <p className="text-sm font-semibold text-slate-700">
+                            No client messages yet
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNotifications((prev) => !prev);
+                  setShowMessages(false);
+                }}
+                className="relative rounded-xl border border-[#219688]/20 bg-white p-3 text-[#219688] shadow-sm transition hover:bg-[#219688]/10"
+                aria-label="Open notifications"
+              >
+                <FaBell className="text-lg" />
+
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#EE6521] px-1 text-[10px] font-bold text-white">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {showNotifications && (
+                <div className="absolute right-0 top-full z-[9999] mt-3 w-[330px] overflow-hidden rounded-2xl border border-[#219688]/15 bg-white shadow-2xl sm:w-96">
                 <div className="flex items-center justify-between border-b border-[#219688]/10 px-5 py-4">
                   <div>
                     <h3 className="font-bold text-slate-900">
@@ -323,8 +438,9 @@ export default function DashboardLayout({
                     </div>
                   )}
                 </div>
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

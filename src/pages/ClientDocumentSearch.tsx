@@ -485,6 +485,9 @@ export default function ClientDocumentSearch() {
   const [clientMessages, setClientMessages] = useState<ClientMessage[]>([]);
   const [clientMessagesLoading, setClientMessagesLoading] = useState(false);
   const [clientMessagesError, setClientMessagesError] = useState("");
+  const [seenMessageSignature, setSeenMessageSignature] = useState(
+    () => localStorage.getItem("seenClientMessageSignature") || "",
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -1333,12 +1336,6 @@ export default function ClientDocumentSearch() {
           return true;
         })
         .sort((first, second) => {
-          const messageDifference =
-            Number(second.client.messageCount || 0) -
-            Number(first.client.messageCount || 0);
-
-          if (messageDifference !== 0) return messageDifference;
-
           const firstMessageTime = first.client.latestMessageAt
             ? new Date(first.client.latestMessageAt).getTime()
             : 0;
@@ -1346,10 +1343,89 @@ export default function ClientDocumentSearch() {
             ? new Date(second.client.latestMessageAt).getTime()
             : 0;
 
-          return secondMessageTime - firstMessageTime;
+          const latestMessageDifference =
+            secondMessageTime - firstMessageTime;
+
+          if (latestMessageDifference !== 0) return latestMessageDifference;
+
+          return (
+            Number(second.client.messageCount || 0) -
+            Number(first.client.messageCount || 0)
+          );
         }),
     [clientFolders, completionFilter],
   );
+
+  const sortedClientMessages = useMemo(
+    () =>
+      [...clientMessages].sort((first, second) => {
+        const firstTime = first.createdAt
+          ? new Date(first.createdAt).getTime()
+          : 0;
+        const secondTime = second.createdAt
+          ? new Date(second.createdAt).getTime()
+          : 0;
+
+        return secondTime - firstTime || second.id - first.id;
+      }),
+    [clientMessages],
+  );
+
+  const totalMessageCount = clientFolders.reduce(
+    (total, folder) => total + Number(folder.client.messageCount || 0),
+    0,
+  );
+
+  const messageClients = [...clientFolders]
+    .filter((folder) => Number(folder.client.messageCount || 0) > 0)
+    .sort((first, second) => {
+      const firstTime = first.client.latestMessageAt
+        ? new Date(first.client.latestMessageAt).getTime()
+        : 0;
+      const secondTime = second.client.latestMessageAt
+        ? new Date(second.client.latestMessageAt).getTime()
+        : 0;
+
+      return secondTime - firstTime;
+    })
+    .map((folder) => ({
+      clientKey: folder.uniqueId,
+      clientName: getFullName(folder.client) || "Unnamed Client",
+      uniqueId: folder.client.uniqueId || folder.uniqueId,
+      messageCount: Number(folder.client.messageCount || 0),
+      latestMessageAt: folder.client.latestMessageAt
+        ? formatMessageDate(folder.client.latestMessageAt)
+        : undefined,
+    }));
+
+  const currentMessageSignature = messageClients
+    .map(
+      (client) =>
+        `${client.clientKey}:${client.messageCount}:${client.latestMessageAt || ""}`,
+    )
+    .join("|");
+
+  const unreadMessageCount =
+    currentMessageSignature &&
+    currentMessageSignature !== seenMessageSignature
+      ? totalMessageCount
+      : 0;
+
+  const handleMessagesOpen = () => {
+    setSeenMessageSignature(currentMessageSignature);
+    localStorage.setItem(
+      "seenClientMessageSignature",
+      currentMessageSignature,
+    );
+  };
+
+  const handleMessageClientClick = (clientKey: string) => {
+    const folder = clientFolders.find(
+      (clientFolder) => clientFolder.uniqueId === clientKey,
+    );
+
+    if (folder) void openClientMessages(folder.client);
+  };
 
   const handleSearch = () => {
     loadClients(search);
@@ -1713,6 +1789,10 @@ export default function ClientDocumentSearch() {
     <DashboardLayout
       title="Client Document Search"
       subtitle="Search client files, source, phone number, team status, loan details, and missing documents."
+      messageCount={unreadMessageCount}
+      messageClients={messageClients}
+      onMessagesOpen={handleMessagesOpen}
+      onMessageClientClick={handleMessageClientClick}
     >
       <div className="mx-auto max-w-[1800px] space-y-6">
         <section className={`${panelClass} overflow-hidden`}>
@@ -1868,7 +1948,8 @@ export default function ClientDocumentSearch() {
                 return (
                   <div
                     key={uniqueId}
-                    className={`${panelClass} overflow-hidden`}
+                    id={`client-folder-${uniqueId}`}
+                    className={`${panelClass} scroll-mt-28 overflow-hidden`}
                   >
                     <div className="grid gap-5 border-b border-slate-200/80 bg-slate-50/80 p-4 sm:p-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
                       <div className="flex min-w-0 items-center gap-4">
@@ -2531,7 +2612,7 @@ export default function ClientDocumentSearch() {
                       : ""
                   }`}
                 >
-                  {clientMessages.map((message) => (
+                  {sortedClientMessages.map((message) => (
                     <article
                       key={message.id}
                       className="rounded-2xl border border-cyan-100 bg-[linear-gradient(135deg,rgba(37,155,143,0.08),rgba(255,255,255,1))] p-4 shadow-sm sm:p-5"
