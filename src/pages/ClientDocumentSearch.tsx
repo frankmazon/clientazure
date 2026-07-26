@@ -10,6 +10,7 @@ import {
   FaChevronDown,
   FaChevronUp,
   FaCheckCircle,
+  FaCommentDots,
   FaDownload,
   FaExclamationTriangle,
   FaEye,
@@ -37,6 +38,9 @@ const CLIENTS_API = `${API_BASE}/clients`;
 const FILE_URL_API = `${API_BASE}/file-url`;
 const FILE_PREVIEW_API = `${API_BASE}/file-preview`;
 const DOCUMENTS_API = `${API_BASE}/documents`;
+const CLIENT_MESSAGES_API = `${API_BASE}/client-messages`;
+const getClientMessagesApi = (clientId: number) =>
+  `${CLIENT_MESSAGES_API}?clientId=${encodeURIComponent(String(clientId))}`;
 
 type AdminReferenceFile = {
   id: number;
@@ -66,6 +70,15 @@ type DocumentComparisonResult = {
   reasons: string[];
   requiresHumanReview: boolean;
   comparedAt?: string;
+};
+
+type ClientMessage = {
+  id: number;
+  clientId: number;
+  senderType: string;
+  senderName: string;
+  message: string;
+  createdAt?: string;
 };
 
 type DocumentOption = {
@@ -340,6 +353,8 @@ type Client = {
   assignedSpecialist?: string;
   requiredDocuments?: string[];
   waivedDocuments?: string[];
+  messageCount?: number;
+  latestMessageAt?: string;
 };
 
 type ClientFolder = {
@@ -429,6 +444,18 @@ const getDocumentStatusIcon = (status?: string) => {
   return <FaSyncAlt />;
 };
 
+const formatMessageDate = (value?: string) => {
+  if (!value) return "Date unavailable";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+};
+
 export default function ClientDocumentSearch() {
   const [search, setSearch] = useState("");
   const [clients, setClients] = useState<Client[]>([]);
@@ -454,6 +481,10 @@ export default function ClientDocumentSearch() {
   const [expandedFolderKey, setExpandedFolderKey] = useState<string | null>(
     null,
   );
+  const [messageClient, setMessageClient] = useState<Client | null>(null);
+  const [clientMessages, setClientMessages] = useState<ClientMessage[]>([]);
+  const [clientMessagesLoading, setClientMessagesLoading] = useState(false);
+  const [clientMessagesError, setClientMessagesError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -495,6 +526,47 @@ export default function ClientDocumentSearch() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openClientMessages = async (client: Client) => {
+    const clientId = Number(client.clientId || client.id);
+
+    setMessageClient(client);
+    setClientMessages([]);
+    setClientMessagesError("");
+
+    if (!clientId) {
+      setClientMessagesError("A valid client ID is required.");
+      return;
+    }
+
+    try {
+      setClientMessagesLoading(true);
+
+      const response = await fetch(getClientMessagesApi(clientId));
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to load client messages.");
+      }
+
+      setClientMessages(result.messages || []);
+    } catch (error) {
+      setClientMessagesError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load client messages.",
+      );
+    } finally {
+      setClientMessagesLoading(false);
+    }
+  };
+
+  const closeClientMessages = () => {
+    setMessageClient(null);
+    setClientMessages([]);
+    setClientMessagesError("");
+    setClientMessagesLoading(false);
   };
 
   useEffect(() => {
@@ -706,6 +778,18 @@ export default function ClientDocumentSearch() {
         "special_notes",
         "special notes",
         "Special Notes",
+      ]) as string | undefined,
+      messageCount: Number(
+        pickValue(rawClient, [
+          "messageCount",
+          "MessageCount",
+          "clientMessageCount",
+          "ClientMessageCount",
+        ]) || 0,
+      ),
+      latestMessageAt: pickValue(rawClient, [
+        "latestMessageAt",
+        "LatestMessageAt",
       ]) as string | undefined,
 
       referrer: {
@@ -1242,11 +1326,28 @@ export default function ClientDocumentSearch() {
 
   const visibleClientFolders = useMemo(
     () =>
-      clientFolders.filter((folder) => {
-        if (completionFilter === "complete") return folder.isComplete;
-        if (completionFilter === "incomplete") return !folder.isComplete;
-        return true;
-      }),
+      clientFolders
+        .filter((folder) => {
+          if (completionFilter === "complete") return folder.isComplete;
+          if (completionFilter === "incomplete") return !folder.isComplete;
+          return true;
+        })
+        .sort((first, second) => {
+          const messageDifference =
+            Number(second.client.messageCount || 0) -
+            Number(first.client.messageCount || 0);
+
+          if (messageDifference !== 0) return messageDifference;
+
+          const firstMessageTime = first.client.latestMessageAt
+            ? new Date(first.client.latestMessageAt).getTime()
+            : 0;
+          const secondMessageTime = second.client.latestMessageAt
+            ? new Date(second.client.latestMessageAt).getTime()
+            : 0;
+
+          return secondMessageTime - firstMessageTime;
+        }),
     [clientFolders, completionFilter],
   );
 
@@ -1705,8 +1806,8 @@ export default function ClientDocumentSearch() {
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <StatCard
-            label="Total Records"
-            value={clients.length}
+            label="Total Clients"
+            value={clientFolders.length}
             className="border-slate-200/80 bg-white text-slate-900"
             icon={<FaFileAlt />}
             onClick={() => setCompletionFilter("all")}
@@ -1762,25 +1863,26 @@ export default function ClientDocumentSearch() {
               }) => {
                 const sourceLabel = getClientSource(client);
                 const isExpanded = expandedFolderKey === uniqueId;
+                const messageCount = Number(client.messageCount || 0);
 
                 return (
                   <div
                     key={uniqueId}
                     className={`${panelClass} overflow-hidden`}
                   >
-                    <div className="flex flex-col gap-4 border-b border-slate-200/80 bg-slate-50/80 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="grid gap-5 border-b border-slate-200/80 bg-slate-50/80 p-4 sm:p-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
                       <div className="flex min-w-0 items-center gap-4">
                         <div
                           className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
                             isComplete
                               ? "bg-green-100 text-green-600 ring-1 ring-green-200"
-                              : "bg-red-100 text-red-600 ring-1 ring-red-200"
+                              : "bg-orange-100 text-orange-600 ring-1 ring-orange-200"
                           }`}
                         >
                           {isComplete ? (
                             <FaCheckCircle className="text-2xl" />
                           ) : (
-                            <FaExclamationTriangle className="text-2xl" />
+                            <FaFolder className="text-2xl" />
                           )}
                         </div>
 
@@ -1789,18 +1891,18 @@ export default function ClientDocumentSearch() {
                             {getFullName(client) || "Unnamed Client"}
                           </h3>
 
-                          <div className="mt-2 flex flex-wrap gap-2 text-sm text-slate-500">
-                            <span className="inline-flex min-w-0 items-center gap-2 break-all rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500 xl:flex-nowrap">
+                            <span className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
                               <FaIdBadge className="text-xs" />
                               {client.uniqueId || uniqueId}
                             </span>
 
-                            <span className="inline-flex min-w-0 items-center gap-2 break-all rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
+                            <span className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
                               <FaUser className="text-xs" />
                               {client.email || "No email"}
                             </span>
 
-                            <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
+                            <span className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
                               <FaPhone className="text-xs" />
                               {client.phone || "No phone"}
                             </span>
@@ -1808,59 +1910,87 @@ export default function ClientDocumentSearch() {
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-black sm:px-4 sm:text-sm ${
-                            sourceLabel === "Referral"
-                              ? "bg-[#259b8f]/10 text-[#1f8178] ring-1 ring-[#259b8f]/20"
-                              : sourceLabel === "Direct Client"
-                                ? "bg-cyan-100 text-cyan-700 ring-1 ring-cyan-200"
-                                : "bg-sky-100 text-sky-700 ring-1 ring-sky-200"
-                          }`}
-                        >
-                          {sourceLabel === "Referral" ? (
-                            <FaUserFriends />
-                          ) : (
-                            <FaBriefcase />
-                          )}
-                          {sourceLabel}
-                        </span>
+                      <div className="flex flex-wrap items-center gap-2 xl:flex-nowrap xl:justify-end">
+                        <div className="contents">
+                          <span
+                            className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-semibold ${
+                              sourceLabel === "Referral"
+                                ? "bg-[#259b8f]/10 text-[#1f8178] ring-1 ring-[#259b8f]/20"
+                                : sourceLabel === "Direct Client"
+                                  ? "bg-cyan-100 text-cyan-700 ring-1 ring-cyan-200"
+                                  : "bg-sky-100 text-sky-700 ring-1 ring-sky-200"
+                            }`}
+                          >
+                            {sourceLabel === "Referral" ? (
+                              <FaUserFriends />
+                            ) : (
+                              <FaBriefcase />
+                            )}
+                            {sourceLabel}
+                          </span>
 
-                        <span className="rounded-full bg-orange-100 px-3 py-2 text-xs font-black text-orange-700 ring-1 ring-orange-200 sm:px-4 sm:text-sm">
-                          {getStatus(client)}
-                        </span>
+                          <span className="inline-flex h-8 items-center whitespace-nowrap rounded-full bg-orange-100 px-3 text-xs font-semibold text-orange-700 ring-1 ring-orange-200">
+                            {getStatus(client)}
+                          </span>
 
-                        <span
-                          className={`rounded-full px-3 py-2 text-xs font-black sm:px-4 sm:text-sm ${
-                            !hasSupportedTransaction
-                              ? "bg-slate-200 text-slate-700 ring-1 ring-slate-300"
+                          <span
+                            className={`inline-flex h-8 items-center whitespace-nowrap rounded-full px-3 text-xs font-semibold ${
+                              !hasSupportedTransaction
+                                ? "bg-slate-200 text-slate-700 ring-1 ring-slate-300"
+                                : isComplete
+                                  ? "bg-green-100 text-green-700 ring-1 ring-green-200"
+                                  : "bg-red-100 text-red-700 ring-1 ring-red-200"
+                            }`}
+                          >
+                            {!hasSupportedTransaction
+                              ? "Checklist unavailable"
                               : isComplete
-                                ? "bg-green-100 text-green-700 ring-1 ring-green-200"
-                                : "bg-red-100 text-red-700 ring-1 ring-red-200"
-                          }`}
-                        >
-                          {!hasSupportedTransaction
-                            ? "Checklist unavailable"
-                            : isComplete
-                              ? "Complete"
-                              : "Incomplete"}
-                        </span>
+                                ? "Complete"
+                                : "Incomplete"}
+                          </span>
+                        </div>
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setExpandedFolderKey(isExpanded ? null : uniqueId)
-                          }
-                          aria-expanded={isExpanded}
-                          aria-label={
-                            isExpanded
-                              ? "Hide client details"
-                              : "Show client details"
-                          }
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-100"
-                        >
-                          {isExpanded ? <FaChevronUp /> : <FaChevronDown />}
-                        </button>
+                        <div className="contents">
+                          <button
+                            type="button"
+                            onClick={() => void openClientMessages(client)}
+                            aria-label={`View messages for ${
+                              getFullName(client) ||
+                              client.uniqueId ||
+                              uniqueId
+                            }`}
+                            title="View client messages"
+                            className={`relative inline-flex h-8 items-center justify-center gap-2 whitespace-nowrap rounded-full px-3.5 text-xs font-semibold transition ${
+                              messageCount > 0
+                                ? "bg-[#259b8f] text-white shadow-[0_10px_22px_rgba(37,155,143,0.22)] hover:bg-[#1f8178]"
+                                : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            <FaCommentDots />
+                            <span>Messages</span>
+                            {messageCount > 0 && (
+                              <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#EE6521] px-1.5 py-0.5 text-[10px] font-black leading-none text-white ring-2 ring-white">
+                                {messageCount > 99 ? "99+" : messageCount}
+                              </span>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedFolderKey(isExpanded ? null : uniqueId)
+                            }
+                            aria-expanded={isExpanded}
+                            aria-label={
+                              isExpanded
+                                ? "Hide client details"
+                                : "Show client details"
+                            }
+                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-xs text-slate-600 ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-900"
+                          >
+                            {isExpanded ? <FaChevronUp /> : <FaChevronDown />}
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -2306,6 +2436,156 @@ export default function ClientDocumentSearch() {
           </div>
         )}
       </div>
+
+      {messageClient && (
+        <div
+          className="fixed inset-0 z-[9998] flex items-center justify-center bg-slate-950/70 p-3 sm:p-5"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="client-messages-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeClientMessages();
+            }
+          }}
+        >
+          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="relative bg-[linear-gradient(135deg,#259b8f,#0f172a_68%,#EE6521)] p-5 pr-16 text-white sm:p-7 sm:pr-20">
+              <div className="flex items-start gap-4">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-xl ring-1 ring-white/20">
+                  <FaCommentDots />
+                </span>
+
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-white/65">
+                    Client Portal
+                  </p>
+                  <h2
+                    id="client-messages-title"
+                    className="mt-1 break-words text-2xl font-black text-white"
+                  >
+                    Messages from{" "}
+                    {getFullName(messageClient) || "Unnamed Client"}
+                  </h2>
+                  <p className="mt-2 break-all text-sm font-semibold text-white/75">
+                    Client ID:{" "}
+                    {messageClient.uniqueId || messageClient.clientId}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeClientMessages}
+                aria-label="Close client messages"
+                className="absolute right-4 top-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-white ring-1 ring-white/15 transition hover:bg-white/20 sm:right-6 sm:top-6"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-black text-slate-900">Message Notes</h3>
+                  <p className="text-sm font-semibold text-slate-500">
+                    Notes submitted by the client from their portal.
+                  </p>
+                </div>
+
+                <span className="rounded-full bg-[#259b8f]/10 px-3 py-1 text-xs font-black text-[#1f8178]">
+                  {clientMessages.length}{" "}
+                  {clientMessages.length === 1 ? "message" : "messages"}
+                </span>
+              </div>
+
+              {clientMessagesLoading ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-10 text-center">
+                  <FaSyncAlt className="mx-auto animate-spin text-3xl text-[#259b8f]" />
+                  <p className="mt-4 text-sm font-black text-slate-600">
+                    Loading client messages...
+                  </p>
+                </div>
+              ) : clientMessagesError ? (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
+                  <p className="font-black text-red-700">
+                    Unable to load messages
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-red-600">
+                    {clientMessagesError}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void openClientMessages(messageClient)}
+                    className="mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-black text-white transition hover:bg-red-700"
+                  >
+                    <FaSyncAlt />
+                    Try Again
+                  </button>
+                </div>
+              ) : clientMessages.length ? (
+                <div
+                  className={`space-y-4 ${
+                    clientMessages.length > 2
+                      ? "max-h-[260px] overflow-y-auto pr-2"
+                      : ""
+                  }`}
+                >
+                  {clientMessages.map((message) => (
+                    <article
+                      key={message.id}
+                      className="rounded-2xl border border-cyan-100 bg-[linear-gradient(135deg,rgba(37,155,143,0.08),rgba(255,255,255,1))] p-4 shadow-sm sm:p-5"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#259b8f] text-sm text-white">
+                            <FaUser />
+                          </span>
+                          <div>
+                            <p className="text-sm font-black text-slate-900">
+                              {message.senderName || "Client"}
+                            </p>
+                            <p className="text-xs font-bold text-[#1f8178]">
+                              Client message
+                            </p>
+                          </div>
+                        </div>
+                        <time className="text-xs font-bold text-slate-400">
+                          {formatMessageDate(message.createdAt)}
+                        </time>
+                      </div>
+
+                      <p className="mt-4 whitespace-pre-wrap break-words text-sm font-semibold leading-7 text-slate-700 sm:text-base">
+                        {message.message}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                  <FaCommentDots className="mx-auto text-4xl text-slate-300" />
+                  <p className="mt-4 font-black text-slate-800">
+                    No client messages yet
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    Notes submitted from the client portal will appear here.
+                  </p>
+                </div>
+              )}
+
+              <div className="mt-5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={closeClientMessages}
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-950 px-5 py-2 text-sm font-black text-white transition hover:bg-slate-800"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {previewFile && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/75 p-2 sm:p-4">

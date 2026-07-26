@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   FaBriefcase,
   FaCheckCircle,
@@ -6,6 +6,7 @@ import {
   FaCloudUploadAlt,
   FaDownload,
   FaCalendarAlt,
+  FaCommentDots,
   FaEnvelope,
   FaExternalLinkAlt,
   FaExclamationTriangle,
@@ -16,6 +17,7 @@ import {
   FaFolderOpen,
   FaIdBadge,
   FaLock,
+  FaPaperPlane,
   FaPhoneAlt,
   FaSearch,
   FaSignOutAlt,
@@ -105,9 +107,18 @@ type ClientLoginUser = {
   mustChangePassword?: boolean;
 };
 
+type ClientMessage = {
+  id: number;
+  clientId: number;
+  senderType: string;
+  senderName: string;
+  message: string;
+  createdAt?: string;
+};
+
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ||
-  "https://docsuploadpythonapi-flex.azurewebsites.net/api"
+  "https://docsuploadpythonapi.azurewebsites.net/api"
 ).replace(/\/$/, "");
 
 const CLIENTS_API = `${API_BASE}/clients`;
@@ -115,6 +126,9 @@ const UPLOAD_API = `${API_BASE}/uploadclient`;
 const FILE_URL_API = `${API_BASE}/file-url`;
 const CLIENT_LOGIN_API = `${API_BASE}/client-login`;
 const CLIENT_CHANGE_PASSWORD_API = `${API_BASE}/client-change-password`;
+const CLIENT_MESSAGES_API = `${API_BASE}/client-messages`;
+const getClientMessagesApi = (clientId: number) =>
+  `${CLIENT_MESSAGES_API}?clientId=${encodeURIComponent(String(clientId))}`;
 
 type DocumentOption = {
   label: string;
@@ -687,6 +701,18 @@ const normalizeLoggedClient = (client: ClientLoginUser): ClientLoginUser => {
   };
 };
 
+const formatMessageDate = (value?: string) => {
+  if (!value) return "Just now";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+};
+
 export default function ClientDashboard() {
   const [loginUniqueId, setLoginUniqueId] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -716,6 +742,11 @@ export default function ClientDashboard() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [clientMessages, setClientMessages] = useState<ClientMessage[]>([]);
+  const [clientMessageText, setClientMessageText] = useState("");
+  const [clientMessagesLoading, setClientMessagesLoading] = useState(false);
+  const [clientMessageSending, setClientMessageSending] = useState(false);
+  const [clientMessagesError, setClientMessagesError] = useState("");
 
   const specialist = specialists[selectedSpecialist];
 
@@ -959,6 +990,90 @@ export default function ClientDashboard() {
     }
   };
 
+  const loadClientMessages = async (clientId: number) => {
+    try {
+      setClientMessagesLoading(true);
+      setClientMessagesError("");
+
+      const response = await fetch(getClientMessagesApi(clientId));
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to load your notes.");
+      }
+
+      setClientMessages(result.messages || []);
+    } catch (error) {
+      setClientMessagesError(
+        error instanceof Error ? error.message : "Failed to load your notes.",
+      );
+    } finally {
+      setClientMessagesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!loggedClient?.id) {
+      setClientMessages([]);
+      return;
+    }
+
+    void loadClientMessages(loggedClient.id);
+  }, [loggedClient?.id]);
+
+  const handleSubmitClientMessage = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+
+    const clientId = Number(loggedClient?.id || selectedClient?.clientId);
+    const message = clientMessageText.trim();
+
+    if (!clientId) {
+      setClientMessagesError("Please log in again before sending a note.");
+      return;
+    }
+
+    if (!message) {
+      setClientMessagesError("Please enter your note.");
+      return;
+    }
+
+    if (message.length > 2000) {
+      setClientMessagesError("Your note cannot exceed 2,000 characters.");
+      return;
+    }
+
+    try {
+      setClientMessageSending(true);
+      setClientMessagesError("");
+
+      const response = await fetch(CLIENT_MESSAGES_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, message }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to send your note.");
+      }
+
+      setClientMessageText("");
+      setClientMessages((currentMessages) => [
+        ...currentMessages,
+        result.clientMessage,
+      ]);
+    } catch (error) {
+      setClientMessagesError(
+        error instanceof Error ? error.message : "Failed to send your note.",
+      );
+    } finally {
+      setClientMessageSending(false);
+    }
+  };
+
   const handleClientLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -1027,6 +1142,9 @@ export default function ClientDashboard() {
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
+    setClientMessages([]);
+    setClientMessageText("");
+    setClientMessagesError("");
   };
 
   const resetPasswordForm = () => {
@@ -1790,6 +1908,130 @@ export default function ClientDashboard() {
           />
         </div>
 
+        <section
+          aria-labelledby="client-message-notes-title"
+          className="overflow-hidden rounded-2xl border border-cyan-200 bg-white shadow-[0_14px_36px_rgba(15,23,42,0.06)]"
+        >
+          <div className="border-b border-cyan-100 bg-[linear-gradient(135deg,rgba(37,155,143,0.12),rgba(255,255,255,0.98)_48%,rgba(238,101,33,0.08))] p-4 sm:px-5">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#259b8f] text-base text-white shadow-[0_10px_20px_rgba(37,155,143,0.2)]">
+                <FaCommentDots />
+              </span>
+
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#1f8178]">
+                  Client Messages
+                </p>
+                <h2
+                  id="client-message-notes-title"
+                  className="mt-0.5 text-lg font-black text-slate-950"
+                >
+                  Contact Your Team
+                </h2>
+                <p className="mt-0.5 text-sm font-medium leading-5 text-slate-600">
+                  Send a note about your application. Your FundsNational team
+                  will see it in the admin dashboard.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid items-start gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]">
+            <form onSubmit={handleSubmitClientMessage}>
+              <label
+                htmlFor="client-message-note"
+                className="mb-2 block text-sm font-black text-slate-800"
+              >
+                Write your message
+              </label>
+              <textarea
+                id="client-message-note"
+                value={clientMessageText}
+                onChange={(event) => {
+                  setClientMessageText(event.target.value);
+                  if (clientMessagesError) setClientMessagesError("");
+                }}
+                maxLength={2000}
+                rows={4}
+                placeholder="Type your message or additional information here..."
+                className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/10"
+              />
+
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-xs font-bold text-slate-400">
+                  {clientMessageText.length}/2,000 characters
+                </span>
+
+                <button
+                  type="submit"
+                  disabled={clientMessageSending || !clientMessageText.trim()}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#259b8f] px-4 text-sm font-bold text-white shadow-[0_8px_18px_rgba(37,155,143,0.18)] transition hover:bg-[#1f8178] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+                >
+                  <FaPaperPlane />
+                  {clientMessageSending ? "Sending..." : "Send Message"}
+                </button>
+              </div>
+
+              {clientMessagesError && (
+                <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                  {clientMessagesError}
+                </p>
+              )}
+            </form>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-black text-slate-900">Your Messages</h3>
+                  <p className="text-xs font-semibold text-slate-500">
+                    Notes are saved with the date and time.
+                  </p>
+                </div>
+                <span className="rounded-full bg-[#259b8f]/10 px-3 py-1 text-xs font-black text-[#1f8178]">
+                  {clientMessages.length}
+                </span>
+              </div>
+
+              {clientMessagesLoading ? (
+                <p className="py-8 text-center text-sm font-bold text-slate-500">
+                  Loading notes...
+                </p>
+              ) : clientMessages.length ? (
+                <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                  {[...clientMessages].reverse().map((message) => (
+                    <article
+                      key={message.id}
+                      className="rounded-xl border border-cyan-100 bg-white p-3 shadow-sm"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-black text-[#1f8178]">
+                          {message.senderName || "You"}
+                        </p>
+                        <time className="text-xs font-bold text-slate-400">
+                          {formatMessageDate(message.createdAt)}
+                        </time>
+                      </div>
+                      <p className="mt-1.5 whitespace-pre-wrap break-words text-sm font-medium leading-5 text-slate-700">
+                        {message.message}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-8 text-center">
+                  <FaCommentDots className="mx-auto text-4xl text-slate-300" />
+                  <p className="mt-3 font-black text-slate-700">
+                    No messages yet
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    Your sent messages will appear here.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="space-y-6">
             <section className={sectionClass}>
@@ -2010,7 +2252,6 @@ export default function ClientDashboard() {
                         "Anticipated Settlement Date",
                         selectedClient.anticipatedSettlementDate,
                       ],
-                      ["Special Notes", selectedClient.specialNotes],
                     ].map(([label, value]) => (
                       <div key={label} className={fieldCardClass}>
                         <p className="text-xs font-bold uppercase text-slate-400">

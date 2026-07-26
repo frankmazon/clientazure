@@ -41,6 +41,7 @@ export default function DashboardLayout({
   const navigate = useNavigate();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarHidden, setIsSidebarHidden] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
@@ -165,9 +166,15 @@ export default function DashboardLayout({
       <Sidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        isDesktopHidden={isSidebarHidden}
+        onDesktopClose={() => setIsSidebarHidden((hidden) => !hidden)}
       />
 
-      <div className="lg:pl-72">
+      <div
+        className={`transition-[padding] duration-300 ${
+          isSidebarHidden ? 'lg:pl-0' : 'lg:pl-72'
+        }`}
+      >
         <header className="sticky top-0 z-40 flex h-20 items-center justify-between border-b border-[#219688]/15 bg-white/95 px-4 shadow-sm backdrop-blur sm:px-6">
           <div className="flex min-w-0 items-center gap-4">
             <button

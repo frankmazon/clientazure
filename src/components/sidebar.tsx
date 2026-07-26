@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   FaChevronDown,
+  FaChevronLeft,
   FaChevronRight,
   FaExclamationTriangle,
   FaExternalLinkAlt,
@@ -17,6 +18,8 @@ import {
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  isDesktopHidden?: boolean;
+  onDesktopClose?: () => void;
 }
 
 const documentTypes = [
@@ -43,7 +46,12 @@ const documentTypes = [
   { label: 'Council Rates Notice', value: 'council-rates-notice' },
 ];
 
-export default function Sidebar({ isOpen, onClose }: SidebarProps) {
+export default function Sidebar({
+  isOpen,
+  onClose,
+  isDesktopHidden = false,
+  onDesktopClose,
+}: SidebarProps) {
   const navigate = useNavigate();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showClients, setShowClients] = useState(true);
@@ -81,8 +89,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-72 bg-slate-950 text-white transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 w-72 bg-slate-950 text-white shadow-2xl transition-transform duration-300 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
+        } ${
+          isDesktopHidden ? 'lg:-translate-x-full' : 'lg:translate-x-0'
         }`}
       >
         <div className="flex h-full flex-col">
@@ -100,6 +110,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             >
               <FaTimes />
             </button>
+
           </div>
 
           <nav className="flex-1 space-y-2 overflow-y-auto px-4 py-6">
@@ -230,6 +241,20 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </div>
         </div>
       </aside>
+
+      <button
+        type="button"
+        onClick={onDesktopClose}
+        className={`fixed top-24 z-50 hidden h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-[#EE6521] text-xs text-white shadow-[0_8px_20px_rgba(15,23,42,0.24)] transition-all duration-300 hover:scale-105 hover:bg-orange-600 lg:flex ${
+          isDesktopHidden
+            ? 'left-2'
+            : 'left-72 -translate-x-1/2'
+        }`}
+        aria-label={isDesktopHidden ? 'Show sidebar' : 'Hide sidebar'}
+        title={isDesktopHidden ? 'Show sidebar' : 'Hide sidebar'}
+      >
+        {isDesktopHidden ? <FaChevronRight /> : <FaChevronLeft />}
+      </button>
 
       {showLogoutModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4">

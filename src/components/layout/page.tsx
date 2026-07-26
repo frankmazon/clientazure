@@ -1337,7 +1337,6 @@ export default function HomePage() {
                   {renderPhoneField({
                     countryCodeName: "referrerPhoneCountryCode",
                     phoneName: "referrerPhone",
-                    label: `${detailLabel} Phone`,
                     placeholder: `${detailLabel} Phone`,
                   })}
 
