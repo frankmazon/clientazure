@@ -256,7 +256,7 @@ const specialists = {
   giulio: {
     name: "Giulio Avian",
     phone: "03 8696 6300",
-    email: "giulio@fundsnational.com",
+    email: "giulio@sbrfunding.com",
     booking: "https://calendly.com/giulio-4",
   },
   leo: {
@@ -1929,7 +1929,7 @@ export default function ClientDashboard() {
                   Contact Your Team
                 </h2>
                 <p className="mt-0.5 text-sm font-medium leading-5 text-slate-600">
-                  Send a note about your application. Your FundsNational team
+                  Send a note about your application. Your SBR Funding team
                   will see it in the admin dashboard.
                 </p>
               </div>

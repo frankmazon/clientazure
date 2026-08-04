@@ -242,7 +242,7 @@ const specialists = {
   giulio: {
     name: "Giulio Avian",
     phone: "03 8696 6300",
-    email: "giulio@fundsnational.com",
+    email: "giulio@sbrfunding.com",
     booking: "https://calendly.com/giulio-4",
   },
   leo: {
