@@ -849,6 +849,26 @@ export default function HomePage() {
     }
 
     const selectedSource = canonicalSource(formData.source);
+    const compatibilityClassification =
+      formData.classificationType ||
+      (usesSimplifiedIntake
+        ? isReferral
+          ? "Referral"
+          : "Direct Client"
+        : "To be confirmed");
+    const compatibilityObjective =
+      formData.objective ||
+      formData.clientNeedsObjectives ||
+      "To be confirmed";
+    const compatibilityLoanType =
+      formData.loanType || "To be confirmed";
+    const compatibilityPurpose =
+      formData.purpose ||
+      formData.painPoint ||
+      formData.clientNeedsObjectives ||
+      "To be confirmed";
+    const compatibilitySecurity =
+      formData.security || "To be confirmed";
 
     appendFormAliases(
       azureFormData,
@@ -878,7 +898,7 @@ export default function HomePage() {
     appendFormAliases(
       azureFormData,
       ["classificationType", "ClassificationType", "classification_type"],
-      formData.classificationType,
+      compatibilityClassification,
     );
     appendFormAliases(
       azureFormData,
@@ -888,14 +908,18 @@ export default function HomePage() {
     appendFormAliases(
       azureFormData,
       ["objective", "Objective"],
-      formData.objective,
+      compatibilityObjective,
     );
     appendFormAliases(
       azureFormData,
       ["loanType", "LoanType", "loan_type"],
-      formData.loanType,
+      compatibilityLoanType,
     );
-    appendFormAliases(azureFormData, ["purpose", "Purpose"], formData.purpose);
+    appendFormAliases(
+      azureFormData,
+      ["purpose", "Purpose"],
+      compatibilityPurpose,
+    );
     appendFormAliases(
       azureFormData,
       ["transactionType", "TransactionType", "transaction_type"],
@@ -1019,13 +1043,13 @@ export default function HomePage() {
     appendFormAliases(
       azureFormData,
       ["security", "Security"],
-      formData.security,
+      compatibilitySecurity,
     );
 
     appendFormAliases(
       azureFormData,
       ["loanAmount", "LoanAmount", "loan_amount"],
-      formData.loanAmount,
+      formData.loanAmount || "0",
     );
     appendFormAliases(
       azureFormData,
