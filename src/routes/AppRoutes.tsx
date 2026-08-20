@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Home from '../components/layout/page';
 import Dashboard from '../pages/Dashboard';
 import Clients from '../pages/Clients';
+import Referrers from '../pages/Referrers';
 import ExportClients from '../pages/ExportClients';
 import ClientDashboard from '../pages/ClientDashboard';
 import Login from '../pages/Login';
@@ -32,6 +33,15 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute>
             <Clients />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dashboard/referrers"
+        element={
+          <ProtectedRoute>
+            <Referrers />
           </ProtectedRoute>
         }
       />

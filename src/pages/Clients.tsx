@@ -591,8 +591,8 @@ export default function Clients() {
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`w-full rounded-2xl border p-4 text-left shadow-[0_14px_34px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.1)] focus:outline-none focus:ring-4 focus:ring-[#259b8f]/15 ${
-        active ? 'ring-2 ring-[#259b8f]' : ''
+      className={`group w-full rounded-2xl border p-5 text-left shadow-[0_12px_30px_rgba(15,23,42,0.05)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.1)] focus:outline-none focus:ring-4 focus:ring-[#259b8f]/15 ${
+        active ? 'ring-2 ring-[#259b8f] ring-offset-2' : ''
       } ${className}`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -600,12 +600,12 @@ export default function Clients() {
           {label}
         </p>
         {icon && (
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/70 text-base shadow-sm">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-base shadow-sm ring-1 ring-slate-100 transition group-hover:scale-105">
             {icon}
           </span>
         )}
       </div>
-      <p className="mt-4 text-2xl font-black leading-none sm:text-3xl">{value}</p>
+      <p className="mt-5 text-3xl font-black leading-none">{value}</p>
     </button>
   );
 
@@ -614,13 +614,14 @@ export default function Clients() {
       title="Clients"
       subtitle="View submitted clients, source, loan details, team call status, and document completion."
     >
-      <div className="mx-auto max-w-[1800px] space-y-6">
+      <div className="mx-auto max-w-[1600px] space-y-6">
         <div className={`${panelClass} overflow-hidden`}>
-          <div className="bg-[linear-gradient(135deg,rgba(37,155,143,0.94),rgba(15,23,42,0.98)_56%,rgba(238,101,33,0.88))] p-5 text-white sm:p-6">
+          <div className="relative overflow-hidden bg-[linear-gradient(120deg,#259b8f,#0f172a_58%,#EE6521)] p-6 text-white sm:p-8">
+            <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-white/10 blur-2xl" />
             <p className="text-xs font-black uppercase tracking-[0.22em] text-white/65">
               Client Records
             </p>
-            <h2 className="mt-2 text-2xl font-black text-white">
+            <h2 className="mt-2 text-3xl font-black text-white">
               Search Clients
             </h2>
             <p className="mt-2 max-w-4xl text-sm leading-6 text-white/75">
@@ -628,17 +629,17 @@ export default function Clients() {
             </p>
           </div>
 
-          <div className="p-5 sm:p-6">
+          <div className="p-4 sm:p-6">
             <div className="relative">
-            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
 
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search unique ID, name, email, phone, source, loan details, status, or file..."
-              className="h-14 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 text-sm font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
-            />
+              <input
+                type="text"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search unique ID, name, email, phone, source, loan details, status, or file..."
+                className="h-14 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:font-medium placeholder:text-slate-400 focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
+              />
             </div>
           </div>
         </div>
@@ -661,7 +662,7 @@ export default function Clients() {
               <StatCard
                 label="Total Records"
                 value={clientGroups.length}
-                className="border-slate-200/80 bg-white text-slate-900"
+                className="border-slate-200/80 bg-[linear-gradient(135deg,#ffffff,#f8fafc)] text-slate-900"
                 icon={<FaFileAlt />}
                 active={summaryFilter === 'all'}
                 onClick={() => setSummaryFilter('all')}
@@ -669,7 +670,7 @@ export default function Clients() {
               <StatCard
                 label="Complete"
                 value={completeCount}
-                className="border-green-200/80 bg-white text-green-700"
+                className="border-green-200/80 bg-[linear-gradient(135deg,#ffffff,#f0fdf4)] text-green-700"
                 icon={<FaCheckCircle />}
                 active={summaryFilter === 'complete'}
                 onClick={() => setSummaryFilter('complete')}
@@ -677,14 +678,14 @@ export default function Clients() {
               <StatCard
                 label="Incomplete"
                 value={incompleteCount}
-                className="border-red-200/80 bg-white text-red-700"
+                className="border-red-200/80 bg-[linear-gradient(135deg,#ffffff,#fef2f2)] text-red-700"
                 icon={<FaExclamationTriangle />}
                 active={summaryFilter === 'incomplete'}
                 onClick={() => setSummaryFilter('incomplete')}
               />
             </div>
 
-            <div className="space-y-4 lg:hidden">
+            <div className="space-y-4 xl:hidden">
               {filteredGroups.map((group) => {
                 const sourceLabel = getClientSource(group.client);
 
@@ -883,33 +884,35 @@ export default function Clients() {
               )}
             </div>
 
-            <div className={`hidden overflow-hidden lg:block ${panelClass}`}>
-              <div className="flex min-h-28 items-center justify-between border-b border-slate-200 bg-slate-50/80 px-8 py-6">
+            <div className={`hidden overflow-hidden xl:block ${panelClass}`}>
+              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-6 py-5">
                 <div>
-                  <h2 className="text-2xl font-black text-slate-900">
+                  <h2 className="text-xl font-black text-slate-900">
                     Client List
                   </h2>
-                  <p className="mt-1 text-lg text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500">
                     {filteredGroups.length} client
                     {filteredGroups.length !== 1 ? 's' : ''}
                   </p>
                 </div>
 
-                <FaFileAlt className="text-3xl text-[#EE6521]" />
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-xl text-[#EE6521] ring-1 ring-orange-100">
+                  <FaFileAlt />
+                </span>
               </div>
 
               <div className="overflow-x-auto overscroll-x-contain">
-                <table className="w-full min-w-[1640px] table-fixed border-collapse">
+                <table className="w-full min-w-[1495px] table-fixed border-collapse">
                   <colgroup>
-                    <col style={{ width: '150px' }} />
-                    <col style={{ width: '170px' }} />
+                    <col style={{ width: '145px' }} />
+                    <col style={{ width: '140px' }} />
                     <col style={{ width: '190px' }} />
-                    <col style={{ width: '270px' }} />
-                    <col style={{ width: '260px' }} />
-                    <col style={{ width: '170px' }} />
-                    <col style={{ width: '160px' }} />
-                    <col style={{ width: '170px' }} />
-                    <col style={{ width: '130px' }} />
+                    <col style={{ width: '215px' }} />
+                    <col style={{ width: '230px' }} />
+                    <col style={{ width: '155px' }} />
+                    <col style={{ width: '150px' }} />
+                    <col style={{ width: '145px' }} />
+                    <col style={{ width: '125px' }} />
                   </colgroup>
                   <thead className="bg-slate-50/90">
                     <tr>
@@ -940,15 +943,15 @@ export default function Clients() {
 
                       return (
                         <tr key={group.key} className="align-top transition hover:bg-slate-50">
-                          <td className="px-4 py-6 align-top text-sm font-bold leading-5 text-slate-700">
-                            <span className="break-all">
+                          <td className="px-4 py-6 align-top text-sm font-black leading-5 text-slate-700">
+                            <span className="whitespace-nowrap font-mono tracking-tight">
                               {group.client.uniqueId || '-'}
                             </span>
                           </td>
 
                           <td className="px-4 py-6 align-top">
                             <span
-                              className={`inline-flex max-w-full items-center gap-2 whitespace-normal rounded-full px-3 py-2 text-xs font-black leading-4 ${
+                              className={`inline-flex max-w-full items-center gap-2 whitespace-nowrap rounded-full px-3 py-2 text-xs font-black leading-4 ${
                                 sourceLabel === 'Referral'
                                   ? 'bg-[#259b8f]/10 text-[#1f8178] ring-1 ring-[#259b8f]/20'
                                   : sourceLabel === 'Direct Client'
@@ -966,7 +969,7 @@ export default function Clients() {
                           </td>
 
                           <td className="px-4 py-6 align-top">
-                            <p className="break-words text-base font-black leading-6 text-slate-900">
+                            <p className="text-[15px] font-black leading-6 text-slate-900">
                               {getFullName(group.client) || '-'}
                             </p>
                           </td>
@@ -1001,14 +1004,14 @@ export default function Clients() {
                           </td>
 
                           <td className="px-4 py-6 align-top">
-                            <span className="inline-flex max-w-full whitespace-normal rounded-2xl bg-orange-100 px-3 py-2 text-xs font-black leading-5 text-orange-700 ring-1 ring-orange-200">
+                            <span className="inline-flex max-w-full rounded-xl bg-orange-100 px-3 py-2 text-xs font-black leading-5 text-orange-700 ring-1 ring-orange-200">
                               {getStatus(group.client)}
                             </span>
                           </td>
 
                           <td className="px-4 py-6 align-top">
                             <span
-                              className={`inline-flex max-w-full items-center gap-2 whitespace-normal rounded-full px-3 py-2 text-xs font-black leading-4 ${
+                              className={`inline-flex max-w-full items-center gap-2 whitespace-nowrap rounded-full px-3 py-2 text-xs font-black leading-4 ${
                                 !group.hasSupportedTransaction
                                   ? 'bg-slate-200 text-slate-700'
                                   : group.isComplete

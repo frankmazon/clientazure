@@ -5,12 +5,10 @@ import {
   FaChevronDown,
   FaChevronRight,
   FaDownload,
-  FaEnvelope,
   FaEye,
   FaFileAlt,
   FaFolder,
   FaFolderOpen,
-  FaPhone,
   FaTimes,
   FaUserFriends,
 } from 'react-icons/fa';
@@ -24,6 +22,7 @@ const API_BASE =
 
 const CLIENTS_API = `${API_BASE}/clients`;
 const FILE_URL_API = `${API_BASE}/file-url`;
+const REFERRERS_API = `${API_BASE}/referrers`;
 
 type Client = {
   [key: string]: unknown;
@@ -39,6 +38,8 @@ type Client = {
   leadType?: string;
   source?: string;
   status?: string;
+  referrerId?: string;
+  referralCode?: string;
 
   classificationType?: string;
   borrowerType?: string;
@@ -73,12 +74,14 @@ type Client = {
   fileName?: string;
   fileUrl?: string;
   submittedAt?: string;
+  waivedDocuments?: string[];
 };
 
 type ClientFolder = {
   key: string;
   client: Client;
   files: Client[];
+  isWaived: boolean;
 };
 
 type DocumentOption = {
@@ -89,6 +92,8 @@ type DocumentOption = {
 type NormalizedTransactionType = 'alt_doc' | 'full_doc';
 
 const sharedDocumentTypes: DocumentOption[] = [
+  { label: 'ID', value: 'id' },
+  { label: 'Passport', value: 'passport' },
   {
     label: 'Last 6 Months Mortgage Statements',
     value: 'last-6-months-mortgage-statements',
@@ -143,25 +148,30 @@ const normalizeDocumentTypeValue = (value?: string) =>
     .replace(/[_\s]+/g, '-')
     .replace(/-+/g, '-');
 
-const formatTransactionType = (value?: string) => {
-  const normalized = (value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[\s-]+/g, '_');
-
-  if (normalized === 'alt' || normalized === 'altdoc' || normalized === 'alt_doc') {
-    return 'Alt Doc';
+const normalizeDocumentList = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return Array.from(
+      new Set(
+        value
+          .map((item) => normalizeDocumentTypeValue(String(item || '')))
+          .filter(Boolean),
+      ),
+    );
   }
 
-  if (
-    normalized === 'full' ||
-    normalized === 'fulldoc' ||
-    normalized === 'full_doc'
-  ) {
-    return 'Full Doc';
+  if (typeof value !== 'string' || !value.trim()) return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return normalizeDocumentList(parsed);
+  } catch {
+    // Older records may store waived document types as comma-separated text.
   }
 
-  return value || 'N/A';
+  return value
+    .split(/[\n,]+/)
+    .map((item) => normalizeDocumentTypeValue(item))
+    .filter(Boolean);
 };
 
 const panelClass =
@@ -250,6 +260,18 @@ const normalizeClient = (rawClient: Client): Client => {
     phone: getStringValue(raw, ['phone', 'Phone', 'mobile', 'Mobile']),
     leadType: getStringValue(raw, ['leadType', 'LeadType', 'lead_type']),
     source: normalizeSourceLabel(sourceValue),
+    referrerId: getStringValue(raw, [
+      'referrerId',
+      'ReferrerId',
+      'referrer_id',
+    ]),
+    referralCode: getStringValue(raw, [
+      'referralCode',
+      'ReferralCode',
+      'referral_code',
+      'uniqueReferrerCode',
+      'UniqueReferrerCode',
+    ]),
 
     classificationType: getStringValue(raw, ['classificationType', 'ClassificationType', 'classification_type']),
     borrowerType: getStringValue(raw, ['borrowerType', 'BorrowerType', 'borrower_type']),
@@ -315,6 +337,13 @@ const normalizeClient = (rawClient: Client): Client => {
     fileName: getStringValue(raw, ['fileName', 'FileName', 'file_name']),
     fileUrl: getStringValue(raw, ['fileUrl', 'FileUrl', 'file_url', 'blobUrl', 'BlobUrl']),
     submittedAt: getStringValue(raw, ['submittedAt', 'SubmittedAt', 'submitted_at', 'uploadedAt', 'UploadedAt']),
+    waivedDocuments: normalizeDocumentList(
+      getAnyValue(raw, [
+        'waivedDocuments',
+        'WaivedDocuments',
+        'waived_documents',
+      ]),
+    ),
 
   };
 };
@@ -371,9 +400,10 @@ export default function DocumentTypePage() {
           );
         }
 
-        const response = await fetch(
-          `${CLIENTS_API}?documentType=${encodeURIComponent(selectedDocumentType)}`,
-        );
+        const [response, referrersResponse] = await Promise.all([
+          fetch(CLIENTS_API),
+          fetch(REFERRERS_API).catch(() => null),
+        ]);
 
         const result = await response.json();
 
@@ -381,14 +411,70 @@ export default function DocumentTypePage() {
           throw new Error(result.message || 'Failed to load documents.');
         }
 
+        const referrersResult = referrersResponse?.ok
+          ? await referrersResponse.json().catch(() => ({}))
+          : {};
+        const referrerDirectory = new Map<
+          string,
+          { firstName: string; middleName: string; lastName: string; phone: string; email: string }
+        >();
+
+        (referrersResult.referrers || []).forEach(
+          (rawReferrer: Record<string, unknown>) => {
+            const name = getStringValue(rawReferrer, ['name', 'Name'])
+              .trim()
+              .split(/\s+/);
+            const details = {
+              firstName:
+                getStringValue(rawReferrer, ['firstName', 'FirstName']) ||
+                name[0] ||
+                '',
+              middleName: getStringValue(rawReferrer, [
+                'middleName',
+                'MiddleName',
+              ]),
+              lastName:
+                getStringValue(rawReferrer, ['lastName', 'LastName']) ||
+                name.slice(1).join(' '),
+              phone: getStringValue(rawReferrer, ['phone', 'Phone']),
+              email: getStringValue(rawReferrer, ['email', 'Email']),
+            };
+
+            [
+              getStringValue(rawReferrer, ['referrerId', 'ReferrerId']),
+              getStringValue(rawReferrer, ['referralCode', 'ReferralCode']),
+            ]
+              .filter(Boolean)
+              .forEach((key) => referrerDirectory.set(key.toUpperCase(), details));
+          },
+        );
+
         setClients(
           (result.clients || [])
             .map(normalizeClient)
-            .filter(
-              (client: Client) =>
-                Boolean(
-                  client.documentType || client.fileName || client.fileUrl,
-                ) && client.documentType === selectedDocumentType,
+            .map((client: Client) => {
+              const savedReferrer =
+                referrerDirectory.get((client.referrerId || '').toUpperCase()) ||
+                referrerDirectory.get((client.referralCode || '').toUpperCase());
+
+              if (!savedReferrer) return client;
+
+              return {
+                ...client,
+                referrer: {
+                  firstName:
+                    client.referrer?.firstName || savedReferrer.firstName,
+                  middleName:
+                    client.referrer?.middleName || savedReferrer.middleName,
+                  lastName: client.referrer?.lastName || savedReferrer.lastName,
+                  phone: client.referrer?.phone || savedReferrer.phone,
+                  email: client.referrer?.email || savedReferrer.email,
+                },
+              };
+            })
+            .filter((client: Client) =>
+              client.documentType === selectedDocumentType ||
+              Boolean(client.waivedDocuments?.includes(selectedDocumentType)),
             ),
         );
       } catch (err) {
@@ -420,15 +506,6 @@ export default function DocumentTypePage() {
 
   const formatSource = (source?: string) => normalizeSourceLabel(source);
 
-  const getDetailLabel = (client: Client) => {
-    const sourceLabel = formatSource(client.source || client.leadType);
-
-    if (sourceLabel === 'Broker') return 'Broker';
-    if (sourceLabel === 'Referral') return 'Referrer';
-
-    return 'Source';
-  };
-
   const getStatus = (client: Client) => client.status || 'Pending Team Call';
 
   const displayValue = (value?: string | number | null) =>
@@ -453,12 +530,24 @@ export default function DocumentTypePage() {
       map.get(key)?.push(client);
     });
 
-    return Array.from(map.entries()).map(([key, files]) => ({
+    return Array.from(map.entries()).map(([key, records]) => ({
       key,
-      client: files[0],
-      files,
+      client: records[0],
+      files: records.filter(
+        (record) =>
+          record.documentType === selectedDocumentType &&
+          Boolean(record.fileName || record.fileUrl),
+      ),
+      isWaived: records.some((record) =>
+        record.waivedDocuments?.includes(selectedDocumentType),
+      ),
     }));
-  }, [clients]);
+  }, [clients, selectedDocumentType]);
+
+  const fileCount = clientFolders.reduce(
+    (total, folder) => total + folder.files.length,
+    0,
+  );
 
   const brokerCount = clientFolders.filter(
     (folder) =>
@@ -579,7 +668,7 @@ export default function DocumentTypePage() {
             <p className="mt-2 max-w-4xl text-sm leading-6 text-white/75">
               {loading
                 ? 'Loading folders from Azure SQL...'
-                : `${clientFolders.length} client folder(s), ${clients.length} file(s) found`}
+                : `${clientFolders.length} client folder(s), ${fileCount} file(s) found`}
             </p>
           </div>
         </div>
@@ -612,7 +701,7 @@ export default function DocumentTypePage() {
             />
             <StatCard
               label="Files"
-              value={clients.length}
+              value={fileCount}
               icon={<FaFileAlt />}
               className="border-orange-200 bg-orange-50 text-orange-700"
             />
@@ -633,10 +722,14 @@ export default function DocumentTypePage() {
 
         {!loading && !error && (
           <div className="grid gap-4">
-            {clientFolders.map(({ key, client, files }) => {
+            {clientFolders.map(({ key, client, files, isWaived }) => {
               const isOpen = openFolders[key];
               const fullName = getFullName(client);
               const sourceLabel = formatSource(client.source || client.leadType);
+              const isReferredClient =
+                sourceLabel === 'Referral' ||
+                (sourceLabel !== 'Broker' &&
+                  Boolean(client.referrerId || client.referralCode));
               return (
                 <div
                   key={key}
@@ -664,23 +757,21 @@ export default function DocumentTypePage() {
                         <div className="mt-2 flex flex-wrap gap-2">
                           <span
                             className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold ${
-                              sourceLabel === 'Referral'
+                              isReferredClient
                                 ? 'bg-[#259b8f]/10 text-[#1f8178] ring-1 ring-[#259b8f]/20'
                                 : sourceLabel === 'Direct Client'
                                   ? 'bg-cyan-100 text-cyan-700 ring-1 ring-cyan-200'
                                   : 'bg-sky-100 text-sky-700 ring-1 ring-sky-200'
                             }`}
                           >
-                            {sourceLabel === 'Referral' ? (
+                            {isReferredClient ? (
                               <FaUserFriends />
                             ) : (
                               <FaBriefcase />
                             )}
-                            {sourceLabel}
-                          </span>
-
-                          <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700 ring-1 ring-orange-200">
-                            {getStatus(client)}
+                            {isReferredClient
+                              ? 'Referred Client'
+                              : sourceLabel}
                           </span>
 
                           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
@@ -690,33 +781,14 @@ export default function DocumentTypePage() {
                           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
                             {files.length} file{files.length !== 1 ? 's' : ''}
                           </span>
+
+                          {isWaived && (
+                            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-700 ring-1 ring-amber-200">
+                              Waived by Admin
+                            </span>
+                          )}
                         </div>
 
-                        <div className="mt-3 grid gap-1 text-sm text-slate-500 sm:grid-cols-2">
-                          <p className="flex items-center gap-2">
-                            <FaEnvelope className="text-xs" />
-                            {client.email || 'No email'}
-                          </p>
-
-                          <p className="flex items-center gap-2">
-                            <FaPhone className="text-xs" />
-                            {client.phone || 'No phone'}
-                          </p>
-
-                          <p>
-                            <span className="font-semibold text-slate-700">
-                              Classification:
-                            </span>{' '}
-                            {client.classificationType || 'N/A'}
-                          </p>
-
-                          <p>
-                            <span className="font-semibold text-slate-700">
-                              Objective:
-                            </span>{' '}
-                            {client.objective || 'N/A'}
-                          </p>
-                        </div>
                       </div>
                     </div>
 
@@ -727,98 +799,71 @@ export default function DocumentTypePage() {
 
                   {isOpen && (
                     <div className="space-y-4 border-t border-slate-100 bg-slate-100 p-4 sm:p-5">
-                      <div className="rounded-2xl bg-white p-5">
-                        <h4 className="mb-4 text-base font-black text-slate-900">
-                          Submitted Loan Information
-                        </h4>
-
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                          <InfoBox label="Source" value={sourceLabel} />
-                          <InfoBox
-                            label="Classification Type"
-                            value={client.classificationType}
-                          />
-                          <InfoBox
-                            label="Borrower Type"
-                            value={client.borrowerType}
-                          />
-                          <InfoBox label="Objective" value={client.objective} />
-                          <InfoBox label="Loan Type" value={client.loanType} />
-                          <InfoBox label="Purpose" value={client.purpose} />
-                          <InfoBox
-                            label="Transaction Type"
-                            value={formatTransactionType(client.transactionType)}
-                          />
-                          <InfoBox
-                            label="With Borrowers / Guarantors?"
-                            value={client.withBorrowersGuarantors}
-                          />
-                        </div>
-
-                        {sourceLabel !== 'Direct Client' && (
-                          <div className="mt-5 rounded-2xl border border-[#259b8f]/20 bg-[#259b8f]/10 p-5">
-                            <h5 className="mb-3 text-sm font-black text-slate-900">
-                              {getDetailLabel(client)} Details
-                            </h5>
-
-                            <div className="grid gap-4 md:grid-cols-3">
-                              <InfoBox
-                                label={`${getDetailLabel(client)} Name`}
-                                value={getReferrerName(client)}
-                              />
-                              <InfoBox
-                                label={`${getDetailLabel(client)} Phone`}
-                                value={client.referrer?.phone}
-                              />
-                              <InfoBox
-                                label={`${getDetailLabel(client)} Email`}
-                                value={client.referrer?.email}
-                              />
+                      {isReferredClient && (
+                        <div className="rounded-2xl border border-[#259b8f]/20 bg-[#259b8f]/10 p-5">
+                          <div className="mb-4 flex items-center gap-3">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[#259b8f] shadow-sm">
+                              <FaUserFriends />
+                            </span>
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#259b8f]">
+                                Referred Client
+                              </p>
+                              <h4 className="font-black text-slate-900">
+                                Referrer Details
+                              </h4>
                             </div>
                           </div>
-                        )}
 
-                        <div className="mt-5 grid gap-4 md:grid-cols-2">
-                          <InfoBox
-                            label="Veda Issues"
-                            value={client.vedaIssues}
-                          />
-                          <InfoBox
-                            label="Conduct Issues"
-                            value={client.conductIssues}
-                          />
-                          <InfoBox
-                            label="Client Needs & Objectives"
-                            value={client.clientNeedsObjectives}
-                          />
-                          <InfoBox
-                            label="Applicant Background"
-                            value={client.applicantBackground}
-                          />
-                          <InfoBox
-                            label="Explanation of Income"
-                            value={client.explanationOfIncome}
-                          />
-                          <InfoBox label="Security" value={client.security} />
-                          <InfoBox
-                            label="Loan Amount"
-                            value={client.loanAmount}
-                          />
-                          <InfoBox
-                            label="Security Value"
-                            value={client.securityValue}
-                          />
-                          <InfoBox label="LVR" value={client.lvr} />
-                          <InfoBox
-                            label="Anticipated Settlement Date"
-                            value={client.anticipatedSettlementDate}
-                          />
-                          <InfoBox
-                            label="Special Notes"
-                            value={client.specialNotes}
-                          />
+                          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                            <InfoBox
+                              label="Referrer Name"
+                              value={getReferrerName(client)}
+                            />
+                            <InfoBox
+                              label="RF ID Used"
+                              value={client.referrerId}
+                            />
+                            <InfoBox
+                              label="Referral Code"
+                              value={client.referralCode}
+                            />
+                            <InfoBox
+                              label="Referrer Phone"
+                              value={client.referrer?.phone}
+                            />
+                            <InfoBox
+                              label="Referrer Email"
+                              value={client.referrer?.email}
+                            />
+                          </div>
                         </div>
-                      </div>
+                      )}
+
+                      {isWaived && (
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+                          <div className="flex items-start gap-4">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 ring-1 ring-amber-200">
+                              <FaFileAlt />
+                            </div>
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-wide text-amber-700">
+                                {pageTitle}
+                              </p>
+                              <h4 className="mt-1 text-base font-black text-slate-900">
+                                Document requirement waived
+                              </h4>
+                              <p className="mt-2 text-sm leading-6 text-slate-600">
+                                This requirement was waived by an administrator.
+                                No file upload, review, or download is required.
+                              </p>
+                              <span className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-black text-amber-700 ring-1 ring-amber-200">
+                                Waived
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {files.map((file) => (
                         <div
@@ -975,95 +1020,46 @@ export default function DocumentTypePage() {
             </div>
 
             <div className="overflow-y-auto bg-slate-100 p-3 sm:p-4">
-              <div className="mb-4 rounded-2xl bg-white p-5">
-                <h3 className="mb-4 text-lg font-black text-slate-900">
-                  Client & Loan Information
-                </h3>
-
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  <InfoBox label="Unique ID" value={previewFile.uniqueId} />
-                  <InfoBox
-                    label="Source"
-                    value={formatSource(previewFile.source || previewFile.leadType)}
-                  />
-                  <InfoBox label="Status" value={getStatus(previewFile)} />
-                  <InfoBox label="Full Name" value={getFullName(previewFile)} />
-                  <InfoBox label="Email" value={previewFile.email} />
-                  <InfoBox label="Phone" value={previewFile.phone} />
-                  <InfoBox
-                    label="Classification Type"
-                    value={previewFile.classificationType}
-                  />
-                  <InfoBox
-                    label="Borrower Type"
-                    value={previewFile.borrowerType}
-                  />
-                  <InfoBox label="Objective" value={previewFile.objective} />
-                  <InfoBox label="Loan Type" value={previewFile.loanType} />
-                  <InfoBox label="Purpose" value={previewFile.purpose} />
-                  <InfoBox
-                    label="Transaction Type"
-                    value={formatTransactionType(previewFile.transactionType)}
-                  />
-                  <InfoBox
-                    label="With Borrowers / Guarantors?"
-                    value={previewFile.withBorrowersGuarantors}
-                  />
-                  <InfoBox label="Veda Issues" value={previewFile.vedaIssues} />
-                  <InfoBox
-                    label="Conduct Issues"
-                    value={previewFile.conductIssues}
-                  />
-                  <InfoBox
-                    label="Client Needs & Objectives"
-                    value={previewFile.clientNeedsObjectives}
-                  />
-                  <InfoBox
-                    label="Applicant Background"
-                    value={previewFile.applicantBackground}
-                  />
-                  <InfoBox
-                    label="Explanation of Income"
-                    value={previewFile.explanationOfIncome}
-                  />
-                  <InfoBox label="Security" value={previewFile.security} />
-                  <InfoBox label="Loan Amount" value={previewFile.loanAmount} />
-                  <InfoBox
-                    label="Security Value"
-                    value={previewFile.securityValue}
-                  />
-                  <InfoBox label="LVR" value={previewFile.lvr} />
-                  <InfoBox
-                    label="Anticipated Settlement Date"
-                    value={previewFile.anticipatedSettlementDate}
-                  />
-                  <InfoBox label="Special Notes" value={previewFile.specialNotes} />
-                </div>
-
-                {formatSource(previewFile.source || previewFile.leadType) !==
-                  'Direct Client' && (
-                  <div className="mt-5 rounded-2xl border border-[#259b8f]/20 bg-[#259b8f]/10 p-5">
-                    <h4 className="mb-3 text-base font-black text-slate-900">
-                      {getDetailLabel(previewFile)} Details
-                    </h4>
-
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <InfoBox
-                        label={`${getDetailLabel(previewFile)} Name`}
-                        value={getReferrerName(previewFile)}
-                      />
-                      <InfoBox
-                        label={`${getDetailLabel(previewFile)} Phone`}
-                        value={previewFile.referrer?.phone}
-                      />
-                      <InfoBox
-                        label={`${getDetailLabel(previewFile)} Email`}
-                        value={previewFile.referrer?.email}
-                      />
+              {(formatSource(previewFile.source || previewFile.leadType) ===
+                'Referral' ||
+                (formatSource(previewFile.source || previewFile.leadType) !==
+                  'Broker' &&
+                  Boolean(previewFile.referrerId || previewFile.referralCode))) && (
+                <div className="mb-4 rounded-2xl border border-[#259b8f]/20 bg-[#259b8f]/10 p-5">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[#259b8f] shadow-sm">
+                      <FaUserFriends />
+                    </span>
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-[#259b8f]">
+                        Referred Client
+                      </p>
+                      <h3 className="font-black text-slate-900">
+                        Referrer Details
+                      </h3>
                     </div>
                   </div>
-                )}
-              </div>
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                    <InfoBox
+                      label="Referrer Name"
+                      value={getReferrerName(previewFile)}
+                    />
+                    <InfoBox label="RF ID Used" value={previewFile.referrerId} />
+                    <InfoBox
+                      label="Referral Code"
+                      value={previewFile.referralCode}
+                    />
+                    <InfoBox
+                      label="Referrer Phone"
+                      value={previewFile.referrer?.phone}
+                    />
+                    <InfoBox
+                      label="Referrer Email"
+                      value={previewFile.referrer?.email}
+                    />
+                  </div>
+                </div>
+              )}
 
               {previewLoading && (
                 <div className="flex h-[68vh] items-center justify-center rounded-2xl bg-white text-center text-slate-500 sm:h-[70vh]">

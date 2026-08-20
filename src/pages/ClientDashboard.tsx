@@ -26,6 +26,7 @@ import {
   FaRedoAlt,
   FaUserFriends,
 } from "react-icons/fa";
+import ReferrerPortal from "./ReferrerPortal";
 
 type CoBorrower = {
   firstName?: string;
@@ -52,6 +53,19 @@ type Submission = {
   status?: string;
 
   classificationType?: string;
+  referrerProfession?: string;
+  uniqueReferrerCode?: string;
+  hasProperty?: string;
+  propertyType?: string;
+  hasMultipleProperties?: string;
+  isSelfEmployed?: string;
+  hasTaxReturn?: string;
+  dpnIssues?: string;
+  dpnDetails?: string;
+  isClientCompliant?: string;
+  painPoint?: string;
+  heardAboutUs?: string;
+  sbrFundingAccountManager?: string;
   borrowerType?: string;
   objective?: string;
   loanType?: string;
@@ -78,6 +92,8 @@ type Submission = {
     lastName?: string;
     phone?: string;
     email?: string;
+    profession?: string;
+    uniqueCode?: string;
   };
 
   documentType?: string;
@@ -85,6 +101,11 @@ type Submission = {
   fileUrl?: string;
   submittedAt?: string;
   documentStatus?: string;
+  uploaderType?: string;
+  uploadedByType?: string;
+  uploadedBy?: string;
+  submittedBy?: string;
+  uploadSource?: string;
   verifiedBy?: string;
   verifiedDate?: string;
   remarks?: string;
@@ -105,6 +126,28 @@ type ClientLoginUser = {
   source?: string;
   status?: string;
   mustChangePassword?: boolean;
+  role?: "client" | "referrer";
+  referrerId?: string;
+  referralCode?: string;
+  profession?: string;
+  referredClients?: ReferrerClient[];
+};
+
+type ReferrerDocument = {
+  id: number;
+  documentType?: string;
+  documentLabel?: string;
+  fileName?: string;
+  uploadedAt?: string;
+  status?: string;
+};
+
+type ReferrerClient = {
+  clientId: number;
+  uniqueId: string;
+  name: string;
+  status?: string;
+  documents: ReferrerDocument[];
 };
 
 type ClientMessage = {
@@ -118,7 +161,7 @@ type ClientMessage = {
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ||
-  "https://docsuploadpythonapi.azurewebsites.net/api"
+  "https://docsuploadpythonapi-flex.azurewebsites.net/api"
 ).replace(/\/$/, "");
 
 const CLIENTS_API = `${API_BASE}/clients`;
@@ -126,6 +169,8 @@ const UPLOAD_API = `${API_BASE}/uploadclient`;
 const FILE_URL_API = `${API_BASE}/file-url`;
 const CLIENT_LOGIN_API = `${API_BASE}/client-login`;
 const CLIENT_CHANGE_PASSWORD_API = `${API_BASE}/client-change-password`;
+const REFERRER_LOGIN_API = `${API_BASE}/referrer-login`;
+const REFERRER_CHANGE_PASSWORD_API = `${API_BASE}/referrer-change-password`;
 const CLIENT_MESSAGES_API = `${API_BASE}/client-messages`;
 const getClientMessagesApi = (clientId: number) =>
   `${CLIENT_MESSAGES_API}?clientId=${encodeURIComponent(String(clientId))}`;
@@ -137,9 +182,12 @@ type DocumentOption = {
 
 type NormalizedTransactionType = "alt_doc" | "full_doc";
 
-const sharedDocumentTypes: DocumentOption[] = [
+const identityDocumentTypes: DocumentOption[] = [
   { label: "ID", value: "id" },
   { label: "Passport", value: "passport" },
+];
+
+const propertyDocumentTypes: DocumentOption[] = [
   {
     label: "Last 6 Months Mortgage Statements",
     value: "last-6-months-mortgage-statements",
@@ -147,31 +195,54 @@ const sharedDocumentTypes: DocumentOption[] = [
   { label: "Council Rates Notice", value: "council-rates-notice" },
 ];
 
+const financialStatementDocumentTypes: DocumentOption[] = [
+  {
+    label: "Management Reports / Financial Statements",
+    value: "management-reports-financial-statements",
+  },
+];
+
+const employmentIncomeDocumentTypes: DocumentOption[] = [
+  {
+    label: "Group Certificate / Payment Summary",
+    value: "group-certificate-payment-summary",
+  },
+];
+
+const alternativeIncomeDocumentTypes: DocumentOption[] = [
+  { label: "BAS from ATO Portal", value: "bas-from-ato-portal" },
+  {
+    label: "Business Banking Statements",
+    value: "business-banking-statements",
+  },
+];
+
+const taxReturnDocumentTypes: Record<"business" | "personal", DocumentOption> =
+  {
+    business: { label: "Company Tax Returns", value: "company-tax-returns" },
+    personal: {
+      label: "Individual Tax Returns",
+      value: "individual-tax-returns",
+    },
+  };
+
 const transactionDocumentTypes: Record<
   NormalizedTransactionType,
   DocumentOption[]
 > = {
   alt_doc: [
-    { label: "BAS from ATO Portal", value: "bas-from-ato-portal" },
-    {
-      label: "Business Banking Statements",
-      value: "business-banking-statements",
-    },
-    ...sharedDocumentTypes,
+    ...alternativeIncomeDocumentTypes,
+    ...identityDocumentTypes,
+    ...propertyDocumentTypes,
   ],
   full_doc: [
     { label: "Payslip", value: "payslip" },
-    {
-      label: "Management Reports / Financial Statements",
-      value: "management-reports-financial-statements",
-    },
-    {
-      label: "Group Certificate / Payment Summary",
-      value: "group-certificate-payment-summary",
-    },
-    { label: "Company Tax Returns", value: "company-tax-returns" },
-    { label: "Individual Tax Returns", value: "individual-tax-returns" },
-    ...sharedDocumentTypes,
+    ...financialStatementDocumentTypes,
+    ...employmentIncomeDocumentTypes,
+    taxReturnDocumentTypes.business,
+    taxReturnDocumentTypes.personal,
+    ...identityDocumentTypes,
+    ...propertyDocumentTypes,
   ],
 };
 
@@ -213,6 +284,53 @@ const getDocumentTypesForTransaction = (
   return normalizedTransactionType
     ? transactionDocumentTypes[normalizedTransactionType]
     : [];
+};
+
+const getRequiredDocumentTypes = (
+  client?: Submission | null,
+): DocumentOption[] => {
+  if (!client) return [];
+
+  const source = normalizeSourceValue(client.source || client.leadType);
+  const isSimplified = source === "Direct Client" || source === "Referral";
+
+  if (!isSimplified) {
+    return getDocumentTypesForTransaction(client.transactionType);
+  }
+
+  const documents: DocumentOption[] = [...identityDocumentTypes];
+  const financialStatementsAvailable =
+    normalizeTransactionType(client.transactionType) === "full_doc";
+  const isSelfEmployed = client.isSelfEmployed?.trim().toLowerCase() === "yes";
+  const hasTaxReturn = client.hasTaxReturn?.trim().toLowerCase() === "yes";
+  const hasProperty = client.hasProperty?.trim().toLowerCase() === "yes";
+  const borrowerType = client.borrowerType?.trim().toLowerCase();
+
+  if (hasProperty) documents.push(...propertyDocumentTypes);
+
+  if (financialStatementsAvailable) {
+    documents.push(...financialStatementDocumentTypes);
+    if (!isSelfEmployed) documents.push(...employmentIncomeDocumentTypes);
+  } else if (isSelfEmployed) {
+    documents.push(...alternativeIncomeDocumentTypes);
+  }
+
+  if (hasTaxReturn) {
+    if (borrowerType === "business") {
+      documents.push(taxReturnDocumentTypes.business);
+    } else if (borrowerType === "personal") {
+      documents.push(taxReturnDocumentTypes.personal);
+    } else {
+      documents.push(
+        taxReturnDocumentTypes.business,
+        taxReturnDocumentTypes.personal,
+      );
+    }
+  }
+
+  return Array.from(
+    new Map(documents.map((document) => [document.value, document])).values(),
+  );
 };
 
 const normalizeDocumentTypeValue = (documentType?: string) =>
@@ -514,6 +632,69 @@ const normalizeClientRecord = (client: Submission): Submission => {
         "classification_type",
       ]),
     ),
+    referrerProfession: toText(
+      getAliasValue(client, [
+        "referrerProfession",
+        "ReferrerProfession",
+        "referrer_profession",
+      ]),
+    ),
+    uniqueReferrerCode: toText(
+      getAliasValue(client, [
+        "uniqueReferrerCode",
+        "UniqueReferrerCode",
+        "unique_referrer_code",
+      ]),
+    ),
+    hasProperty: toText(
+      getAliasValue(client, ["hasProperty", "HasProperty", "has_property"]),
+    ),
+    propertyType: toText(
+      getAliasValue(client, ["propertyType", "PropertyType", "property_type"]),
+    ),
+    hasMultipleProperties: toText(
+      getAliasValue(client, [
+        "hasMultipleProperties",
+        "HasMultipleProperties",
+        "has_multiple_properties",
+      ]),
+    ),
+    isSelfEmployed: toText(
+      getAliasValue(client, [
+        "isSelfEmployed",
+        "IsSelfEmployed",
+        "is_self_employed",
+      ]),
+    ),
+    hasTaxReturn: toText(
+      getAliasValue(client, ["hasTaxReturn", "HasTaxReturn", "has_tax_return"]),
+    ),
+    dpnIssues: toText(
+      getAliasValue(client, ["dpnIssues", "DpnIssues", "dpn_issues"]),
+    ),
+    dpnDetails: toText(
+      getAliasValue(client, ["dpnDetails", "DpnDetails", "dpn_details"]),
+    ),
+    isClientCompliant: toText(
+      getAliasValue(client, [
+        "isClientCompliant",
+        "IsClientCompliant",
+        "is_client_compliant",
+      ]),
+    ),
+    painPoint: toText(
+      getAliasValue(client, ["painPoint", "PainPoint", "pain_point"]),
+    ),
+    heardAboutUs: toText(
+      getAliasValue(client, ["heardAboutUs", "HeardAboutUs", "heard_about_us"]),
+    ),
+    sbrFundingAccountManager: toText(
+      getAliasValue(client, [
+        "sbrFundingAccountManager",
+        "SbrFundingAccountManager",
+        "sbr_funding_account_manager",
+      ]),
+    ),
     borrowerType: toText(
       getAliasValue(client, ["borrowerType", "BorrowerType", "borrower_type"]),
     ),
@@ -628,6 +809,22 @@ const normalizeClientRecord = (client: Submission): Submission => {
         getAliasValue(referrer, ["email", "Email"]) ||
           getAliasValue(client, ["referrerEmail", "ReferrerEmail"]),
       ),
+      profession: toText(
+        getAliasValue(referrer, ["profession", "Profession"]) ||
+          getAliasValue(client, [
+            "referrerProfession",
+            "ReferrerProfession",
+            "referrer_profession",
+          ]),
+      ),
+      uniqueCode: toText(
+        getAliasValue(referrer, ["uniqueCode", "UniqueCode"]) ||
+          getAliasValue(client, [
+            "uniqueReferrerCode",
+            "UniqueReferrerCode",
+            "unique_referrer_code",
+          ]),
+      ),
     },
 
     documentType: toText(
@@ -655,6 +852,22 @@ const normalizeClientRecord = (client: Submission): Submission => {
           "VerificationStatus",
         ]),
       ) || "Pending",
+    uploaderType: toText(
+      getAliasValue(client, [
+        "uploaderType",
+        "UploaderType",
+        "uploadedByType",
+        "UploadedByType",
+        "uploadedByRole",
+        "UploadedByRole",
+        "uploadSource",
+        "UploadSource",
+        "uploadedBy",
+        "UploadedBy",
+        "submittedBy",
+        "SubmittedBy",
+      ]),
+    ),
     verifiedBy: toText(
       getAliasValue(client, ["verifiedBy", "VerifiedBy", "verified_by"]),
     ),
@@ -714,6 +927,7 @@ const formatMessageDate = (value?: string) => {
 };
 
 export default function ClientDashboard() {
+  const [loginMode, setLoginMode] = useState<"client" | "referrer">("client");
   const [loginUniqueId, setLoginUniqueId] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -752,7 +966,12 @@ export default function ClientDashboard() {
 
   const selectedClient =
     clientFiles.find(
-      (client) => client.uniqueId && client.classificationType,
+      (client) =>
+        client.uniqueId &&
+        (client.borrowerType ||
+          client.transactionType ||
+          client.classificationType ||
+          client.hasProperty),
     ) ||
     clientFiles.find((client) => client.uniqueId) ||
     null;
@@ -773,8 +992,16 @@ export default function ClientDashboard() {
   }, [clientFiles]);
 
   const requiredDocumentTypes = useMemo(
-    () => getDocumentTypesForTransaction(selectedClient?.transactionType),
-    [selectedClient?.transactionType],
+    () => getRequiredDocumentTypes(selectedClient),
+    [
+      selectedClient?.source,
+      selectedClient?.leadType,
+      selectedClient?.transactionType,
+      selectedClient?.hasProperty,
+      selectedClient?.isSelfEmployed,
+      selectedClient?.hasTaxReturn,
+      selectedClient?.borrowerType,
+    ],
   );
 
   const requiredDocumentTypeValues = useMemo(
@@ -829,6 +1056,23 @@ export default function ClientDashboard() {
   const formatLeadType = (type?: string | number | null) =>
     normalizeSourceValue(type);
 
+  const getUploaderLabel = (file: Submission) =>
+    (
+      file.uploaderType ||
+      file.uploadedByType ||
+      file.uploadedBy ||
+      file.submittedBy ||
+      file.uploadSource ||
+      file.remarks ||
+      file.verifiedBy ||
+      "Client"
+    )
+      .trim()
+      .toLowerCase()
+      .includes("referr")
+      ? "Referrer"
+      : "Client";
+
   const currentSource =
     formatLeadType(
       selectedClient?.source ||
@@ -840,11 +1084,24 @@ export default function ClientDashboard() {
   const showBrokerOrReferrer =
     currentSource === "Broker" || currentSource === "Referral";
 
+  const usesSimplifiedIntake =
+    currentSource === "Direct Client" || currentSource === "Referral";
+
+  const isReferral = currentSource === "Referral";
+  const isDirectClient = currentSource === "Direct Client";
+
   const detailLabel = currentSource === "Broker" ? "Broker" : "Referrer";
 
   const displayValue = (value?: string | number | null) => {
     if (value === null || value === undefined || value === "") return "N/A";
     return String(value);
+  };
+
+  const displayFinancialStatements = (value?: string | null) => {
+    const normalized = normalizeTransactionType(value || "");
+    if (normalized === "full_doc") return "Yes";
+    if (normalized === "alt_doc") return "No";
+    return displayValue(value);
   };
 
   const documentRowsByType = useMemo(() => {
@@ -1013,7 +1270,7 @@ export default function ClientDashboard() {
   };
 
   useEffect(() => {
-    if (!loggedClient?.id) {
+    if (!loggedClient?.id || loggedClient.role === "referrer") {
       setClientMessages([]);
       return;
     }
@@ -1078,7 +1335,16 @@ export default function ClientDashboard() {
     event.preventDefault();
 
     if (!loginUniqueId.trim()) {
-      alert("Please enter your Client ID.");
+      alert(`Please enter your ${loginMode === "client" ? "Client" : "Referrer"} ID.`);
+      return;
+    }
+
+    const normalizedLoginId = loginUniqueId.trim().toUpperCase();
+    const requiredPrefix = loginMode === "client" ? "CL-" : "RF-";
+    if (!normalizedLoginId.startsWith(requiredPrefix)) {
+      alert(
+        `${loginMode === "client" ? "Client" : "Referrer"} login accepts ${requiredPrefix} IDs only.`,
+      );
       return;
     }
 
@@ -1090,14 +1356,18 @@ export default function ClientDashboard() {
     try {
       setLoading(true);
 
-      const response = await fetch(CLIENT_LOGIN_API, {
+      const response = await fetch(
+        loginMode === "client" ? CLIENT_LOGIN_API : REFERRER_LOGIN_API,
+        {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          uniqueId: loginUniqueId.trim(),
+          uniqueId: normalizedLoginId,
+          referrerId: normalizedLoginId,
           password: loginPassword.trim(),
         }),
-      });
+        },
+      );
 
       const result = await response.json();
 
@@ -1105,7 +1375,18 @@ export default function ClientDashboard() {
         throw new Error(result.message || "Invalid Client ID or password.");
       }
 
-      const normalizedClient = normalizeLoggedClient(result.client);
+      const normalizedClient = normalizeLoggedClient(
+        loginMode === "client" ? result.client : result.referrer,
+      );
+      normalizedClient.role = loginMode;
+      if (
+        loginMode === "referrer" &&
+        normalizedClient.profession?.trim().toLowerCase() === "broker"
+      ) {
+        throw new Error(
+          "Broker records do not have portal access. The RF portal is for referrals only.",
+        );
+      }
       const requiresPasswordChange = Boolean(
         result.mustChangePassword ||
           result.client?.mustChangePassword ||
@@ -1117,7 +1398,11 @@ export default function ClientDashboard() {
       setMustChangePassword(requiresPasswordChange);
       setShowChangePassword(requiresPasswordChange);
       setCurrentPassword(loginPassword.trim());
-      await loadClientFiles(normalizedClient.uniqueId);
+      if (loginMode === "client") {
+        await loadClientFiles(normalizedClient.uniqueId);
+      } else {
+        setClientFiles([]);
+      }
     } catch (error) {
       alert(error instanceof Error ? error.message : "Client login failed.");
     } finally {
@@ -1215,15 +1500,22 @@ export default function ClientDashboard() {
     try {
       setPasswordLoading(true);
 
-      const response = await fetch(CLIENT_CHANGE_PASSWORD_API, {
+      const isReferrerAccount = loggedClient.role === "referrer";
+      const response = await fetch(
+        isReferrerAccount
+          ? REFERRER_CHANGE_PASSWORD_API
+          : CLIENT_CHANGE_PASSWORD_API,
+        {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           uniqueId: loggedClient.uniqueId,
+          referrerId: loggedClient.referrerId || loggedClient.uniqueId,
           currentPassword: currentPassword.trim(),
           newPassword,
         }),
-      });
+        },
+      );
 
       const result = await response.json().catch(() => ({}));
 
@@ -1314,9 +1606,7 @@ export default function ClientDashboard() {
       return;
     }
 
-    const allowedDocumentTypes = getDocumentTypesForTransaction(
-      clientRecord.transactionType,
-    );
+    const allowedDocumentTypes = getRequiredDocumentTypes(clientRecord);
 
     if (allowedDocumentTypes.length === 0) {
       alert(
@@ -1331,14 +1621,27 @@ export default function ClientDashboard() {
       )
     ) {
       alert(
-        `The selected document type is not valid for ${clientRecord.transactionType}. Please select a document from the current checklist.`,
+        "The selected document type is not required for this application. Please select a document from the current checklist.",
       );
       setDocumentType("");
       setNewFiles(null);
       return;
     }
 
-    const requiredIntakeValues = [
+    const normalizedUploadSource = normalizeSourceValue(
+      clientRecord.source ||
+        clientRecord.leadType ||
+        loggedClient.source ||
+        loggedClient.leadType,
+    );
+    const usesSimplifiedUpload =
+      normalizedUploadSource === "Direct Client" ||
+      normalizedUploadSource === "Referral";
+
+    const requiredIntakeValues: Array<[string, unknown]> = [
+      ["First Name", clientRecord.firstName || loggedClient.firstName],
+      ["Last Name", clientRecord.lastName || loggedClient.lastName],
+      ["Email", clientRecord.email || loggedClient.email],
       ["Phone", clientRecord.phone || loggedClient.phone],
       [
         "Source",
@@ -1347,14 +1650,45 @@ export default function ClientDashboard() {
           loggedClient.source ||
           loggedClient.leadType,
       ],
-      ["Classification Type", clientRecord.classificationType],
       ["Borrower Type", clientRecord.borrowerType],
-      ["Objective", clientRecord.objective],
-      ["Loan Type", clientRecord.loanType],
-      ["Purpose", clientRecord.purpose],
       ["Transaction Type", clientRecord.transactionType],
-      ["Anticipated Settlement Date", clientRecord.anticipatedSettlementDate],
+      ["Co-Borrower Selection", clientRecord.withBorrowersGuarantors],
     ];
+
+    if (usesSimplifiedUpload) {
+      requiredIntakeValues.push(
+        ["Objective / Tell us your story", clientRecord.clientNeedsObjectives],
+        ["Property Ownership", clientRecord.hasProperty],
+        ["Self-Employment Status", clientRecord.isSelfEmployed],
+        ["Tax Return Availability", clientRecord.hasTaxReturn],
+      );
+
+      if (clientRecord.hasProperty === "Yes") {
+        requiredIntakeValues.push(["Property Type", clientRecord.propertyType]);
+      }
+
+      if (normalizedUploadSource === "Referral") {
+        requiredIntakeValues.push(
+          ["Referrer Profession", clientRecord.referrerProfession],
+          ["Unique Referrer Code", clientRecord.uniqueReferrerCode],
+          ["DPN Issues", clientRecord.dpnIssues],
+          ["Client Compliance", clientRecord.isClientCompliant],
+        );
+      } else {
+        requiredIntakeValues.push([
+          "How You Heard About Us",
+          clientRecord.heardAboutUs,
+        ]);
+      }
+    } else {
+      requiredIntakeValues.push(
+        ["Classification Type", clientRecord.classificationType],
+        ["Objective", clientRecord.objective],
+        ["Loan Type", clientRecord.loanType],
+        ["Purpose", clientRecord.purpose],
+        ["Anticipated Settlement Date", clientRecord.anticipatedSettlementDate],
+      );
+    }
 
     const missingIntakeValues = requiredIntakeValues
       .filter(([, value]) => !toText(value))
@@ -1473,8 +1807,45 @@ export default function ClientDashboard() {
         );
         appendValue(formData, "referrerPhone", clientRecord.referrer?.phone);
         appendValue(formData, "referrerEmail", clientRecord.referrer?.email);
+        appendValue(
+          formData,
+          "referrerProfession",
+          clientRecord.referrerProfession || clientRecord.referrer?.profession,
+        );
+        appendValue(
+          formData,
+          "uniqueReferrerCode",
+          clientRecord.uniqueReferrerCode || clientRecord.referrer?.uniqueCode,
+        );
+        appendValue(formData, "hasProperty", clientRecord.hasProperty);
+        appendValue(formData, "propertyType", clientRecord.propertyType);
+        appendValue(
+          formData,
+          "hasMultipleProperties",
+          clientRecord.hasMultipleProperties,
+        );
+        appendValue(formData, "isSelfEmployed", clientRecord.isSelfEmployed);
+        appendValue(formData, "hasTaxReturn", clientRecord.hasTaxReturn);
+        appendValue(formData, "dpnIssues", clientRecord.dpnIssues);
+        appendValue(formData, "dpnDetails", clientRecord.dpnDetails);
+        appendValue(
+          formData,
+          "isClientCompliant",
+          clientRecord.isClientCompliant,
+        );
+        appendValue(formData, "painPoint", clientRecord.painPoint);
+        appendValue(formData, "heardAboutUs", clientRecord.heardAboutUs);
+        appendValue(
+          formData,
+          "sbrFundingAccountManager",
+          clientRecord.sbrFundingAccountManager,
+        );
 
         appendValue(formData, "documentType", selectedDocumentType);
+        appendValue(formData, "uploaderType", "Client");
+        appendValue(formData, "uploadedByType", "Client");
+        appendValue(formData, "uploadedByRole", "Client");
+        appendValue(formData, "uploadSource", "Client Portal");
         formData.append("file", file);
 
         const controller = new AbortController();
@@ -1713,14 +2084,35 @@ export default function ClientDashboard() {
                 Sign in to continue
               </h2>
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                Use your Client ID and password to open your document dashboard.
+                Choose your account type, then enter the matching ID and password.
               </p>
             </div>
 
-            <form onSubmit={handleClientLogin} className="mt-7 space-y-5">
+            <div className="mt-7 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5">
+              {(["client", "referrer"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => {
+                    setLoginMode(mode);
+                    setLoginUniqueId("");
+                    setLoginPassword("");
+                  }}
+                  className={`h-11 rounded-xl text-sm font-black transition ${
+                    loginMode === mode
+                      ? "bg-white text-[#259b8f] shadow-sm ring-1 ring-slate-200"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {mode === "client" ? "Client" : "Referrer"}
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={handleClientLogin} className="mt-5 space-y-5">
               <div>
                 <label className="mb-2 block text-sm font-black text-slate-700">
-                  Client ID
+                  {loginMode === "client" ? "Client ID" : "Referrer ID"}
                 </label>
 
                 <div className="relative">
@@ -1729,7 +2121,11 @@ export default function ClientDashboard() {
                   <input
                     value={loginUniqueId}
                     onChange={(event) => setLoginUniqueId(event.target.value)}
-                    placeholder="Example: CL-81BE533A"
+                    placeholder={
+                      loginMode === "client"
+                        ? "Example: CL-81BE533A"
+                        : "Example: RF-81BE533A"
+                    }
                     className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15"
                   />
                 </div>
@@ -1769,7 +2165,9 @@ export default function ClientDashboard() {
                 disabled={loading}
                 className="h-12 w-full rounded-xl bg-[#259b8f] text-sm font-black text-white shadow-[0_14px_24px_rgba(37,155,143,0.24)] transition hover:bg-[#1f887d] disabled:bg-[#259b8f]/40"
               >
-                {loading ? "Signing in..." : "Login"}
+                {loading
+                  ? "Signing in..."
+                  : `Login as ${loginMode === "client" ? "Client" : "Referrer"}`}
               </button>
             </form>
 
@@ -1778,8 +2176,8 @@ export default function ClientDashboard() {
                 First time signing in?
               </p>
               <p className="mt-1 text-sm leading-6 text-slate-600">
-                Your temporary password is usually your last name. You can
-                change it after login.
+                Your temporary password is your last name. You must change it
+                after your first login.
               </p>
             </div>
           </div>
@@ -1788,6 +2186,26 @@ export default function ClientDashboard() {
     );
   }
 
+  if (loggedClient.role === "referrer") {
+    return (
+      <ReferrerPortal
+        account={loggedClient}
+        showChangePassword={showChangePassword}
+        mustChangePassword={mustChangePassword}
+        currentPassword={currentPassword}
+        newPassword={newPassword}
+        confirmPassword={confirmPassword}
+        passwordLoading={passwordLoading}
+        onCurrentPasswordChange={setCurrentPassword}
+        onNewPasswordChange={setNewPassword}
+        onConfirmPasswordChange={setConfirmPassword}
+        onOpenChangePassword={() => setShowChangePassword(true)}
+        onCloseChangePassword={closeChangePasswordModal}
+        onChangePassword={handleChangePassword}
+        onLogout={handleLogout}
+      />
+    );
+  }
   return (
     <div className="min-h-screen bg-[#eef8f6] px-3 py-4 font-sans text-slate-900 sm:px-4 sm:py-8">
       <div className="fixed inset-0 -z-10 bg-[linear-gradient(135deg,rgba(37,155,143,0.16),rgba(255,255,255,0.88)_38%,rgba(238,101,33,0.1)),radial-gradient(circle_at_12%_16%,rgba(37,155,143,0.22),transparent_28%),radial-gradient(circle_at_86%_12%,rgba(108,191,81,0.16),transparent_26%),radial-gradient(circle_at_72%_88%,rgba(238,101,33,0.14),transparent_30%)]" />
@@ -1929,8 +2347,8 @@ export default function ClientDashboard() {
                   Contact Your Team
                 </h2>
                 <p className="mt-0.5 text-sm font-medium leading-5 text-slate-600">
-                  Send a note about your application. Your SBR Funding team
-                  will see it in the admin dashboard.
+                  Send a note about your application. Your SBR Funding team will
+                  see it in the admin dashboard.
                 </p>
               </div>
             </div>
@@ -2110,27 +2528,54 @@ export default function ClientDashboard() {
             {selectedClient && (
               <section className={sectionClass}>
                 <h2 className="mb-5 text-xl font-black text-slate-900">
-                  Submitted Loan Information
+                  Submitted Application Information
                 </h2>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  {[
-                    ["Source", currentSource],
-                    ["Classification Type", selectedClient.classificationType],
-                    ["Borrower Type", selectedClient.borrowerType],
-                    ["Objective", selectedClient.objective],
-                    ["Loan Type", selectedClient.loanType],
-                    ["Purpose", selectedClient.purpose],
-                    ["Transaction Type", selectedClient.transactionType],
-                    [
-                      "With Co-Borrowers?",
-                      selectedClient.withBorrowersGuarantors,
-                    ],
-                    [
-                      "Anticipated Settlement Date",
-                      selectedClient.anticipatedSettlementDate,
-                    ],
-                  ].map(([label, value]) => (
+                  {(usesSimplifiedIntake
+                    ? [
+                        ["Source", currentSource],
+                        ["Who is the borrower?", selectedClient.borrowerType],
+                        ["Do you have a property?", selectedClient.hasProperty],
+                        ["Property type", selectedClient.propertyType],
+                        [
+                          "More than one property?",
+                          selectedClient.hasMultipleProperties,
+                        ],
+                        [
+                          "Are financial statements available?",
+                          displayFinancialStatements(
+                            selectedClient.transactionType,
+                          ),
+                        ],
+                        ["Self-employed?", selectedClient.isSelfEmployed],
+                        ["Tax return available?", selectedClient.hasTaxReturn],
+                        [
+                          "With Co-Borrowers?",
+                          selectedClient.withBorrowersGuarantors,
+                        ],
+                      ]
+                    : [
+                        ["Source", currentSource],
+                        [
+                          "Classification Type",
+                          selectedClient.classificationType,
+                        ],
+                        ["Borrower Type", selectedClient.borrowerType],
+                        ["Objective", selectedClient.objective],
+                        ["Loan Type", selectedClient.loanType],
+                        ["Purpose", selectedClient.purpose],
+                        ["Transaction Type", selectedClient.transactionType],
+                        [
+                          "With Co-Borrowers?",
+                          selectedClient.withBorrowersGuarantors,
+                        ],
+                        [
+                          "Anticipated Settlement Date",
+                          selectedClient.anticipatedSettlementDate,
+                        ],
+                      ]
+                  ).map(([label, value]) => (
                     <div key={label} className={fieldCardClass}>
                       <p className="text-xs font-bold uppercase text-slate-400">
                         {label}
@@ -2209,23 +2654,70 @@ export default function ClientDashboard() {
                   </h3>
 
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    {[
-                      ["Veda Issues", selectedClient.vedaIssues],
-                      ["Conduct Issues", selectedClient.conductIssues],
-                      [
-                        "Client Needs & Objectives",
-                        selectedClient.clientNeedsObjectives,
-                      ],
-                      [
-                        "Applicant Background",
-                        selectedClient.applicantBackground,
-                      ],
-                      [
-                        "Explanation of Income",
-                        selectedClient.explanationOfIncome,
-                      ],
-                      ["Security", selectedClient.security],
-                    ].map(([label, value]) => (
+                    {(usesSimplifiedIntake
+                      ? [
+                          ["Credit issues?", selectedClient.vedaIssues],
+                          [
+                            "Have you been making your loan payments?",
+                            selectedClient.conductIssues,
+                          ],
+                          [
+                            "Objective / Tell us your story",
+                            selectedClient.clientNeedsObjectives,
+                          ],
+                          ...(isReferral
+                            ? [
+                                [
+                                  "Referrer Background",
+                                  selectedClient.applicantBackground,
+                                ],
+                                ["DPN issues?", selectedClient.dpnIssues],
+                                [
+                                  "DPN issue details",
+                                  selectedClient.dpnDetails,
+                                ],
+                                [
+                                  "Is the client compliant?",
+                                  selectedClient.isClientCompliant,
+                                ],
+                              ]
+                            : []),
+                          [
+                            "Income stream and performance",
+                            selectedClient.explanationOfIncome,
+                          ],
+                          ["Pain Point / Key Issue", selectedClient.painPoint],
+                          ...(isDirectClient
+                            ? [
+                                [
+                                  "How did you hear from us?",
+                                  selectedClient.heardAboutUs,
+                                ],
+                                [
+                                  "SBR Funding account manager",
+                                  selectedClient.sbrFundingAccountManager,
+                                ],
+                              ]
+                            : []),
+                        ]
+                      : [
+                          ["Veda Issues", selectedClient.vedaIssues],
+                          ["Conduct Issues", selectedClient.conductIssues],
+                          [
+                            "Client Needs & Objectives",
+                            selectedClient.clientNeedsObjectives,
+                          ],
+                          [
+                            "Applicant Background",
+                            selectedClient.applicantBackground,
+                          ],
+                          [
+                            "Explanation of Income",
+                            selectedClient.explanationOfIncome,
+                          ],
+                          ["Security", selectedClient.security],
+                        ]
+                    ).map(([label, value]) => (
                       <div key={label} className={fieldCardClass}>
                         <p className="text-xs font-bold uppercase text-slate-400">
                           {label}
@@ -2240,19 +2732,28 @@ export default function ClientDashboard() {
 
                 <div className="mt-6 border-t border-slate-200 pt-6">
                   <h3 className="mb-4 text-lg font-black uppercase tracking-wide text-slate-600">
-                    Loan Amount & Settlement
+                    {usesSimplifiedIntake
+                      ? "Funds Required & Notes"
+                      : "Loan Amount & Settlement"}
                   </h3>
 
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                    {[
-                      ["Loan Amount", selectedClient.loanAmount],
-                      ["Security Value", selectedClient.securityValue],
-                      ["LVR", selectedClient.lvr],
-                      [
-                        "Anticipated Settlement Date",
-                        selectedClient.anticipatedSettlementDate,
-                      ],
-                    ].map(([label, value]) => (
+                    {(usesSimplifiedIntake
+                      ? [
+                          ["Funds required", selectedClient.loanAmount],
+                          ["Special Notes", selectedClient.specialNotes],
+                        ]
+                      : [
+                          ["Loan Amount", selectedClient.loanAmount],
+                          ["Security Value", selectedClient.securityValue],
+                          ["LVR", selectedClient.lvr],
+                          [
+                            "Anticipated Settlement Date",
+                            selectedClient.anticipatedSettlementDate,
+                          ],
+                          ["Special Notes", selectedClient.specialNotes],
+                        ]
+                    ).map(([label, value]) => (
                       <div key={label} className={fieldCardClass}>
                         <p className="text-xs font-bold uppercase text-slate-400">
                           {label}
@@ -2292,6 +2793,20 @@ export default function ClientDashboard() {
                         <strong>Email:</strong>{" "}
                         {selectedClient.referrer?.email || "N/A"}
                       </p>
+
+                      <p className="break-words text-sm text-slate-700">
+                        <strong>Profession:</strong>{" "}
+                        {selectedClient.referrerProfession ||
+                          selectedClient.referrer?.profession ||
+                          "N/A"}
+                      </p>
+
+                      <p className="break-words text-sm text-slate-700">
+                        <strong>Unique Referrer Code:</strong>{" "}
+                        {selectedClient.uniqueReferrerCode ||
+                          selectedClient.referrer?.uniqueCode ||
+                          "N/A"}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -2305,9 +2820,9 @@ export default function ClientDashboard() {
                     Document Checklist
                   </h2>
                   <p className="text-sm text-slate-500">
-                    {selectedClient?.transactionType
-                      ? `Required documents for ${selectedClient.transactionType}.`
-                      : "The checklist will appear after a Transaction Type is assigned."}
+                    {selectedClient
+                      ? "Required documents based on your application answers."
+                      : "The checklist will appear after your application loads."}
                   </p>
                 </div>
 
@@ -2586,6 +3101,14 @@ export default function ClientDashboard() {
                                     : status}
                                 </span>
 
+                                <span className={`ml-2 inline-flex rounded-full border px-3 py-1 text-xs font-extrabold ${
+                                  getUploaderLabel(file) === "Referrer"
+                                    ? "border-violet-200 bg-violet-50 text-violet-700"
+                                    : "border-cyan-200 bg-cyan-50 text-cyan-700"
+                                }`}>
+                                  Uploaded by {getUploaderLabel(file)}
+                                </span>
+
                                 {file.remarks && (
                                   <p className="max-w-full whitespace-pre-wrap break-words text-xs font-semibold text-slate-500 md:max-w-[260px]">
                                     Remarks: {file.remarks}
@@ -2751,15 +3274,15 @@ export default function ClientDashboard() {
               </div>
 
               <div className="mb-4">
-                {selectedClient?.transactionType ? (
+                {selectedClient ? (
                   <div className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
-                    Showing the required documents for{" "}
-                    <strong>{selectedClient.transactionType}</strong>.
+                    Showing documents based on financial statements, employment,
+                    tax return, property and identity requirements.
                   </div>
                 ) : (
                   <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
-                    Transaction Type is missing. Document uploads are
-                    unavailable until the client record is updated.
+                    Client application details are unavailable. Refresh the
+                    portal before uploading.
                   </div>
                 )}
 

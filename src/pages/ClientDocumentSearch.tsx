@@ -28,7 +28,7 @@ import DashboardLayout from "../components/layout/layout";
 
 const DEFAULT_API_BASE = import.meta.env.DEV
   ? "http://localhost:7071/api"
-  : "https://docsuploadpythonapi.azurewebsites.net/api";
+  : "https://docsuploadpythonapi-flex.azurewebsites.net/api";
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE
@@ -331,6 +331,10 @@ type Client = {
   referrerLastName?: string;
   referrerPhone?: string;
   referrerEmail?: string;
+  referrerId?: string;
+  referralCode?: string;
+  referrerProfession?: string;
+  uniqueReferrerCode?: string;
   brokerFirstName?: string;
   brokerMiddleName?: string;
   brokerLastName?: string;
@@ -343,6 +347,11 @@ type Client = {
   submittedAt?: string;
 
   documentStatus?: string;
+  uploaderType?: string;
+  uploadedByType?: string;
+  uploadedBy?: string;
+  submittedBy?: string;
+  uploadSource?: string;
   verifiedBy?: string;
   verifiedDate?: string;
   remarks?: string;
@@ -837,6 +846,21 @@ export default function ClientDocumentSearch() {
             "BrokerEmail",
           ]) as string | undefined),
       },
+      referrerId: pickValue(rawClient, ["referrerId", "ReferrerId"]) as string | undefined,
+      referralCode: pickValue(rawClient, [
+        "referralCode",
+        "ReferralCode",
+        "uniqueReferrerCode",
+        "UniqueReferrerCode",
+      ]) as string | undefined,
+      referrerProfession: pickValue(rawClient, [
+        "referrerProfession",
+        "ReferrerProfession",
+      ]) as string | undefined,
+      uniqueReferrerCode: pickValue(rawClient, [
+        "uniqueReferrerCode",
+        "UniqueReferrerCode",
+      ]) as string | undefined,
 
       documentType: pickValue(rawClient, ["documentType", "DocumentType"]) as
         | string
@@ -863,6 +887,20 @@ export default function ClientDocumentSearch() {
           "document_status",
         ]) as string | undefined,
       ),
+      uploaderType: pickValue(rawClient, [
+        "uploaderType",
+        "UploaderType",
+        "uploadedByType",
+        "UploadedByType",
+        "uploadedByRole",
+        "UploadedByRole",
+        "uploadSource",
+        "UploadSource",
+        "uploadedBy",
+        "UploadedBy",
+        "submittedBy",
+        "SubmittedBy",
+      ]) as string | undefined,
       verifiedBy: pickValue(rawClient, [
         "verifiedBy",
         "VerifiedBy",
@@ -957,6 +995,23 @@ export default function ClientDocumentSearch() {
     return value;
   };
 
+  const hasDetailValue = (value?: string | number | null) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === "number") return true;
+
+    const normalizedValue = value.trim().toLowerCase();
+
+    return ![
+      "",
+      "-",
+      "n/a",
+      "na",
+      "null",
+      "undefined",
+      "1900-01-01",
+    ].includes(normalizedValue) && !normalizedValue.startsWith("1900-01-01t");
+  };
+
   const getReferrerName = (client: Client) =>
     [
       client.referrer?.firstName ||
@@ -980,6 +1035,23 @@ export default function ClientDocumentSearch() {
 
   const getDocumentStatus = (file: Client) =>
     normalizeDocumentStatus(file.documentStatus);
+
+  const getDocumentUploader = (file: Client) =>
+    (
+      file.uploaderType ||
+      file.uploadedByType ||
+      file.uploadedBy ||
+      file.submittedBy ||
+      file.uploadSource ||
+      file.remarks ||
+      file.verifiedBy ||
+      "Client"
+    )
+      .trim()
+      .toLowerCase()
+      .includes("referr")
+      ? "Referrer"
+      : "Client";
 
   const updateDocumentStatus = async (
     file: Client,
@@ -1144,7 +1216,11 @@ export default function ClientDocumentSearch() {
         (client.specialNotes || "").toLowerCase().includes(keyword) ||
         getReferrerName(client).toLowerCase().includes(keyword) ||
         (getReferrerEmail(client) || "").toLowerCase().includes(keyword) ||
-        (getReferrerPhone(client) || "").toLowerCase().includes(keyword);
+        (getReferrerPhone(client) || "").toLowerCase().includes(keyword) ||
+        (client.referrerId || "").toLowerCase().includes(keyword) ||
+        (client.referralCode || client.uniqueReferrerCode || "")
+          .toLowerCase()
+          .includes(keyword);
 
       const matchesType =
         selectedType === "all" ||
@@ -1737,14 +1813,18 @@ export default function ClientDocumentSearch() {
   }: {
     label: string;
     value?: string | number | null;
-  }) => (
-    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 p-4 transition hover:border-[#259b8f]/25 hover:bg-white">
-      <p className="text-xs font-bold uppercase text-slate-400">{label}</p>
-      <p className="mt-1 break-words text-sm font-bold leading-6 text-slate-900">
-        {displayValue(value)}
-      </p>
-    </div>
-  );
+  }) => {
+    if (!hasDetailValue(value)) return null;
+
+    return (
+      <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/80 p-4 transition hover:border-[#259b8f]/25 hover:bg-white">
+        <p className="text-xs font-bold uppercase text-slate-400">{label}</p>
+        <p className="mt-1 break-words text-sm font-bold leading-6 text-slate-900">
+          {displayValue(value)}
+        </p>
+      </div>
+    );
+  };
 
   const StatCard = ({
     label,
@@ -2127,7 +2207,7 @@ export default function ClientDocumentSearch() {
                               </div>
 
                               {client.coBorrowers?.length ? (
-                                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                <div className="grid gap-3">
                                   {client.coBorrowers.map(
                                     (coBorrower, index) => (
                                       <div
@@ -2139,7 +2219,7 @@ export default function ClientDocumentSearch() {
                                         <p className="text-xs font-black uppercase tracking-wide text-cyan-700">
                                           Co-Borrower {index + 1}
                                         </p>
-                                        <div className="mt-3 grid gap-3">
+                                        <div className="mt-3 grid gap-3 md:grid-cols-3">
                                           <InfoBox
                                             label="Name"
                                             value={[
@@ -2177,7 +2257,7 @@ export default function ClientDocumentSearch() {
                                 {getDetailLabel(client)} Details
                               </p>
 
-                              <div className="grid gap-3 md:grid-cols-3">
+                              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                                 <InfoBox
                                   label={`${getDetailLabel(client)} Name`}
                                   value={getReferrerName(client)}
@@ -2190,6 +2270,22 @@ export default function ClientDocumentSearch() {
                                   label={`${getDetailLabel(client)} Email`}
                                   value={getReferrerEmail(client)}
                                 />
+                                <InfoBox
+                                  label="Referrer Profession"
+                                  value={client.referrerProfession}
+                                />
+                                {sourceLabel === "Referral" && (
+                                  <>
+                                    <InfoBox
+                                      label="RF Login ID"
+                                      value={client.referrerId}
+                                    />
+                                    <InfoBox
+                                      label="Referral Code"
+                                      value={client.referralCode || client.uniqueReferrerCode}
+                                    />
+                                  </>
+                                )}
                               </div>
                             </div>
                           )}
@@ -2415,16 +2511,27 @@ export default function ClientDocumentSearch() {
                                       Submitted: {file.submittedAt || "N/A"}
                                     </p>
 
-                                    <span
-                                      className={`mt-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-extrabold ${getDocumentStatusStyle(
-                                        file.documentStatus,
-                                      )}`}
-                                    >
-                                      {getDocumentStatusIcon(
-                                        file.documentStatus,
-                                      )}
-                                      {getDocumentStatus(file)}
-                                    </span>
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                      <span
+                                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-extrabold ${getDocumentStatusStyle(
+                                          file.documentStatus,
+                                        )}`}
+                                      >
+                                        {getDocumentStatusIcon(
+                                          file.documentStatus,
+                                        )}
+                                        {getDocumentStatus(file)}
+                                      </span>
+                                      <span
+                                        className={`inline-flex rounded-full border px-3 py-1 text-xs font-extrabold ${
+                                          getDocumentUploader(file) === "Referrer"
+                                            ? "border-violet-200 bg-violet-50 text-violet-700"
+                                            : "border-cyan-200 bg-cyan-50 text-cyan-700"
+                                        }`}
+                                      >
+                                        Uploaded by {getDocumentUploader(file)}
+                                      </span>
+                                    </div>
 
                                     {file.remarks && (
                                       <p className="mt-2 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-600">
@@ -3228,7 +3335,3 @@ export default function ClientDocumentSearch() {
     </DashboardLayout>
   );
 }
-
-
-
-

@@ -24,6 +24,7 @@ import {
   FaRedoAlt,
   FaUserFriends,
 } from "react-icons/fa";
+import ReferrerPortal from "./ReferrerPortal";
 
 type CoBorrower = {
   firstName?: string;
@@ -83,6 +84,11 @@ type Submission = {
   fileUrl?: string;
   submittedAt?: string;
   documentStatus?: string;
+  uploaderType?: string;
+  uploadedByType?: string;
+  uploadedBy?: string;
+  submittedBy?: string;
+  uploadSource?: string;
   verifiedBy?: string;
   verifiedDate?: string;
   remarks?: string;
@@ -103,6 +109,28 @@ type ClientLoginUser = {
   source?: string;
   status?: string;
   mustChangePassword?: boolean;
+  role?: "client" | "referrer";
+  referrerId?: string;
+  referralCode?: string;
+  profession?: string;
+  referredClients?: ReferrerClient[];
+};
+
+type ReferrerDocument = {
+  id: number;
+  documentType?: string;
+  documentLabel?: string;
+  fileName?: string;
+  uploadedAt?: string;
+  status?: string;
+};
+
+type ReferrerClient = {
+  clientId: number;
+  uniqueId: string;
+  name: string;
+  status?: string;
+  documents: ReferrerDocument[];
 };
 
 const API_BASE = (
@@ -115,6 +143,8 @@ const UPLOAD_API = `${API_BASE}/uploadclient`;
 const FILE_URL_API = `${API_BASE}/file-url`;
 const CLIENT_LOGIN_API = `${API_BASE}/client-login`;
 const CLIENT_CHANGE_PASSWORD_API = `${API_BASE}/client-change-password`;
+const REFERRER_LOGIN_API = `${API_BASE}/referrer-login`;
+const REFERRER_CHANGE_PASSWORD_API = `${API_BASE}/referrer-change-password`;
 
 type DocumentOption = {
   label: string;
@@ -641,6 +671,22 @@ const normalizeClientRecord = (client: Submission): Submission => {
           "VerificationStatus",
         ]),
       ) || "Pending",
+    uploaderType: toText(
+      getAliasValue(client, [
+        "uploaderType",
+        "UploaderType",
+        "uploadedByType",
+        "UploadedByType",
+        "uploadedByRole",
+        "UploadedByRole",
+        "uploadSource",
+        "UploadSource",
+        "uploadedBy",
+        "UploadedBy",
+        "submittedBy",
+        "SubmittedBy",
+      ]),
+    ),
     verifiedBy: toText(
       getAliasValue(client, ["verifiedBy", "VerifiedBy", "verified_by"]),
     ),
@@ -688,6 +734,7 @@ const normalizeLoggedClient = (client: ClientLoginUser): ClientLoginUser => {
 };
 
 export default function ClientDashboard() {
+  const [loginMode, setLoginMode] = useState<"client" | "referrer">("client");
   const [loginUniqueId, setLoginUniqueId] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -797,6 +844,23 @@ export default function ClientDashboard() {
 
   const formatLeadType = (type?: string | number | null) =>
     normalizeSourceValue(type);
+
+  const getUploaderLabel = (file: Submission) =>
+    (
+      file.uploaderType ||
+      file.uploadedByType ||
+      file.uploadedBy ||
+      file.submittedBy ||
+      file.uploadSource ||
+      file.remarks ||
+      file.verifiedBy ||
+      "Client"
+    )
+      .trim()
+      .toLowerCase()
+      .includes("referr")
+      ? "Referrer"
+      : "Client";
 
   const currentSource =
     formatLeadType(
@@ -963,7 +1027,14 @@ export default function ClientDashboard() {
     event.preventDefault();
 
     if (!loginUniqueId.trim()) {
-      alert("Please enter your Client ID.");
+      alert(`Please enter your ${loginMode === "client" ? "Client" : "Referrer"} ID.`);
+      return;
+    }
+
+    const normalizedLoginId = loginUniqueId.trim().toUpperCase();
+    const requiredPrefix = loginMode === "client" ? "CL-" : "RF-";
+    if (!normalizedLoginId.startsWith(requiredPrefix)) {
+      alert(`${loginMode === "client" ? "Client" : "Referrer"} login accepts ${requiredPrefix} IDs only.`);
       return;
     }
 
@@ -975,14 +1046,18 @@ export default function ClientDashboard() {
     try {
       setLoading(true);
 
-      const response = await fetch(CLIENT_LOGIN_API, {
+      const response = await fetch(
+        loginMode === "client" ? CLIENT_LOGIN_API : REFERRER_LOGIN_API,
+        {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          uniqueId: loginUniqueId.trim(),
+          uniqueId: normalizedLoginId,
+          referrerId: normalizedLoginId,
           password: loginPassword.trim(),
         }),
-      });
+        },
+      );
 
       const result = await response.json();
 
@@ -990,10 +1065,22 @@ export default function ClientDashboard() {
         throw new Error(result.message || "Invalid Client ID or password.");
       }
 
-      const normalizedClient = normalizeLoggedClient(result.client);
+      const normalizedClient = normalizeLoggedClient(
+        loginMode === "client" ? result.client : result.referrer,
+      );
+      normalizedClient.role = loginMode;
+      if (
+        loginMode === "referrer" &&
+        normalizedClient.profession?.trim().toLowerCase() === "broker"
+      ) {
+        throw new Error(
+          "Broker records do not have portal access. The RF portal is for referrals only.",
+        );
+      }
       const requiresPasswordChange = Boolean(
         result.mustChangePassword ||
           result.client?.mustChangePassword ||
+          result.referrer?.mustChangePassword ||
           normalizedClient.mustChangePassword,
       );
 
@@ -1002,7 +1089,11 @@ export default function ClientDashboard() {
       setMustChangePassword(requiresPasswordChange);
       setShowChangePassword(requiresPasswordChange);
       setCurrentPassword(loginPassword.trim());
-      await loadClientFiles(normalizedClient.uniqueId);
+      if (loginMode === "client") {
+        await loadClientFiles(normalizedClient.uniqueId);
+      } else {
+        setClientFiles([]);
+      }
     } catch (error) {
       alert(error instanceof Error ? error.message : "Client login failed.");
     } finally {
@@ -1097,15 +1188,21 @@ export default function ClientDashboard() {
     try {
       setPasswordLoading(true);
 
-      const response = await fetch(CLIENT_CHANGE_PASSWORD_API, {
+      const response = await fetch(
+        loggedClient.role === "referrer"
+          ? REFERRER_CHANGE_PASSWORD_API
+          : CLIENT_CHANGE_PASSWORD_API,
+        {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           uniqueId: loggedClient.uniqueId,
+          referrerId: loggedClient.referrerId || loggedClient.uniqueId,
           currentPassword: currentPassword.trim(),
           newPassword,
         }),
-      });
+        },
+      );
 
       const result = await response.json().catch(() => ({}));
 
@@ -1357,6 +1454,10 @@ export default function ClientDashboard() {
         appendValue(formData, "referrerEmail", clientRecord.referrer?.email);
 
         appendValue(formData, "documentType", selectedDocumentType);
+        appendValue(formData, "uploaderType", "Client");
+        appendValue(formData, "uploadedByType", "Client");
+        appendValue(formData, "uploadedByRole", "Client");
+        appendValue(formData, "uploadSource", "Client Portal");
         formData.append("file", file);
 
         const controller = new AbortController();
@@ -1595,14 +1696,48 @@ export default function ClientDashboard() {
                 Sign in to continue
               </h2>
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                Use your Client ID and password to open your document dashboard.
+                Choose Client or Referrer, then enter the matching ID and password.
               </p>
             </div>
 
-            <form onSubmit={handleClientLogin} className="mt-7 space-y-5">
+            <div
+              role="tablist"
+              aria-label="Select portal login type"
+              className="mt-7 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-slate-100 p-1.5"
+            >
+              {(["client", "referrer"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="tab"
+                  aria-selected={loginMode === mode}
+                  aria-controls="portal-login-panel"
+                  onClick={() => {
+                    setLoginMode(mode);
+                    setLoginUniqueId("");
+                    setLoginPassword("");
+                  }}
+                  className={`relative flex min-h-16 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition ${
+                    loginMode === mode
+                      ? "border-[#259b8f] bg-white text-[#1f8178] shadow-[0_10px_24px_rgba(37,155,143,0.15)] ring-4 ring-[#259b8f]/10"
+                      : "border-transparent text-slate-500 hover:border-slate-200 hover:bg-white/70 hover:text-slate-800"
+                  }`}
+                >
+                  {loginMode === mode && <FaCheckCircle className="text-[#259b8f]" />}
+                  <span>{mode === "client" ? "Client ID Login" : "Referrer ID Login"}</span>
+                </button>
+              ))}
+            </div>
+
+            <form
+              id="portal-login-panel"
+              role="tabpanel"
+              onSubmit={handleClientLogin}
+              className="mt-5 space-y-5"
+            >
               <div>
                 <label className="mb-2 block text-sm font-black text-slate-700">
-                  Client ID
+                  {loginMode === "client" ? "Client ID" : "Referrer ID"}
                 </label>
 
                 <div className="relative">
@@ -1611,7 +1746,7 @@ export default function ClientDashboard() {
                   <input
                     value={loginUniqueId}
                     onChange={(event) => setLoginUniqueId(event.target.value)}
-                    placeholder="Example: CL-81BE533A"
+                    placeholder={loginMode === "client" ? "Example: CL-81BE533A" : "Example: RF-81BE533A"}
                     className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15"
                   />
                 </div>
@@ -1651,7 +1786,7 @@ export default function ClientDashboard() {
                 disabled={loading}
                 className="h-12 w-full rounded-xl bg-[#259b8f] text-sm font-black text-white shadow-[0_14px_24px_rgba(37,155,143,0.24)] transition hover:bg-[#1f887d] disabled:bg-[#259b8f]/40"
               >
-                {loading ? "Signing in..." : "Login"}
+                {loading ? "Signing in..." : `Login as ${loginMode === "client" ? "Client" : "Referrer"}`}
               </button>
             </form>
 
@@ -1667,6 +1802,27 @@ export default function ClientDashboard() {
           </div>
         </div>
       </div>
+    );
+  }
+
+  if (loggedClient.role === "referrer") {
+    return (
+      <ReferrerPortal
+        account={loggedClient}
+        showChangePassword={showChangePassword}
+        mustChangePassword={mustChangePassword}
+        currentPassword={currentPassword}
+        newPassword={newPassword}
+        confirmPassword={confirmPassword}
+        passwordLoading={passwordLoading}
+        onCurrentPasswordChange={setCurrentPassword}
+        onNewPasswordChange={setNewPassword}
+        onConfirmPasswordChange={setConfirmPassword}
+        onOpenChangePassword={() => setShowChangePassword(true)}
+        onCloseChangePassword={closeChangePasswordModal}
+        onChangePassword={handleChangePassword}
+        onLogout={handleLogout}
+      />
     );
   }
 
@@ -2343,6 +2499,14 @@ export default function ClientDashboard() {
                                   {status === "Pending"
                                     ? "Pending Review"
                                     : status}
+                                </span>
+
+                                <span className={`ml-2 inline-flex rounded-full border px-3 py-1 text-xs font-extrabold ${
+                                  getUploaderLabel(file) === "Referrer"
+                                    ? "border-violet-200 bg-violet-50 text-violet-700"
+                                    : "border-cyan-200 bg-cyan-50 text-cyan-700"
+                                }`}>
+                                  Uploaded by {getUploaderLabel(file)}
                                 </span>
 
                                 {file.remarks && (

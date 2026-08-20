@@ -6,13 +6,12 @@ import {
   FaChevronRight,
   FaExclamationTriangle,
   FaExternalLinkAlt,
-  FaFileExport,
   FaFolder,
   FaFolderOpen,
   FaSignOutAlt,
-  FaTachometerAlt,
   FaTimes,
   FaUsers,
+  FaUserTie,
 } from 'react-icons/fa';
 
 interface SidebarProps {
@@ -23,12 +22,14 @@ interface SidebarProps {
 }
 
 const documentTypes = [
+  { label: 'ID', value: 'id' },
+  { label: 'Passport', value: 'passport' },
+  { label: 'Payslip', value: 'payslip' },
   { label: 'BAS from ATO Portal', value: 'bas-from-ato-portal' },
   {
     label: 'Business Banking Statements',
     value: 'business-banking-statements',
   },
-  { label: 'Payslip', value: 'payslip' },
   {
     label: 'Management Reports / Financial Statements',
     value: 'management-reports-financial-statements',
@@ -55,6 +56,8 @@ export default function Sidebar({
   const navigate = useNavigate();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showClients, setShowClients] = useState(true);
+  const [showDocuments, setShowDocuments] = useState(true);
+  const [showReferrers, setShowReferrers] = useState(true);
   const [showClientPortal, setShowClientPortal] = useState(true);
 
   const handleConfirmLogout = () => {
@@ -62,13 +65,6 @@ export default function Sidebar({
     setShowLogoutModal(false);
     navigate('/login');
   };
-
-  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${
-      isActive
-        ? 'bg-orange-500 text-white shadow-lg'
-        : 'text-slate-300 hover:bg-white/10 hover:text-white'
-    }`;
 
   const childNavLinkClass = ({ isActive }: { isActive: boolean }) =>
     `ml-6 flex items-start gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold leading-5 transition ${
@@ -89,7 +85,7 @@ export default function Sidebar({
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-72 bg-slate-950 text-white shadow-2xl transition-transform duration-300 ${
+        className={`fixed inset-y-0 left-0 z-40 w-[calc(100vw-2rem)] max-w-96 bg-slate-950 text-white shadow-2xl transition-transform duration-300 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         } ${
           isDesktopHidden ? 'lg:-translate-x-full' : 'lg:translate-x-0'
@@ -166,9 +162,74 @@ export default function Sidebar({
                       className={childNavLinkClass}
                     >
                       <FaFolder className="mt-0.5 shrink-0 text-orange-400" />
-                      <span>{type.label}</span>
+                      <span className="whitespace-nowrap text-xs">
+                        {type.label}
+                      </span>
                     </NavLink>
                   ))} */}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl bg-white/[0.04] p-2">
+              <button
+                type="button"
+                onClick={() => setShowDocuments((prev) => !prev)}
+                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10"
+              >
+                <span className="flex items-center gap-3">
+                  {showDocuments ? (
+                    <FaFolderOpen className="text-orange-400" />
+                  ) : (
+                    <FaFolder className="text-orange-400" />
+                  )}
+                  Documents
+                </span>
+
+                {showDocuments ? <FaChevronDown /> : <FaChevronRight />}
+              </button>
+
+              {showDocuments && (
+                <div className="mt-2 space-y-1">
+                  {documentTypes.map((type) => (
+                    <NavLink
+                      key={type.value}
+                      to={`/dashboard/documents/${type.value}`}
+                      onClick={onClose}
+                      className={childNavLinkClass}
+                    >
+                      <FaFolder className="mt-0.5 shrink-0 text-orange-400" />
+                      <span>{type.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl bg-white/[0.04] p-2">
+              <button
+                type="button"
+                onClick={() => setShowReferrers((prev) => !prev)}
+                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10"
+              >
+                <span className="flex items-center gap-3">
+                  <FaUserTie className="text-[#6CBF51]" />
+                  Referrers
+                </span>
+
+                {showReferrers ? <FaChevronDown /> : <FaChevronRight />}
+              </button>
+
+              {showReferrers && (
+                <div className="mt-2 space-y-1">
+                  <NavLink
+                    to="/dashboard/referrers"
+                    onClick={onClose}
+                    className={childNavLinkClass}
+                  >
+                    <FaUserTie className="mt-0.5 shrink-0" />
+                    <span>Referrer Folders</span>
+                  </NavLink>
                 </div>
               )}
             </div>
@@ -248,7 +309,7 @@ export default function Sidebar({
         className={`fixed top-24 z-50 hidden h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-[#EE6521] text-xs text-white shadow-[0_8px_20px_rgba(15,23,42,0.24)] transition-all duration-300 hover:scale-105 hover:bg-orange-600 lg:flex ${
           isDesktopHidden
             ? 'left-2'
-            : 'left-72 -translate-x-1/2'
+            : 'left-96 -translate-x-1/2'
         }`}
         aria-label={isDesktopHidden ? 'Show sidebar' : 'Hide sidebar'}
         title={isDesktopHidden ? 'Show sidebar' : 'Hide sidebar'}

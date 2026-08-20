@@ -190,7 +190,7 @@ export default function DashboardLayout({
 
       <div
         className={`transition-[padding] duration-300 ${
-          isSidebarHidden ? 'lg:pl-0' : 'lg:pl-72'
+          isSidebarHidden ? 'lg:pl-0' : 'lg:pl-96'
         }`}
       >
         <header className="sticky top-0 z-40 flex h-20 items-center justify-between border-b border-[#219688]/15 bg-white/95 px-4 shadow-sm backdrop-blur sm:px-6">

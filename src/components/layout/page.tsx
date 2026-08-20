@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const ENV_API_BASE = import.meta.env.VITE_API_BASE_URL?.trim().replace(
   /\/+$/,
@@ -6,7 +6,7 @@ const ENV_API_BASE = import.meta.env.VITE_API_BASE_URL?.trim().replace(
 );
 const LOCAL_API_BASE = "http://localhost:7071/api";
 const PRODUCTION_API_BASE =
-  "https://docsuploadpythonapi.azurewebsites.net/api";
+  "https://docsuploadpythonapi-flex.azurewebsites.net/api";
 
 const isLocalDevelopment =
   typeof window !== "undefined" &&
@@ -17,6 +17,12 @@ const API_BASE =
   ENV_API_BASE || (isLocalDevelopment ? LOCAL_API_BASE : PRODUCTION_API_BASE);
 
 const API_URL = `${API_BASE}/uploadclient`;
+const REFERRER_LOOKUP_API = `${API_BASE}/referrer-lookup`;
+const REFERRERS_API = `${API_BASE}/referrers`;
+
+// Temporarily hidden while these intake fields are out of scope.
+const SHOW_ADVANCED_LOAN_FIELDS = false;
+const SHOW_SUBMISSION_DOCUMENT_UPLOADS = false;
 
 type GhlOperationResult = {
   success?: boolean;
@@ -37,9 +43,40 @@ type UploadClientResponse = {
   status?: string;
   ghlSync?: GhlOperationResult;
   ghlSubmissionTrigger?: GhlOperationResult;
-  intake?: {
-    coBorrowers?: Array<Omit<CoBorrower, "id">>;
+  referrerAccount?: {
+    referrerId: string;
+    referralCode: string;
+    created: boolean;
+  } | null;
+  referrerNotification?: GhlOperationResult;
+  coBorrowerNotifications?: GhlOperationResult[];
+};
+
+type ReferrerLookupResponse = {
+  success: boolean;
+  message?: string;
+  referrer?: {
+    referralCode: string;
+    firstName: string;
+    middleName?: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+    profession?: string;
   };
+};
+
+type ReferrerListResponse = {
+  success: boolean;
+  referrers?: Array<{
+    name?: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    email?: string;
+    referrerId?: string;
+    referralCode?: string;
+  }>;
 };
 
 type DocumentOption = {
@@ -55,6 +92,18 @@ type CoBorrower = {
   phoneCountryCode: string;
   phone: string;
   email: string;
+};
+
+type SubmissionSuccess = {
+  uniqueId: string;
+  source: string;
+  status: string;
+  missingRequirements: string[];
+  referrerAccount?: {
+    referrerId: string;
+    referralCode: string;
+    created: boolean;
+  } | null;
 };
 
 const createEmptyCoBorrower = (): CoBorrower => ({
@@ -113,9 +162,24 @@ const sourceOptions = [
   { label: "Referral", value: "referral" },
   { label: "Direct Client", value: "direct-client" },
 ];
+const applicationAudienceOptions = [
+  { label: "Direct Client", value: "direct-client" },
+  { label: "Referral", value: "referral" },
+];
 
 const classificationOptions = ["Residential", "Commercial"];
 const borrowerOptions = ["Individual", "Company"];
+const directClientBorrowerOptions = ["Business", "Personal"];
+const referralBorrowerOptions = ["Business", "Personal", "Do not know"];
+const referrerProfessionOptions = [
+  "Broker",
+  "Accountant",
+  "Lawyer",
+  "Financial Planner",
+  "Mortgage Broker",
+  "Bookkeeper",
+  "Other",
+];
 
 const objectiveOptions = [
   "Purchase",
@@ -132,49 +196,49 @@ const purposeOptions = ["Investment", "Owner occupied"];
 const yesNoOptions = ["Yes", "No"];
 const countryCodeOptions = [
   {
-    flag: "🇦🇺",
+    flag: "\u{1F1E6}\u{1F1FA}",
     label: "AU +61",
     country: "Australia",
     value: "AU:+61",
     dialCode: "+61",
   },
   {
-    flag: "🇵🇭",
+    flag: "\u{1F1F5}\u{1F1ED}",
     label: "PH +63",
     country: "Philippines",
     value: "PH:+63",
     dialCode: "+63",
   },
   {
-    flag: "🇺🇸",
+    flag: "\u{1F1FA}\u{1F1F8}",
     label: "US +1",
     country: "United States",
     value: "US:+1",
     dialCode: "+1",
   },
   {
-    flag: "🇬🇧",
+    flag: "\u{1F1EC}\u{1F1E7}",
     label: "UK +44",
     country: "United Kingdom",
     value: "UK:+44",
     dialCode: "+44",
   },
   {
-    flag: "🇳🇿",
+    flag: "\u{1F1F3}\u{1F1FF}",
     label: "NZ +64",
     country: "New Zealand",
     value: "NZ:+64",
     dialCode: "+64",
   },
   {
-    flag: "🇸🇬",
+    flag: "\u{1F1F8}\u{1F1EC}",
     label: "SG +65",
     country: "Singapore",
     value: "SG:+65",
     dialCode: "+65",
   },
   {
-    flag: "🇨🇦",
+    flag: "\u{1F1E8}\u{1F1E6}",
     label: "CA +1",
     country: "Canada",
     value: "CA:+1",
@@ -198,8 +262,8 @@ const errorFieldClass =
   "border-red-500 bg-red-50 focus:border-red-500 focus:ring-red-500/15";
 
 const initialFormData = {
-  leadType: "broker",
-  source: "broker",
+  leadType: "direct-client",
+  source: "direct-client",
 
   firstName: "",
   middleName: "",
@@ -222,6 +286,20 @@ const initialFormData = {
   referrerPhoneCountryCode: "AU:+61",
   referrerPhone: "",
   referrerEmail: "",
+  referrerProfession: "",
+  uniqueReferrerCode: "",
+
+  hasProperty: "",
+  propertyType: "",
+  hasMultipleProperties: "",
+  isSelfEmployed: "",
+  hasTaxReturn: "",
+  dpnIssues: "",
+  dpnDetails: "",
+  isClientCompliant: "",
+  painPoint: "",
+  heardAboutUs: "",
+  sbrFundingAccountManager: "",
 
   vedaIssues: "No",
   conductIssues: "No",
@@ -308,6 +386,21 @@ const formatPhoneNumber = (countryCode: string, phone: string) => {
   return `${dialCode} ${cleanPhone}`;
 };
 
+const splitStoredPhoneNumber = (phone?: string) => {
+  const normalized = (phone || "").trim();
+  const selectedCountry = countryCodeOptions.find((country) =>
+    normalized.startsWith(country.dialCode),
+  ) || countryCodeOptions[0];
+  const localNumber = normalized
+    .replace(selectedCountry.dialCode, "")
+    .replace(/\D/g, "");
+
+  return {
+    countryCode: selectedCountry.value,
+    localNumber,
+  };
+};
+
 const calculateLvr = (loanAmount: string, securityValue: string) => {
   const loanAmountValue = Number(loanAmount);
   const securityValueValue = Number(securityValue);
@@ -334,11 +427,21 @@ export default function HomePage() {
     {},
   );
   const [formErrorMessage, setFormErrorMessage] = useState("");
+  const [referrerLookupStatus, setReferrerLookupStatus] = useState<
+    "idle" | "loading" | "found" | "error"
+  >("idle");
+  const [referrerLookupMessage, setReferrerLookupMessage] = useState("");
+  const [isReferrerResolved, setIsReferrerResolved] = useState(false);
+  const [submissionSuccess, setSubmissionSuccess] =
+    useState<SubmissionSuccess | null>(null);
 
   const showReferrerDetails =
     isBrokerSource(formData.source) || isReferralSource(formData.source);
 
   const detailLabel = isBrokerSource(formData.source) ? "Broker" : "Referral";
+  const isReferral = isReferralSource(formData.source);
+  const isDirectClient = isDirectClientSource(formData.source);
+  const usesSimplifiedIntake = isReferral || isDirectClient;
   const fullPhone = formatPhoneNumber(
     formData.phoneCountryCode,
     formData.phone,
@@ -355,6 +458,83 @@ export default function HomePage() {
     countryCodeOptions.find(
       (country) => country.value === coBorrowerDraft.phoneCountryCode,
     ) || countryCodeOptions[0];
+
+  useEffect(() => {
+    const referralCode = formData.uniqueReferrerCode.trim().toUpperCase();
+
+    if (!referralCode) {
+      setReferrerLookupStatus("idle");
+      setReferrerLookupMessage("");
+      setIsReferrerResolved(false);
+      return;
+    }
+
+    if (!referralCode.startsWith("REF-")) {
+      setReferrerLookupStatus("error");
+      setReferrerLookupMessage("Referral codes must start with REF-.");
+      setIsReferrerResolved(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const lookupTimer = window.setTimeout(async () => {
+      try {
+        setReferrerLookupStatus("loading");
+        setReferrerLookupMessage("Checking referral code...");
+
+        const response = await fetch(
+          `${REFERRER_LOOKUP_API}?code=${encodeURIComponent(referralCode)}`,
+          { signal: controller.signal },
+        );
+        const result = (await response.json()) as ReferrerLookupResponse;
+
+        if (!response.ok || !result.success || !result.referrer) {
+          throw new Error(result.message || "Referrer code not found.");
+        }
+
+        const phoneParts = splitStoredPhoneNumber(result.referrer.phone);
+        setFormData((previous) => ({
+          ...previous,
+          uniqueReferrerCode: result.referrer!.referralCode,
+          referrerFirstName: result.referrer!.firstName || "",
+          referrerMiddleName: result.referrer!.middleName || "",
+          referrerLastName: result.referrer!.lastName || "",
+          referrerEmail: result.referrer!.email || "",
+          referrerPhoneCountryCode: phoneParts.countryCode,
+          referrerPhone: phoneParts.localNumber,
+          referrerProfession: result.referrer!.profession || previous.referrerProfession,
+          source:
+            result.referrer!.profession === "Broker" ? "broker" : "referral",
+          leadType:
+            result.referrer!.profession === "Broker" ? "broker" : "referral",
+        }));
+        setFieldErrors((previous) => {
+          const next = { ...previous };
+          delete next.uniqueReferrerCode;
+          delete next.referrerFirstName;
+          delete next.referrerLastName;
+          delete next.referrerEmail;
+          delete next.referrerProfession;
+          return next;
+        });
+        setIsReferrerResolved(true);
+        setReferrerLookupStatus("found");
+        setReferrerLookupMessage("Referrer verified. Saved details were filled automatically.");
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setIsReferrerResolved(false);
+        setReferrerLookupStatus("error");
+        setReferrerLookupMessage(
+          error instanceof Error ? error.message : "Referrer code not found.",
+        );
+      }
+    }, 500);
+
+    return () => {
+      window.clearTimeout(lookupTimer);
+      controller.abort();
+    };
+  }, [formData.uniqueReferrerCode]);
 
   const clearFieldError = (name: string) => {
     setFieldErrors((prev) => {
@@ -387,6 +567,21 @@ export default function HomePage() {
         : value;
 
     clearFieldError(name);
+
+    if (name === "uniqueReferrerCode" && isReferrerResolved) {
+      setIsReferrerResolved(false);
+      setReferrerLookupStatus("idle");
+      setReferrerLookupMessage("");
+      setFormData((previous) => ({
+        ...previous,
+        referrerFirstName: "",
+        referrerMiddleName: "",
+        referrerLastName: "",
+        referrerPhoneCountryCode: "AU:+61",
+        referrerPhone: "",
+        referrerEmail: "",
+      }));
+    }
 
     if (name === "transactionType") {
       setDocumentErrors({});
@@ -444,6 +639,9 @@ export default function HomePage() {
       ...prev,
       source: selectedSource,
       leadType: selectedSource,
+      ...(isReferralSource(selectedSource) || isDirectClientSource(selectedSource)
+        ? { documentTypes: [], documentFiles: {} }
+        : {}),
       ...(isDirectClientSource(selectedSource)
         ? {
             referrerFirstName: "",
@@ -455,6 +653,38 @@ export default function HomePage() {
           }
         : {}),
     }));
+  };
+
+  const handleAudienceChange = (audience: string) => {
+    if (audience === "direct-client") {
+      handleSourceChange("direct-client");
+      return;
+    }
+
+    const selectedReferrerType = formData.referrerProfession;
+    handleSourceChange(selectedReferrerType === "Broker" ? "broker" : "referral");
+  };
+
+  const handleReferrerTypeChange = (
+    event: React.ChangeEvent<HTMLSelectElement>,
+  ) => {
+    const referrerType = event.target.value;
+    clearFieldError("referrerProfession");
+    setFormData((prev) => ({
+      ...prev,
+      referrerProfession: referrerType,
+      source: referrerType === "Broker" ? "broker" : "referral",
+      leadType: referrerType === "Broker" ? "broker" : "referral",
+      uniqueReferrerCode:
+        referrerType === "Broker" ? "" : prev.uniqueReferrerCode,
+      documentTypes: referrerType === "Broker" ? prev.documentTypes : [],
+      documentFiles: referrerType === "Broker" ? prev.documentFiles : {},
+    }));
+    if (referrerType === "Broker") {
+      setIsReferrerResolved(false);
+      setReferrerLookupStatus("idle");
+      setReferrerLookupMessage("");
+    }
   };
 
   const handleCoBorrowerDraftChange = (
@@ -479,12 +709,6 @@ export default function HomePage() {
     setCoBorrowerDraft(createEmptyCoBorrower());
     setCoBorrowerErrors({});
     setIsCoBorrowerModalOpen(true);
-  };
-
-  const closeCoBorrowerModal = () => {
-    setCoBorrowerDraft(createEmptyCoBorrower());
-    setCoBorrowerErrors({});
-    setIsCoBorrowerModalOpen(false);
   };
 
   const handleAddCoBorrower = () => {
@@ -522,7 +746,6 @@ export default function HomePage() {
     ]);
     setCoBorrowerDraft(createEmptyCoBorrower());
     setCoBorrowerErrors({});
-    setIsCoBorrowerModalOpen(false);
     setFieldErrors((prev) => {
       const next = { ...prev };
       delete next.withBorrowersGuarantors;
@@ -601,6 +824,10 @@ export default function HomePage() {
   };
 
   const getMissingRequirements = (data: typeof initialFormData) => {
+    if (isReferralSource(data.source) || isDirectClientSource(data.source)) {
+      return [];
+    }
+
     const requiredDocuments = getDocumentOptionsForTransaction(
       data.transactionType,
     );
@@ -696,16 +923,7 @@ export default function HomePage() {
 
     appendFormAliases(
       azureFormData,
-      [
-        "coBorrowers",
-        "CoBorrowers",
-        "co_borrowers",
-        "coBorrowersJson",
-        "CoBorrowersJson",
-        "additionalCoBorrowers",
-        "AdditionalCoBorrowers",
-        "additional_co_borrowers",
-      ],
+      ["coBorrowers", "CoBorrowers", "co_borrowers"],
       JSON.stringify(serializedCoBorrowers),
     );
     appendFormAliases(
@@ -738,6 +956,35 @@ export default function HomePage() {
       azureFormData,
       ["referrerEmail", "ReferrerEmail", "referrer_email"],
       formData.referrerEmail,
+    );
+    const referralFields: Array<[string[], string]> = [
+      [["referrerProfession", "ReferrerProfession", "referrer_profession"], formData.referrerProfession],
+      [["uniqueReferrerCode", "UniqueReferrerCode", "unique_referrer_code"], formData.uniqueReferrerCode],
+      [["hasProperty", "HasProperty", "has_property"], formData.hasProperty],
+      [["propertyType", "PropertyType", "property_type"], formData.propertyType],
+      [["hasMultipleProperties", "HasMultipleProperties", "has_multiple_properties"], formData.hasMultipleProperties],
+      [["isSelfEmployed", "IsSelfEmployed", "is_self_employed"], formData.isSelfEmployed],
+      [["hasTaxReturn", "HasTaxReturn", "has_tax_return"], formData.hasTaxReturn],
+      [["dpnIssues", "DpnIssues", "dpn_issues"], formData.dpnIssues],
+      [["dpnDetails", "DpnDetails", "dpn_details"], formData.dpnDetails],
+      [["isClientCompliant", "IsClientCompliant", "is_client_compliant"], formData.isClientCompliant],
+      [["painPoint", "PainPoint", "pain_point"], formData.painPoint],
+      [["heardAboutUs", "HeardAboutUs", "heard_about_us"], formData.heardAboutUs],
+      [["sbrFundingAccountManager", "SbrFundingAccountManager", "sbr_funding_account_manager"], formData.sbrFundingAccountManager],
+    ];
+    referralFields.forEach(([aliases, value]) =>
+      appendFormAliases(azureFormData, aliases, value),
+    );
+    appendFormAliases(
+      azureFormData,
+      [
+        "createReferrerPortal",
+        "CreateReferrerPortal",
+        "create_referrer_portal",
+        "createReferrerAccount",
+        "CreateReferrerAccount",
+      ],
+      isReferral ? "true" : "false",
     );
 
     appendFormAliases(
@@ -783,9 +1030,13 @@ export default function HomePage() {
     appendFormAliases(
       azureFormData,
       ["securityValue", "SecurityValue", "security_value"],
-      formData.securityValue,
+      SHOW_ADVANCED_LOAN_FIELDS ? formData.securityValue : "0",
     );
-    appendFormAliases(azureFormData, ["lvr", "Lvr", "LVR"], formData.lvr);
+    appendFormAliases(
+      azureFormData,
+      ["lvr", "Lvr", "LVR"],
+      SHOW_ADVANCED_LOAN_FIELDS ? formData.lvr : "0",
+    );
     appendFormAliases(
       azureFormData,
       [
@@ -793,7 +1044,9 @@ export default function HomePage() {
         "AnticipatedSettlementDate",
         "anticipated_settlement_date",
       ],
-      formData.anticipatedSettlementDate,
+      SHOW_ADVANCED_LOAN_FIELDS
+        ? formData.anticipatedSettlementDate
+        : "1900-01-01",
     );
     appendFormAliases(
       azureFormData,
@@ -801,9 +1054,17 @@ export default function HomePage() {
       formData.specialNotes,
     );
 
-    if (documentType) {
-      azureFormData.append("documentType", documentType);
-    }
+    azureFormData.append("documentType", documentType);
+    appendFormAliases(
+      azureFormData,
+      ["submissionOnly", "SubmissionOnly", "submission_only"],
+      file ? "false" : "true",
+    );
+    appendFormAliases(
+      azureFormData,
+      ["hasDocument", "HasDocument", "has_document"],
+      file ? "true" : "false",
+    );
 
     if (file) {
       azureFormData.append("file", file);
@@ -844,14 +1105,51 @@ export default function HomePage() {
       ["lastName", "Last name"],
       ["email", "Email address"],
       ["phone", "Phone number"],
-      ["classificationType", "Classification type"],
       ["borrowerType", "Borrower type"],
-      ["objective", "Objective"],
-      ["loanType", "Loan type"],
-      ["purpose", "Purpose"],
       ["transactionType", "Financial statements availability"],
       ["withBorrowersGuarantors", "Co-borrower selection"],
     ];
+
+    if (showReferrerDetails) {
+      requiredFields.push(
+        ["referrerProfession", "Referrer profession"],
+        ["referrerFirstName", "Referrer first name"],
+        ["referrerLastName", "Referrer last name"],
+        ["referrerEmail", "Referrer email"],
+      );
+    }
+
+    if (isReferral) {
+      requiredFields.push(
+        ["clientNeedsObjectives", "Objective / Tell us your story"],
+        ["hasProperty", "Property ownership"],
+        ["isSelfEmployed", "Self-employment status"],
+        ["hasTaxReturn", "Tax return availability"],
+        ["dpnIssues", "DPN issues"],
+        ["isClientCompliant", "Client compliance"],
+      );
+      if (formData.hasProperty === "Yes") {
+        requiredFields.push(["propertyType", "Property type"]);
+      }
+    } else if (isDirectClient) {
+      requiredFields.push(
+        ["clientNeedsObjectives", "Objective / Tell us your story"],
+        ["hasProperty", "Property ownership"],
+        ["isSelfEmployed", "Self-employment status"],
+        ["hasTaxReturn", "Tax return availability"],
+        ["heardAboutUs", "How you heard about us"],
+      );
+      if (formData.hasProperty === "Yes") {
+        requiredFields.push(["propertyType", "Property type"]);
+      }
+    } else {
+      requiredFields.push(["objective", "Objective"]);
+      requiredFields.push(
+        ["classificationType", "Classification type"],
+        ["loanType", "Loan type"],
+        ["purpose", "Purpose"],
+      );
+    }
 
     requiredFields.forEach(([name, label]) => {
       const value = formData[name];
@@ -869,6 +1167,24 @@ export default function HomePage() {
     }
 
     if (
+      showReferrerDetails &&
+      formData.referrerEmail.trim() &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.referrerEmail.trim())
+    ) {
+      nextErrors.referrerEmail = "Enter a valid referrer email address.";
+    }
+
+    if (
+      formData.uniqueReferrerCode.trim() &&
+      !isReferrerResolved
+    ) {
+      nextErrors.uniqueReferrerCode =
+        referrerLookupStatus === "loading"
+          ? "Please wait while the referral code is checked."
+          : "Enter a valid saved referral code or clear the field to create a new referrer.";
+    }
+
+    if (
       formData.withBorrowersGuarantors === "Yes" &&
       coBorrowers.length === 0
     ) {
@@ -879,8 +1195,34 @@ export default function HomePage() {
     return nextErrors;
   };
 
+  const findExistingReferrerByEmail = async () => {
+    if (!isReferral || isReferrerResolved || !formData.referrerEmail.trim()) {
+      return null;
+    }
+
+    try {
+      const response = await fetch(REFERRERS_API);
+      const result = (await response.json()) as ReferrerListResponse;
+
+      if (!response.ok || !result.success) return null;
+
+      const email = formData.referrerEmail.trim().toLowerCase();
+      return (
+        result.referrers?.find(
+          (referrer) => referrer.email?.trim().toLowerCase() === email,
+        ) || null
+      );
+    } catch {
+      // The upload API remains the final authority if this safety check is unavailable.
+      return null;
+    }
+  };
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const submissionDocumentTypes = SHOW_SUBMISSION_DOCUMENT_UPLOADS
+      ? formData.documentTypes
+      : [];
 
     const nextFieldErrors = validateRequiredFields();
 
@@ -902,7 +1244,7 @@ export default function HomePage() {
       return;
     }
 
-    const missingFiles = formData.documentTypes.filter(
+    const missingFiles = submissionDocumentTypes.filter(
       (type) => !formData.documentFiles[type],
     );
 
@@ -931,6 +1273,33 @@ export default function HomePage() {
     try {
       setIsSubmitting(true);
 
+      const existingReferrer = await findExistingReferrerByEmail();
+
+      if (existingReferrer) {
+        const existingName =
+          existingReferrer.name ||
+          [
+            existingReferrer.firstName,
+            existingReferrer.middleName,
+            existingReferrer.lastName,
+          ]
+            .filter(Boolean)
+            .join(" ") ||
+          "an existing referrer";
+
+        setFieldErrors((previous) => ({
+          ...previous,
+          referrerEmail:
+            `This email already belongs to ${existingName}. Use their referral code ` +
+            `(${existingReferrer.referralCode || "existing code"}) or enter a unique email for the new referrer.`,
+        }));
+        setFormErrorMessage(
+          "This referral cannot be created because its email is already assigned to another RF account.",
+        );
+        scrollToFirstError();
+        return;
+      }
+
       const existingNotifications = JSON.parse(
         localStorage.getItem("notifications") || "[]",
       );
@@ -944,7 +1313,7 @@ export default function HomePage() {
       const uploadResults = [];
       let sharedUniqueId = "";
 
-      if (formData.documentTypes.length === 0) {
+      if (submissionDocumentTypes.length === 0) {
         const result = await uploadToAzure("", null, sharedUniqueId);
         sharedUniqueId = result.uniqueId;
 
@@ -954,7 +1323,7 @@ export default function HomePage() {
           fileName: "",
         });
       } else {
-        for (const selectedDocumentType of formData.documentTypes) {
+        for (const selectedDocumentType of submissionDocumentTypes) {
           const file = formData.documentFiles[selectedDocumentType];
 
           if (!file) continue;
@@ -1001,13 +1370,16 @@ export default function HomePage() {
         console.info("GHL confirmation workflow triggered successfully.");
       }
 
-      const selectedDocumentLabels = formData.documentTypes.length
-        ? formData.documentTypes.map(formatDocumentType).join(", ")
+      const selectedDocumentLabels = submissionDocumentTypes.length
+        ? submissionDocumentTypes.map(formatDocumentType).join(", ")
         : "loan application details";
 
       const missingRequirements = getMissingRequirements(formData);
       const isIncomplete = missingRequirements.length > 0;
       const sourceLabel = formatSource(canonicalSource(formData.source));
+      const referrerAccount = isReferral
+        ? initialSubmissionResult?.referrerAccount
+        : null;
 
       const newNotification = {
         id: Date.now(),
@@ -1026,7 +1398,7 @@ export default function HomePage() {
         leadType: sourceLabel,
         source: sourceLabel,
         status: "Pending Team Call",
-        documentType: formData.documentTypes[0],
+        documentType: submissionDocumentTypes[0],
         redirectTo: "/dashboard",
       };
 
@@ -1035,13 +1407,13 @@ export default function HomePage() {
         JSON.stringify([newNotification, ...existingNotifications]),
       );
 
-      alert(
-        isIncomplete
-          ? `Document submitted successfully!\nUnique ID: ${uniqueId}\nSource: ${sourceLabel}\nStatus: Pending Team Call\nMissing: ${missingRequirements.join(
-              ", ",
-            )}`
-          : `Document submitted successfully!\nUnique ID: ${uniqueId}\nSource: ${sourceLabel}\nStatus: Pending Team Call`,
-      );
+      setSubmissionSuccess({
+        uniqueId,
+        source: sourceLabel,
+        status: "Pending Team Call",
+        missingRequirements,
+        referrerAccount,
+      });
 
       setFormData({ ...initialFormData });
       setCoBorrowers([]);
@@ -1073,12 +1445,14 @@ export default function HomePage() {
     label,
     placeholder,
     required = false,
+    disabled = false,
   }: {
     countryCodeName: "phoneCountryCode" | "referrerPhoneCountryCode";
     phoneName: "phone" | "referrerPhone";
-    label?: string;
+    label: string;
     placeholder: string;
     required?: boolean;
+    disabled?: boolean;
   }) => {
     const selectedCountry =
       countryCodeOptions.find(
@@ -1088,11 +1462,9 @@ export default function HomePage() {
 
     return (
       <div data-field-error={fieldErrors[phoneName] ? "true" : undefined}>
-        {label && (
-          <label className="mb-2 block text-sm font-bold text-slate-700">
-            {label}
-          </label>
-        )}
+        <label className="mb-2 block text-sm font-bold text-slate-700">
+          {label}
+        </label>
 
         <div className="grid grid-cols-[142px_minmax(0,1fr)] gap-2">
           <div>
@@ -1100,6 +1472,7 @@ export default function HomePage() {
               name={countryCodeName}
               value={formData[countryCodeName]}
               onChange={handleChange}
+              disabled={disabled}
               className={`${selectClass} px-3`}
             >
               {countryCodeOptions.map((country) => (
@@ -1118,6 +1491,7 @@ export default function HomePage() {
             name={phoneName}
             value={formData[phoneName]}
             onChange={handleChange}
+            disabled={disabled}
             placeholder={phonePlaceholder || placeholder}
             inputMode="tel"
             autoComplete="tel"
@@ -1190,7 +1564,7 @@ export default function HomePage() {
     label: string;
     placeholder?: string;
   }) => (
-    <div>
+    <div data-field-error={fieldErrors[name] ? "true" : undefined}>
       <label className="mb-2 block text-sm font-semibold text-slate-700">
         {label}
       </label>
@@ -1201,8 +1575,13 @@ export default function HomePage() {
         onChange={handleChange}
         placeholder={placeholder}
         rows={4}
-        className={textAreaClass}
+        className={`${textAreaClass} ${fieldErrors[name] ? errorFieldClass : ""}`}
       />
+      {fieldErrors[name] && (
+        <p className="mt-2 text-xs font-bold text-red-600">
+          {fieldErrors[name]}
+        </p>
+      )}
     </div>
   );
 
@@ -1214,7 +1593,7 @@ export default function HomePage() {
           <div className="bg-[linear-gradient(135deg,rgba(37,155,143,0.94),rgba(15,23,42,0.98)_56%,rgba(238,101,33,0.88))] px-6 py-8 text-white sm:px-8 lg:px-10">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-white p-2 shadow-[0_18px_40px_rgba(0,0,0,0.18)] sm:h-24 sm:w-24">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-white p-3 shadow-[0_18px_40px_rgba(0,0,0,0.18)]">
                   <img
                     src="/logo/logo.png"
                     alt="Company Logo"
@@ -1224,20 +1603,20 @@ export default function HomePage() {
 
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.24em] text-white/70">
-                    Client Portal
+                    New Client
                   </p>
                   <h1 className="mt-2 text-3xl font-black text-white sm:text-4xl">
-                    Client Submission Portal
+                    Client Submission
                   </h1>
                   <p className="mt-3 max-w-2xl text-sm leading-6 text-white/75">
-                    Submit borrower details, loan scenario notes, and supporting
-                    documents in one secure application.
+                    Tell us your situation and our specialists will find a
+                    funding solution that fits.
                   </p>
                 </div>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-3 lg:w-[360px]">
-                {sourceOptions.map((source) => (
+              <div className="grid gap-2 sm:grid-cols-2 lg:w-[360px]">
+                {applicationAudienceOptions.map((source) => (
                   <span
                     key={source.value}
                     className="rounded-full bg-white/12 px-3 py-2 text-center text-xs font-bold text-white ring-1 ring-white/15"
@@ -1269,20 +1648,21 @@ export default function HomePage() {
                   Application Source
                 </p>
                 <h2 className="mt-1 text-xl font-black text-slate-950">
-                  Who referred this client?
+                  Are you a direct client or a referrer?
                 </h2>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3">
-                {sourceOptions.map((source) => {
-                  const isSelected =
-                    canonicalSource(formData.source) === source.value;
+              <div className="grid gap-3 sm:grid-cols-2">
+                {applicationAudienceOptions.map((source) => {
+                  const isSelected = source.value === "direct-client"
+                    ? isDirectClient
+                    : !isDirectClient;
 
                   return (
                     <button
                       key={source.value}
                       type="button"
-                      onClick={() => handleSourceChange(source.value)}
+                      onClick={() => handleAudienceChange(source.value)}
                       className={`rounded-2xl border p-4 text-center transition hover:-translate-y-0.5 ${
                         isSelected
                           ? "border-[#259b8f] bg-[#259b8f]/10 ring-4 ring-[#259b8f]/10"
@@ -1296,6 +1676,35 @@ export default function HomePage() {
                   );
                 })}
               </div>
+
+              {!isDirectClient && (
+                <div
+                  className="mt-5"
+                  data-field-error={fieldErrors.referrerProfession ? "true" : undefined}
+                >
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Referrer type
+                  </label>
+                  <select
+                    name="referrerProfession"
+                    value={formData.referrerProfession}
+                    onChange={handleReferrerTypeChange}
+                    disabled={isReferrerResolved}
+                    className={`${selectClass} ${fieldErrors.referrerProfession ? errorFieldClass : ""}`}
+                    required
+                  >
+                    <option value="">Select referrer type</option>
+                    {referrerProfessionOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                  {fieldErrors.referrerProfession && (
+                    <p className="mt-2 text-xs font-bold text-red-600">
+                      {fieldErrors.referrerProfession}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {showReferrerDetails && (
@@ -1305,50 +1714,105 @@ export default function HomePage() {
                 </h3>
 
                 <div className="grid gap-4 md:grid-cols-3">
-                  <input
-                    type="text"
-                    name="referrerFirstName"
-                    value={formData.referrerFirstName}
-                    onChange={handleChange}
-                    placeholder={`${detailLabel} First Name`}
-                    className={inputClass}
-                  />
+                  <div data-field-error={fieldErrors.referrerFirstName ? "true" : undefined}>
+                    <input
+                      type="text"
+                      name="referrerFirstName"
+                      value={formData.referrerFirstName}
+                      onChange={handleChange}
+                      readOnly={isReferrerResolved}
+                      placeholder={`${detailLabel} First Name`}
+                      className={`${inputClass} ${fieldErrors.referrerFirstName ? errorFieldClass : ""}`}
+                    />
+                    {fieldErrors.referrerFirstName && <p className="mt-2 text-xs font-bold text-red-600">{fieldErrors.referrerFirstName}</p>}
+                  </div>
 
                   <input
                     type="text"
                     name="referrerMiddleName"
                     value={formData.referrerMiddleName}
                     onChange={handleChange}
+                    readOnly={isReferrerResolved}
                     placeholder={`${detailLabel} Middle Name`}
                     className={inputClass}
                   />
 
-                  <input
-                    type="text"
-                    name="referrerLastName"
-                    value={formData.referrerLastName}
-                    onChange={handleChange}
-                    placeholder={`${detailLabel} Last Name`}
-                    className={inputClass}
-                  />
+                  <div data-field-error={fieldErrors.referrerLastName ? "true" : undefined}>
+                    <input
+                      type="text"
+                      name="referrerLastName"
+                      value={formData.referrerLastName}
+                      onChange={handleChange}
+                      readOnly={isReferrerResolved}
+                      placeholder={`${detailLabel} Last Name`}
+                      className={`${inputClass} ${fieldErrors.referrerLastName ? errorFieldClass : ""}`}
+                    />
+                    {fieldErrors.referrerLastName && <p className="mt-2 text-xs font-bold text-red-600">{fieldErrors.referrerLastName}</p>}
+                  </div>
                 </div>
 
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   {renderPhoneField({
                     countryCodeName: "referrerPhoneCountryCode",
                     phoneName: "referrerPhone",
+                    label: `${detailLabel} Phone`,
                     placeholder: `${detailLabel} Phone`,
+                    disabled: isReferrerResolved,
                   })}
 
-                  <input
-                    type="email"
-                    name="referrerEmail"
-                    value={formData.referrerEmail}
-                    onChange={handleChange}
-                    placeholder={`${detailLabel} Email`}
-                    className={inputClass}
-                  />
+                  <div data-field-error={fieldErrors.referrerEmail ? "true" : undefined}>
+                    <label className="mb-2 block text-sm font-bold text-slate-700">
+                      {detailLabel} Email
+                    </label>
+                    <input
+                      type="email"
+                      name="referrerEmail"
+                      value={formData.referrerEmail}
+                      onChange={handleChange}
+                      readOnly={isReferrerResolved}
+                      placeholder={`${detailLabel} Email`}
+                      className={`${inputClass} ${fieldErrors.referrerEmail ? errorFieldClass : ""}`}
+                    />
+                    {fieldErrors.referrerEmail && <p className="mt-2 text-xs font-bold text-red-600">{fieldErrors.referrerEmail}</p>}
+                  </div>
                 </div>
+
+                {showReferrerDetails && (
+                  <div className="mt-4">
+                    <div data-field-error={fieldErrors.uniqueReferrerCode ? "true" : undefined}>
+                      <label className="mb-2 block text-sm font-semibold text-slate-700">
+                        Unique Referrer Code
+                      </label>
+                      <input
+                        type="text"
+                        name="uniqueReferrerCode"
+                        value={formData.uniqueReferrerCode}
+                        onChange={handleChange}
+                        placeholder="Enter saved code, or leave blank if new"
+                        className={`${inputClass} ${fieldErrors.uniqueReferrerCode ? errorFieldClass : ""}`}
+                      />
+                      <p className="mt-2 text-xs font-medium text-slate-500">
+                        Existing referrers can enter their saved code. If left blank, a new RF account and reusable referral code will be created automatically.
+                      </p>
+                      {referrerLookupMessage && (
+                        <p className={`mt-2 text-xs font-bold ${
+                          referrerLookupStatus === "found"
+                            ? "text-green-700"
+                            : referrerLookupStatus === "error"
+                              ? "text-red-600"
+                              : "text-cyan-700"
+                        }`}>
+                          {referrerLookupMessage}
+                        </p>
+                      )}
+                      {fieldErrors.uniqueReferrerCode && (
+                        <p className="mt-2 text-xs font-bold text-red-600">
+                          {fieldErrors.uniqueReferrerCode}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1408,6 +1872,9 @@ export default function HomePage() {
 
               <div className="mt-5 grid gap-5 md:grid-cols-2">
                 <div data-field-error={fieldErrors.email ? "true" : undefined}>
+                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                    Email Address
+                  </label>
                   <input
                     type="email"
                     name="email"
@@ -1427,6 +1894,7 @@ export default function HomePage() {
                 {renderPhoneField({
                   countryCodeName: "phoneCountryCode",
                   phoneName: "phone",
+                  label: "Phone Number",
                   placeholder: "Phone Number",
                   required: true,
                 })}
@@ -1439,7 +1907,7 @@ export default function HomePage() {
               </h3>
 
               <div className="grid gap-5 md:grid-cols-2">
-                {renderSelectField({
+                {!usesSimplifiedIntake && renderSelectField({
                   name: "classificationType",
                   label: "Classification Type",
                   options: classificationOptions,
@@ -1447,26 +1915,49 @@ export default function HomePage() {
 
                 {renderSelectField({
                   name: "borrowerType",
-                  label: "Borrower Type",
-                  options: borrowerOptions,
+                  label: usesSimplifiedIntake ? "Who is the borrower?" : "Borrower Type",
+                  options: isReferral
+                    ? referralBorrowerOptions
+                    : isDirectClient
+                      ? directClientBorrowerOptions
+                      : borrowerOptions,
                 })}
 
-                {renderSelectField({
+                {!usesSimplifiedIntake && renderSelectField({
                   name: "objective",
                   label: "Objective",
                   options: objectiveOptions,
                 })}
 
-                {renderSelectField({
+                {!usesSimplifiedIntake && renderSelectField({
                   name: "loanType",
                   label: "Loan Type",
                   options: loanTypeOptions,
                 })}
 
-                {renderSelectField({
+                {!usesSimplifiedIntake && renderSelectField({
                   name: "purpose",
                   label: "Purpose",
                   options: purposeOptions,
+                })}
+
+                {usesSimplifiedIntake && renderSelectField({
+                  name: "hasProperty",
+                  label: "Do you have a property?",
+                  options: yesNoOptions,
+                })}
+
+                {usesSimplifiedIntake && formData.hasProperty === "Yes" && renderSelectField({
+                  name: "propertyType",
+                  label: "Property type",
+                  options: ["Residential", "Commercial", "Both"],
+                })}
+
+                {usesSimplifiedIntake && formData.hasProperty === "Yes" && renderSelectField({
+                  name: "hasMultipleProperties",
+                  label: "Do you have more than one property?",
+                  options: yesNoOptions,
+                  required: false,
                 })}
 
                 <div
@@ -1495,6 +1986,18 @@ export default function HomePage() {
                     </p>
                   )}
                 </div>
+
+                {usesSimplifiedIntake && renderSelectField({
+                  name: "isSelfEmployed",
+                  label: "Self-employed?",
+                  options: yesNoOptions,
+                })}
+
+                {usesSimplifiedIntake && renderSelectField({
+                  name: "hasTaxReturn",
+                  label: "Tax return available?",
+                  options: yesNoOptions,
+                })}
 
                 {renderSelectField({
                   name: "withBorrowersGuarantors",
@@ -1583,42 +2086,100 @@ export default function HomePage() {
               <div className="grid gap-5 md:grid-cols-2">
                 {renderSelectField({
                   name: "vedaIssues",
-                  label: "Veda Issues",
+                  label: usesSimplifiedIntake ? "Credit issues?" : "Veda Issues",
                   options: yesNoOptions,
                   required: false,
                 })}
 
                 {renderSelectField({
                   name: "conductIssues",
-                  label: "Conduct Issues",
+                  label: usesSimplifiedIntake
+                    ? "Have you been making your loan payments?"
+                    : "Conduct Issues",
                   options: yesNoOptions,
                   required: false,
+                })}
+
+                {isReferral && renderSelectField({
+                  name: "dpnIssues",
+                  label: "DPN issues?",
+                  options: yesNoOptions,
+                })}
+
+                {isReferral && renderSelectField({
+                  name: "isClientCompliant",
+                  label: "Is the client compliant?",
+                  options: yesNoOptions,
                 })}
               </div>
 
               <div className="mt-5 grid gap-5 md:grid-cols-2">
                 {renderTextAreaField({
                   name: "clientNeedsObjectives",
-                  label: "Client Needs & Objectives",
+                  label: usesSimplifiedIntake
+                    ? "Objective / Tell us your story"
+                    : "Client Needs & Objectives",
+                  placeholder: usesSimplifiedIntake
+                    ? "Describe what you want to achieve and the key context behind your request."
+                    : "Type here...",
                 })}
 
-                {renderTextAreaField({
+                {!isDirectClient && renderTextAreaField({
                   name: "applicantBackground",
-                  label: "Applicant Background",
+                  label: isReferral ? "Referrer Background" : "Applicant Background",
+                  placeholder: isReferral
+                    ? "Add critical context about the client from the referrer."
+                    : "Type here...",
                 })}
 
                 {renderTextAreaField({
                   name: "explanationOfIncome",
-                  label: "Explanation of Income",
+                  label: usesSimplifiedIntake
+                    ? "Income stream and performance"
+                    : "Explanation of Income",
                 })}
 
-                {renderTextAreaField({ name: "security", label: "Security" })}
+                {!usesSimplifiedIntake && renderTextAreaField({ name: "security", label: "Security" })}
+
+                {isReferral && formData.dpnIssues === "Yes" && renderTextAreaField({
+                  name: "dpnDetails",
+                  label: "DPN issue details",
+                  placeholder: "Include relevant dates, amounts, and professional or technical context.",
+                })}
+
+                {usesSimplifiedIntake && renderTextAreaField({
+                  name: "painPoint",
+                  label: "Pain Point / Key Issue",
+                  placeholder: "What is the client's core problem?",
+                })}
+
+                {isDirectClient && renderSelectField({
+                  name: "heardAboutUs",
+                  label: "How did you hear from us?",
+                  options: ["Google / Search", "Social Media", "Referral", "Event", "Existing Client", "Other"],
+                })}
+
+                {isDirectClient && (
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">
+                      SBR Funding account manager
+                    </label>
+                    <input
+                      type="text"
+                      name="sbrFundingAccountManager"
+                      value={formData.sbrFundingAccountManager}
+                      onChange={handleChange}
+                      placeholder="Enter account manager (if known)"
+                      className={inputClass}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
             <div className={sectionClass}>
               <h3 className="mb-4 text-lg font-black text-slate-900">
-                Loan Amount & Settlement
+                {usesSimplifiedIntake ? "Funds Required & Notes" : "Loan Amount & Notes"}
               </h3>
 
               <div className="grid gap-5 md:grid-cols-2">
@@ -1628,11 +2189,11 @@ export default function HomePage() {
                   name="loanAmount"
                   value={formData.loanAmount}
                   onChange={handleChange}
-                  placeholder="Loan Amount"
+                  placeholder={usesSimplifiedIntake ? "Funds required" : "Loan Amount"}
                   className={inputClass}
                 />
 
-                <input
+                {SHOW_ADVANCED_LOAN_FIELDS && !usesSimplifiedIntake && <input
                   type="number"
                   step="0.01"
                   name="securityValue"
@@ -1640,9 +2201,9 @@ export default function HomePage() {
                   onChange={handleChange}
                   placeholder="Security Value"
                   className={inputClass}
-                />
+                />}
 
-                <div>
+                {SHOW_ADVANCED_LOAN_FIELDS && !usesSimplifiedIntake && <div>
                   <input
                     type="number"
                     step="0.01"
@@ -1655,15 +2216,15 @@ export default function HomePage() {
                   <p className="mt-2 text-xs font-medium text-slate-500">
                     Auto-calculated: loan amount / security value x 100.
                   </p>
-                </div>
+                </div>}
 
-                <input
+                {SHOW_ADVANCED_LOAN_FIELDS && !usesSimplifiedIntake && <input
                   type="date"
                   name="anticipatedSettlementDate"
                   value={formData.anticipatedSettlementDate}
                   onChange={handleChange}
                   className={inputClass}
-                />
+                />}
               </div>
 
               <div className="mt-5">
@@ -1674,7 +2235,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className={sectionClass}>
+            {SHOW_SUBMISSION_DOCUMENT_UPLOADS && !usesSimplifiedIntake && <div className={sectionClass}>
               <div className="mb-4">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-[#EE6521]">
                   Documents
@@ -1734,9 +2295,9 @@ export default function HomePage() {
                   })}
                 </div>
               )}
-            </div>
+            </div>}
 
-            {formData.documentTypes.length > 0 && (
+            {SHOW_SUBMISSION_DOCUMENT_UPLOADS && !usesSimplifiedIntake && formData.documentTypes.length > 0 && (
               <div className={sectionClass}>
                 <h3 className="mb-4 text-lg font-black text-slate-900">
                   Upload Documents
@@ -1796,6 +2357,95 @@ export default function HomePage() {
         </div>
       </main>
 
+      {submissionSuccess && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-slate-950/60 px-4 py-8 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="submission-success-title"
+        >
+          <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-[0_24px_80px_rgba(15,23,42,0.35)]">
+            <div className="bg-[linear-gradient(135deg,#259b8f,#16766e)] px-6 py-7 text-white sm:px-8">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/20 text-3xl ring-1 ring-white/30">
+                ✓
+              </div>
+              <p className="mt-5 text-xs font-black uppercase tracking-[0.2em] text-white/70">
+                Submission complete
+              </p>
+              <h2
+                id="submission-success-title"
+                className="mt-1 text-2xl font-black sm:text-3xl"
+              >
+                Application submitted successfully!
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-white/80">
+                Your application has been received. Keep the unique ID below
+                for future reference.
+              </p>
+            </div>
+
+            <div className="space-y-5 p-6 sm:p-8">
+              <div className="rounded-2xl border border-[#259b8f]/20 bg-[#259b8f]/5 p-4 text-center">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#16766e]">
+                  Unique ID
+                </p>
+                <p className="mt-1 break-all text-2xl font-black tracking-wide text-slate-950">
+                  {submissionSuccess.uniqueId}
+                </p>
+              </div>
+
+              <dl className="divide-y divide-slate-100 rounded-2xl border border-slate-200 px-4">
+                <div className="flex items-center justify-between gap-4 py-3">
+                  <dt className="text-sm font-semibold text-slate-500">Source</dt>
+                  <dd className="text-sm font-black text-slate-900">{submissionSuccess.source}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4 py-3">
+                  <dt className="text-sm font-semibold text-slate-500">Status</dt>
+                  <dd className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-orange-700">
+                    {submissionSuccess.status}
+                  </dd>
+                </div>
+                {submissionSuccess.referrerAccount && (
+                  <>
+                    <div className="flex items-center justify-between gap-4 py-3">
+                      <dt className="text-sm font-semibold text-slate-500">Referrer ID</dt>
+                      <dd className="text-sm font-black text-slate-900">{submissionSuccess.referrerAccount.referrerId}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 py-3">
+                      <dt className="text-sm font-semibold text-slate-500">Referral code</dt>
+                      <dd className="text-sm font-black text-slate-900">{submissionSuccess.referrerAccount.referralCode}</dd>
+                    </div>
+                  </>
+                )}
+              </dl>
+
+              {submissionSuccess.missingRequirements.length > 0 && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-black text-amber-900">Still required</p>
+                  <p className="mt-1 text-sm leading-6 text-amber-800">
+                    {submissionSuccess.missingRequirements.join(", ")}
+                  </p>
+                </div>
+              )}
+
+              {submissionSuccess.referrerAccount?.created && (
+                <p className="rounded-xl bg-slate-50 p-3 text-sm leading-6 text-slate-600">
+                  The new referrer account details will be emailed to the referrer.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setSubmissionSuccess(null)}
+                className="h-12 w-full rounded-xl bg-[#EE6521] text-sm font-black text-white shadow-[0_12px_24px_rgba(238,101,33,0.22)] transition hover:bg-orange-600 focus:outline-none focus:ring-4 focus:ring-orange-200"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isCoBorrowerModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 px-4 py-8 backdrop-blur-sm"
@@ -1816,15 +2466,14 @@ export default function HomePage() {
                   Add Co-Borrowers
                 </h2>
                 <p className="mt-2 text-sm text-slate-500">
-                  Enter the details below and select Save Co-Borrower. Use Add
-                  Another Co-Borrower from the application if you need to add
-                  another person.
+                  Enter one co-borrower, select + Add Co-Borrower, then repeat
+                  for the next person.
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={closeCoBorrowerModal}
+                onClick={() => setIsCoBorrowerModalOpen(false)}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xl font-bold text-slate-500 transition hover:bg-slate-200 hover:text-slate-900"
                 aria-label="Close co-borrower modal"
               >
@@ -2006,10 +2655,10 @@ export default function HomePage() {
             <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={closeCoBorrowerModal}
+                onClick={() => setIsCoBorrowerModalOpen(false)}
                 className="h-12 rounded-xl border border-slate-300 px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
               >
-                Cancel
+                Done
               </button>
 
               <button
@@ -2017,7 +2666,7 @@ export default function HomePage() {
                 onClick={handleAddCoBorrower}
                 className="h-12 rounded-xl bg-[#259b8f] px-5 text-sm font-black text-white transition hover:bg-[#1f847a]"
               >
-                Save Co-Borrower
+                + Add Co-Borrower
               </button>
             </div>
           </div>
