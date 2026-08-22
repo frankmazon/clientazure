@@ -825,7 +825,10 @@ export default function HomePage() {
 
   const getMissingRequirements = (data: typeof initialFormData) => {
     if (isReferralSource(data.source) || isDirectClientSource(data.source)) {
-      return [];
+      // Referral/direct-client submissions may be created without selecting a
+      // document checklist, but they must not be reported as "complete" in
+      // notifications when no document was submitted at all.
+      return data.documentTypes.length > 0 ? [] : ["at least one document"];
     }
 
     const requiredDocuments = getDocumentOptionsForTransaction(
