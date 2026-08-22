@@ -45,6 +45,9 @@ type NotificationItem = {
 };
 
 const LOGO_PATH = '/logo/logo.png';
+// Notifications are browser-local, so clear the stale pre-backend-reset
+// entries once for every browser after the data reset.
+const NOTIFICATION_RESET_VERSION = '2026-08-22-backend-reset';
 
 export default function DashboardLayout({
   title,
@@ -64,10 +67,20 @@ export default function DashboardLayout({
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   useEffect(() => {
+    if (localStorage.getItem('notificationResetVersion') !== NOTIFICATION_RESET_VERSION) {
+      localStorage.removeItem('notifications');
+      localStorage.setItem('notificationResetVersion', NOTIFICATION_RESET_VERSION);
+    }
+
     const loadNotifications = () => {
-      const savedNotifications = JSON.parse(
-        localStorage.getItem('notifications') || '[]',
-      );
+      let savedNotifications: NotificationItem[] = [];
+      try {
+        savedNotifications = JSON.parse(
+          localStorage.getItem('notifications') || '[]',
+        );
+      } catch {
+        localStorage.removeItem('notifications');
+      }
       setNotifications(savedNotifications);
     };
 
