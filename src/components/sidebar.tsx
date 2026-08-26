@@ -21,6 +21,9 @@ interface SidebarProps {
   onDesktopClose?: () => void;
 }
 
+const CLIENT_PORTAL_URL =
+  'https://dashboard.sbrfunding.com.au/clients';
+
 const documentTypes = [
   { label: 'ID', value: 'id' },
   { label: 'Passport', value: 'passport' },
@@ -38,13 +41,22 @@ const documentTypes = [
     label: 'Group Certificate / Payment Summary',
     value: 'group-certificate-payment-summary',
   },
-  { label: 'Company Tax Returns', value: 'company-tax-returns' },
-  { label: 'Individual Tax Returns', value: 'individual-tax-returns' },
+  {
+    label: 'Company Tax Returns',
+    value: 'company-tax-returns',
+  },
+  {
+    label: 'Individual Tax Returns',
+    value: 'individual-tax-returns',
+  },
   {
     label: 'Last 6 Months Mortgage Statements',
     value: 'last-6-months-mortgage-statements',
   },
-  { label: 'Council Rates Notice', value: 'council-rates-notice' },
+  {
+    label: 'Council Rates Notice',
+    value: 'council-rates-notice',
+  },
 ];
 
 export default function Sidebar({
@@ -54,6 +66,7 @@ export default function Sidebar({
   onDesktopClose,
 }: SidebarProps) {
   const navigate = useNavigate();
+
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showClients, setShowClients] = useState(true);
   const [showDocuments, setShowDocuments] = useState(true);
@@ -62,16 +75,31 @@ export default function Sidebar({
 
   const handleConfirmLogout = () => {
     localStorage.removeItem('isAdminLoggedIn');
+    localStorage.removeItem('adminToken');
+
     setShowLogoutModal(false);
-    navigate('/login');
+    onClose();
+
+    navigate('/admin', { replace: true });
   };
 
-  const childNavLinkClass = ({ isActive }: { isActive: boolean }) =>
+  const handlePortalClick = () => {
+    onClose();
+  };
+
+  const childNavLinkClass = ({
+    isActive,
+  }: {
+    isActive: boolean;
+  }) =>
     `ml-6 flex items-start gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold leading-5 transition ${
       isActive
         ? 'bg-orange-500 text-white shadow-lg'
         : 'text-slate-400 hover:bg-white/10 hover:text-white'
     }`;
+
+  const externalLinkClass =
+    'ml-6 flex items-start gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold leading-5 text-slate-400 transition hover:bg-white/10 hover:text-white';
 
   return (
     <>
@@ -88,14 +116,21 @@ export default function Sidebar({
         className={`fixed inset-y-0 left-0 z-40 w-[calc(100vw-2rem)] max-w-96 bg-slate-950 text-white shadow-2xl transition-transform duration-300 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         } ${
-          isDesktopHidden ? 'lg:-translate-x-full' : 'lg:translate-x-0'
+          isDesktopHidden
+            ? 'lg:-translate-x-full'
+            : 'lg:translate-x-0'
         }`}
       >
         <div className="flex h-full flex-col">
           <div className="flex h-20 items-center justify-between border-b border-white/10 px-6">
             <div>
-              <h2 className="text-xl font-extrabold">Document Portal</h2>
-              <p className="text-xs text-slate-400">Admin Dashboard</p>
+              <h2 className="text-xl font-extrabold">
+                Document Portal
+              </h2>
+
+              <p className="text-xs text-slate-400">
+                Admin Dashboard
+              </p>
             </div>
 
             <button
@@ -106,32 +141,29 @@ export default function Sidebar({
             >
               <FaTimes />
             </button>
-
           </div>
 
           <nav className="flex-1 space-y-2 overflow-y-auto px-4 py-6">
-            {/* <NavLink
-              to="/dashboard"
-              end
-              onClick={onClose}
-              className={navLinkClass}
-            >
-              <FaTachometerAlt />
-              Client Summary
-            </NavLink> */}
-
+            {/* Clients */}
             <div className="rounded-2xl bg-white/[0.04] p-2">
               <button
                 type="button"
-                onClick={() => setShowClients((prev) => !prev)}
+                onClick={() =>
+                  setShowClients((previous) => !previous)
+                }
                 className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10"
+                aria-expanded={showClients}
               >
                 <span className="flex items-center gap-3">
                   <FaUsers />
                   Clients
                 </span>
 
-                {showClients ? <FaChevronDown /> : <FaChevronRight />}
+                {showClients ? (
+                  <FaChevronDown />
+                ) : (
+                  <FaChevronRight />
+                )}
               </button>
 
               {showClients && (
@@ -153,29 +185,19 @@ export default function Sidebar({
                     <FaUsers className="mt-0.5 shrink-0" />
                     <span>Search Client</span>
                   </NavLink>
-
-                  {/* {documentTypes.map((type) => (
-                    <NavLink
-                      key={type.value}
-                      to={`/dashboard/documents/${type.value}`}
-                      onClick={onClose}
-                      className={childNavLinkClass}
-                    >
-                      <FaFolder className="mt-0.5 shrink-0 text-orange-400" />
-                      <span className="whitespace-nowrap text-xs">
-                        {type.label}
-                      </span>
-                    </NavLink>
-                  ))} */}
                 </div>
               )}
             </div>
 
+            {/* Documents */}
             <div className="rounded-2xl bg-white/[0.04] p-2">
               <button
                 type="button"
-                onClick={() => setShowDocuments((prev) => !prev)}
+                onClick={() =>
+                  setShowDocuments((previous) => !previous)
+                }
                 className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10"
+                aria-expanded={showDocuments}
               >
                 <span className="flex items-center gap-3">
                   {showDocuments ? (
@@ -183,41 +205,55 @@ export default function Sidebar({
                   ) : (
                     <FaFolder className="text-orange-400" />
                   )}
+
                   Documents
                 </span>
 
-                {showDocuments ? <FaChevronDown /> : <FaChevronRight />}
+                {showDocuments ? (
+                  <FaChevronDown />
+                ) : (
+                  <FaChevronRight />
+                )}
               </button>
 
               {showDocuments && (
                 <div className="mt-2 space-y-1">
-                  {documentTypes.map((type) => (
+                  {documentTypes.map((documentType) => (
                     <NavLink
-                      key={type.value}
-                      to={`/dashboard/documents/${type.value}`}
+                      key={documentType.value}
+                      to={`/dashboard/documents/${documentType.value}`}
                       onClick={onClose}
                       className={childNavLinkClass}
                     >
                       <FaFolder className="mt-0.5 shrink-0 text-orange-400" />
-                      <span>{type.label}</span>
+
+                      <span>{documentType.label}</span>
                     </NavLink>
                   ))}
                 </div>
               )}
             </div>
 
+            {/* Referrers */}
             <div className="rounded-2xl bg-white/[0.04] p-2">
               <button
                 type="button"
-                onClick={() => setShowReferrers((prev) => !prev)}
+                onClick={() =>
+                  setShowReferrers((previous) => !previous)
+                }
                 className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10"
+                aria-expanded={showReferrers}
               >
                 <span className="flex items-center gap-3">
                   <FaUserTie className="text-[#6CBF51]" />
                   Referrers
                 </span>
 
-                {showReferrers ? <FaChevronDown /> : <FaChevronRight />}
+                {showReferrers ? (
+                  <FaChevronDown />
+                ) : (
+                  <FaChevronRight />
+                )}
               </button>
 
               {showReferrers && (
@@ -234,11 +270,15 @@ export default function Sidebar({
               )}
             </div>
 
+            {/* Client and referrer portal */}
             <div className="rounded-2xl bg-white/[0.04] p-2">
               <button
                 type="button"
-                onClick={() => setShowClientPortal((prev) => !prev)}
+                onClick={() =>
+                  setShowClientPortal((previous) => !previous)
+                }
                 className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10"
+                aria-expanded={showClientPortal}
               >
                 <span className="flex items-center gap-3">
                   {showClientPortal ? (
@@ -246,49 +286,44 @@ export default function Sidebar({
                   ) : (
                     <FaFolder className="text-orange-400" />
                   )}
-                  Client Portal
+
+                  Client / Referrer Portal
                 </span>
 
-                {showClientPortal ? <FaChevronDown /> : <FaChevronRight />}
+                {showClientPortal ? (
+                  <FaChevronDown />
+                ) : (
+                  <FaChevronRight />
+                )}
               </button>
 
               {showClientPortal && (
                 <div className="mt-2 space-y-1">
-                  <NavLink
-                    to="/client-dashboard"
-                    onClick={onClose}
-                    className={childNavLinkClass}
+                  <a
+                    href={CLIENT_PORTAL_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={handlePortalClick}
+                    className={externalLinkClass}
                   >
                     <FaExternalLinkAlt className="mt-0.5 shrink-0 text-xs" />
-                    <span>Open Client Portal</span>
-                  </NavLink>
 
-                  {/* <NavLink
-                    to="/dashboard/client-portal-uploads"
-                    onClick={onClose}
-                    className={childNavLinkClass}
-                  >
-                    <FaFolder className="mt-0.5 shrink-0 text-orange-400" />
-                    <span>Client Portal Uploads</span>
-                  </NavLink> */}
+                    <span>Open Client Portal</span>
+                  </a>
                 </div>
               )}
             </div>
-
-            {/* <NavLink
-              to="/dashboard/export-clients"
-              onClick={onClose}
-              className={navLinkClass}
-            >
-              <FaFileExport />
-              Export Clients
-            </NavLink> */}
           </nav>
 
           <div className="border-t border-white/10 p-4">
             <div className="rounded-2xl bg-white/10 p-4">
-              <p className="text-sm font-bold">Logged in as</p>
-              <p className="mt-1 text-xs text-slate-400">Administrator</p>
+              <p className="text-sm font-bold">
+                Logged in as
+              </p>
+
+              <p className="mt-1 text-xs text-slate-400">
+                Administrator
+              </p>
 
               <button
                 type="button"
@@ -311,10 +346,22 @@ export default function Sidebar({
             ? 'left-2'
             : 'left-96 -translate-x-1/2'
         }`}
-        aria-label={isDesktopHidden ? 'Show sidebar' : 'Hide sidebar'}
-        title={isDesktopHidden ? 'Show sidebar' : 'Hide sidebar'}
+        aria-label={
+          isDesktopHidden
+            ? 'Show sidebar'
+            : 'Hide sidebar'
+        }
+        title={
+          isDesktopHidden
+            ? 'Show sidebar'
+            : 'Hide sidebar'
+        }
       >
-        {isDesktopHidden ? <FaChevronRight /> : <FaChevronLeft />}
+        {isDesktopHidden ? (
+          <FaChevronRight />
+        ) : (
+          <FaChevronLeft />
+        )}
       </button>
 
       {showLogoutModal && (
@@ -330,7 +377,7 @@ export default function Sidebar({
               </h2>
 
               <p className="mt-2 text-sm text-slate-500">
-                Are you sure you want to logout?
+                Are you sure you want to log out?
               </p>
             </div>
 
