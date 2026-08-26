@@ -1,14 +1,18 @@
+import type { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
+
+interface ProtectedRouteProps {
+  children: ReactNode;
+}
 
 export default function ProtectedRoute({
   children,
-}: {
-  children: React.ReactNode;
-}) {
-  const isLoggedIn = localStorage.getItem('isAdminLoggedIn') === 'true';
+}: ProtectedRouteProps) {
+  const isLoggedIn =
+    localStorage.getItem('isAdminLoggedIn') === 'true';
 
   if (!isLoggedIn) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/admin" replace />;
   }
 
   return children;

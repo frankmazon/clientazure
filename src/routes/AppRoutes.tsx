@@ -12,13 +12,37 @@ import DocumentTypePage from '@/pages/DocumentTypePage';
 import ClientPortalUploads from '@/pages/ClientPortalUploads';
 import ClientDocumentSearch from '@/pages/ClientDocumentSearch';
 
+function DomainLanding() {
+  const hostname = window.location.hostname.toLowerCase();
+
+  // Opening dashboard.sbrfunding.com.au without a path
+  // automatically opens the admin login.
+  if (hostname === 'dashboard.sbrfunding.com.au') {
+    return <Navigate to="/admin" replace />;
+  }
+
+  // scenarios.sbrfunding.com.au and localhost show submission form.
+  return <Home />;
+}
+
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/client-dashboard" element={<ClientDashboard />} />
-      <Route path="/login" element={<Login />} />
+      {/* Submission page */}
+      <Route path="/" element={<DomainLanding />} />
 
+      {/* Public portal pages */}
+      <Route path="/admin" element={<Login />} />
+      <Route path="/clients" element={<ClientDashboard />} />
+
+      {/* Redirect old URLs */}
+      <Route path="/login" element={<Navigate to="/admin" replace />} />
+      <Route
+        path="/client-dashboard"
+        element={<Navigate to="/clients" replace />}
+      />
+
+      {/* Protected administrator pages */}
       <Route
         path="/dashboard"
         element={
