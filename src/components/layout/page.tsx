@@ -711,8 +711,9 @@ export default function HomePage() {
     setIsCoBorrowerModalOpen(true);
   };
 
-  const handleAddCoBorrower = () => {
+  const saveCoBorrowerDraft = (closeAfterSave = false) => {
     const firstName = coBorrowerDraft.firstName.trim();
+    const middleName = coBorrowerDraft.middleName.trim();
     const lastName = coBorrowerDraft.lastName.trim();
     const phone = coBorrowerDraft.phone.trim();
     const email = coBorrowerDraft.email.trim();
@@ -722,6 +723,7 @@ export default function HomePage() {
     if (!firstName) nextErrors.firstName = "First name is required.";
     if (!lastName) nextErrors.lastName = "Last name is required.";
     if (!phone) nextErrors.phone = "Phone number is required.";
+
     if (!email) {
       nextErrors.email = "Email is required.";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -730,7 +732,7 @@ export default function HomePage() {
 
     if (Object.keys(nextErrors).length > 0) {
       setCoBorrowerErrors(nextErrors);
-      return;
+      return false;
     }
 
     setCoBorrowers((prev) => [
@@ -738,20 +740,50 @@ export default function HomePage() {
       {
         ...coBorrowerDraft,
         firstName,
-        middleName: coBorrowerDraft.middleName.trim(),
+        middleName,
         lastName,
         phone,
         email,
       },
     ]);
+
     setCoBorrowerDraft(createEmptyCoBorrower());
     setCoBorrowerErrors({});
+
     setFieldErrors((prev) => {
       const next = { ...prev };
       delete next.withBorrowersGuarantors;
       return next;
     });
+
     setFormErrorMessage("");
+
+    if (closeAfterSave) {
+      setIsCoBorrowerModalOpen(false);
+    }
+
+    return true;
+  };
+
+  const handleAddCoBorrower = () => {
+    saveCoBorrowerDraft(false);
+  };
+
+  const handleDoneCoBorrower = () => {
+    const hasDraftData =
+      coBorrowerDraft.firstName.trim() ||
+      coBorrowerDraft.middleName.trim() ||
+      coBorrowerDraft.lastName.trim() ||
+      coBorrowerDraft.phone.trim() ||
+      coBorrowerDraft.email.trim();
+
+    if (!hasDraftData) {
+      setCoBorrowerErrors({});
+      setIsCoBorrowerModalOpen(false);
+      return;
+    }
+
+    saveCoBorrowerDraft(true);
   };
 
   const handleRemoveCoBorrower = (id: string) => {
@@ -2682,7 +2714,7 @@ export default function HomePage() {
             <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={() => setIsCoBorrowerModalOpen(false)}
+                onClick={handleDoneCoBorrower}
                 className="h-12 rounded-xl border border-slate-300 px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
               >
                 Done
