@@ -19,7 +19,7 @@ import DocumentTypePage from '@/pages/DocumentTypePage';
 import ClientPortalUploads from '@/pages/ClientPortalUploads';
 import ClientDocumentSearch from '@/pages/ClientDocumentSearch';
 
-const FAVICON_PATH = '/logo/logo%20header.png';
+const FAVICON_PATH = '/favicon.svg';
 
 function PageMetadata() {
   const location = useLocation();
@@ -44,7 +44,7 @@ function PageMetadata() {
       document.title = 'Scenario | SBR Funding';
     }
 
-    // Add or update the browser-tab logo.
+    // Find or create the browser-tab icon.
     let favicon = document.querySelector<HTMLLinkElement>(
       "link[rel='icon']",
     );
@@ -55,7 +55,7 @@ function PageMetadata() {
       document.head.appendChild(favicon);
     }
 
-    favicon.type = 'image/png';
+    favicon.type = 'image/svg+xml';
     favicon.href = FAVICON_PATH;
   }, [location.pathname]);
 
@@ -66,12 +66,12 @@ function DomainLanding() {
   const hostname = window.location.hostname.toLowerCase();
 
   // Opening the dashboard domain without a path
-  // automatically opens the admin login.
+  // automatically opens the administrator login.
   if (hostname === 'dashboard.sbrfunding.com.au') {
     return <Navigate to="/admin" replace />;
   }
 
-  // Scenarios domain and localhost show the submission form.
+  // The scenarios domain and localhost show the submission form.
   return <Home />;
 }
 

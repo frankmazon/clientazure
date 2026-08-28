@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- White rounded background -->
+  <rect x="2" y="2" width="60" height="60" rx="13" fill="#ffffff" stroke="#d9e3e5" stroke-width="2"></rect>
+
+  <!-- Orange upper arrow -->
+  <path d="M17 15H31L46 30H32Z" fill="#EE6521"></path>
+
+  <!-- Teal lower arrow -->
+  <path d="M32 30H46L31 49H17Z" fill="#299B90"></path>
+</svg>
