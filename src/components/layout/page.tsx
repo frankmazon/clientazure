@@ -2410,7 +2410,7 @@ export default function HomePage() {
               disabled={isSubmitting}
               className="h-14 w-full rounded-xl bg-[#EE6521] text-sm font-black text-white shadow-[0_14px_24px_rgba(238,101,33,0.24)] transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-orange-300"
             >
-              {isSubmitting ? "Submitting..." : "Submit Application"}
+              {isSubmitting ? "Submitting..." : "Submit"}
             </button>
           </form>
         </div>
