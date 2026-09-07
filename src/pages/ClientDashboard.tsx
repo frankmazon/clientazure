@@ -26,6 +26,7 @@ import {
   FaRedoAlt,
   FaUserFriends,
 } from "react-icons/fa";
+import { addClientUploadNotification } from "../utils/notifications";
 import ReferrerPortal from "./ReferrerPortal";
 
 type CoBorrower = {
@@ -1056,22 +1057,40 @@ export default function ClientDashboard() {
   const formatLeadType = (type?: string | number | null) =>
     normalizeSourceValue(type);
 
-  const getUploaderLabel = (file: Submission) =>
-    (
-      file.uploaderType ||
-      file.uploadedByType ||
-      file.uploadedBy ||
-      file.submittedBy ||
-      file.uploadSource ||
-      file.remarks ||
-      file.verifiedBy ||
-      "Client"
-    )
+  const getUploaderLabel = (file: Submission) => {
+    const uploader = [
+      file.uploaderType,
+      file.uploadedByType,
+      file.uploadedBy,
+      file.submittedBy,
+      file.uploadSource,
+      file.remarks,
+      file.verifiedBy,
+    ]
+      .filter(Boolean)
+      .join(" ")
       .trim()
-      .toLowerCase()
-      .includes("referr")
-      ? "Referrer"
-      : "Client";
+      .toLowerCase();
+
+    if (uploader.includes("referr")) return "Referrer";
+    if (uploader.includes("admin")) return "Admin";
+    return "Client";
+  };
+
+  const formatSubmittedDate = (value?: string) => {
+    if (!value) return "N/A";
+    const normalized = value.includes("T") ? value : value.replace(" ", "T");
+    const date = new Date(normalized);
+
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat("en-AU", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  };
 
   const currentSource =
     formatLeadType(
@@ -1863,6 +1882,17 @@ export default function ClientDashboard() {
           if (!response.ok || !result.success) {
             throw new Error(result.message || "Upload failed.");
           }
+
+          addClientUploadNotification({
+            clientId: Number(clientRecord.clientId || clientRecord.id || 0) || undefined,
+            clientName:
+              getFullName(clientRecord) || loggedClient.name || cleanUniqueId,
+            uniqueId: cleanUniqueId,
+            documentType: selectedDocumentType,
+            documentLabel: formatDocumentType(selectedDocumentType),
+            fileName: file.name,
+            isReupload: isRejectedReupload,
+          });
         } finally {
           window.clearTimeout(timeout);
         }
@@ -3016,14 +3046,14 @@ export default function ClientDashboard() {
             )}
 
             <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 px-4 py-5 sm:px-6">
+              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 px-4 py-4 sm:px-5">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-2xl bg-orange-50 p-3 text-orange-600 ring-1 ring-orange-100">
+                  <div className="rounded-xl bg-orange-50 p-2.5 text-orange-600 ring-1 ring-orange-100">
                     <FaFileAlt />
                   </div>
 
                   <div>
-                    <h2 className="text-xl font-black text-slate-900">
+                    <h2 className="text-lg font-black text-slate-900">
                       My Files
                     </h2>
                     <p className="text-sm text-slate-500">
@@ -3034,23 +3064,30 @@ export default function ClientDashboard() {
                 </div>
               </div>
 
-              <div className="p-4 md:overflow-x-auto md:p-0">
-                <table className="block w-full md:table md:min-w-[980px]">
+              <div className="p-3 md:overflow-x-auto md:p-0">
+                <table className="block w-full table-fixed md:table md:min-w-[760px]">
+                  <colgroup className="hidden md:table-column-group">
+                    <col className="w-[29%]" />
+                    <col className="w-[20%]" />
+                    <col className="w-[22%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[14%]" />
+                  </colgroup>
                   <thead className="hidden bg-slate-50/90 md:table-header-group">
                     <tr>
-                      <th className="px-6 py-4 text-left text-sm font-black uppercase tracking-wide text-slate-600">
+                      <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-600">
                         File Name
                       </th>
-                      <th className="px-6 py-4 text-left text-sm font-black uppercase tracking-wide text-slate-600">
+                      <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-600">
                         Document Type
                       </th>
-                      <th className="px-6 py-4 text-left text-sm font-black uppercase tracking-wide text-slate-600">
+                      <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-600">
                         Status
                       </th>
-                      <th className="px-6 py-4 text-left text-sm font-black uppercase tracking-wide text-slate-600">
+                      <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wide text-slate-600">
                         Submitted
                       </th>
-                      <th className="px-6 py-4 text-center text-sm font-black uppercase tracking-wide text-slate-600">
+                      <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-wide text-slate-600">
                         Action
                       </th>
                     </tr>
@@ -3062,14 +3099,14 @@ export default function ClientDashboard() {
                         key={`${file.id}-${file.fileName}`}
                         className="block rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:bg-slate-50 md:table-row md:rounded-none md:border-x-0 md:border-b-0 md:shadow-none"
                       >
-                        <td className="block px-4 py-4 md:table-cell md:px-6">
+                        <td className="block px-4 py-4 md:table-cell md:px-4 md:py-4">
                           <div className="flex items-center gap-3">
-                            <div className="rounded-xl bg-slate-100 p-3 text-slate-600 ring-1 ring-slate-200">
+                            <div className="shrink-0 rounded-lg bg-slate-100 p-2.5 text-slate-600 ring-1 ring-slate-200">
                               <FaFileAlt />
                             </div>
 
                             <div className="min-w-0">
-                              <p className="break-words font-black text-slate-900">
+                              <p className="break-all text-sm font-black leading-5 text-slate-900">
                                 {file.fileName || "No file name"}
                               </p>
                               <p className="break-words text-xs text-slate-500">
@@ -3079,19 +3116,19 @@ export default function ClientDashboard() {
                           </div>
                         </td>
 
-                        <td className="block px-4 pb-3 md:table-cell md:px-6 md:py-4">
-                          <span className="inline-flex rounded-full bg-cyan-100 px-3 py-1 text-xs font-bold text-cyan-700">
+                        <td className="block px-4 pb-3 md:table-cell md:px-4 md:py-4">
+                          <span className="inline-flex max-w-full rounded-lg bg-cyan-100 px-2.5 py-1.5 text-left text-xs font-bold leading-4 text-cyan-700">
                             {formatDocumentType(file.documentType)}
                           </span>
                         </td>
 
-                        <td className="block px-4 pb-3 md:table-cell md:px-6 md:py-4">
+                        <td className="block px-4 pb-3 md:table-cell md:px-4 md:py-4">
                           {(() => {
                             const status = normalizeDocumentStatus(
                               file.documentStatus,
                             );
                             return (
-                              <div className="space-y-2">
+                              <div className="flex flex-col items-start gap-2">
                                 <span
                                   className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-extrabold ${getStatusStyles(status)}`}
                                 >
@@ -3101,12 +3138,16 @@ export default function ClientDashboard() {
                                     : status}
                                 </span>
 
-                                <span className={`ml-2 inline-flex rounded-full border px-3 py-1 text-xs font-extrabold ${
-                                  getUploaderLabel(file) === "Referrer"
-                                    ? "border-violet-200 bg-violet-50 text-violet-700"
-                                    : "border-cyan-200 bg-cyan-50 text-cyan-700"
+                                <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-extrabold ${
+                                  getUploaderLabel(file) === "Admin"
+                                    ? "border-orange-200 bg-orange-50 text-orange-700"
+                                    : getUploaderLabel(file) === "Referrer"
+                                      ? "border-violet-200 bg-violet-50 text-violet-700"
+                                      : "border-cyan-200 bg-cyan-50 text-cyan-700"
                                 }`}>
-                                  Uploaded by {getUploaderLabel(file)}
+                                  {getUploaderLabel(file) === "Admin"
+                                    ? "Admin Upload"
+                                    : `Uploaded by ${getUploaderLabel(file)}`}
                                 </span>
 
                                 {file.remarks && (
@@ -3119,12 +3160,12 @@ export default function ClientDashboard() {
                           })()}
                         </td>
 
-                        <td className="block px-4 pb-3 text-sm text-slate-600 md:table-cell md:px-6 md:py-4">
-                          {file.submittedAt || "N/A"}
+                        <td className="block px-4 pb-3 text-sm font-semibold leading-5 text-slate-600 md:table-cell md:px-4 md:py-4">
+                          {formatSubmittedDate(file.submittedAt)}
                         </td>
 
-                        <td className="block px-4 pb-4 md:table-cell md:px-6 md:py-4">
-                          <div className="grid gap-2 sm:grid-cols-2 md:flex md:justify-center">
+                        <td className="block px-4 pb-4 md:table-cell md:px-4 md:py-4">
+                          <div className="grid gap-2 sm:grid-cols-2 md:flex md:flex-col md:justify-center">
                             <button
                               type="button"
                               onClick={() => handlePreview(file)}

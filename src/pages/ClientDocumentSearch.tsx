@@ -17,7 +17,9 @@ import {
   FaFileAlt,
   FaFolder,
   FaIdBadge,
+  FaEdit,
   FaPhone,
+  FaPlus,
   FaSearch,
   FaSyncAlt,
   FaTimes,
@@ -35,6 +37,7 @@ const API_BASE = (
 ).replace(/\/$/, "");
 
 const CLIENTS_API = `${API_BASE}/clients`;
+const UPLOAD_API = `${API_BASE}/uploadclient`;
 const FILE_URL_API = `${API_BASE}/file-url`;
 const FILE_PREVIEW_API = `${API_BASE}/file-preview`;
 const DOCUMENTS_API = `${API_BASE}/documents`;
@@ -382,6 +385,33 @@ type ClientFolder = {
   progress: number;
 };
 
+const editableClientFields: Array<{
+  key: keyof Client;
+  label: string;
+  type?: "date" | "number" | "textarea";
+}> = [
+  { key: "classificationType", label: "Classification Type" },
+  { key: "borrowerType", label: "Borrower Type" },
+  { key: "objective", label: "Objective" },
+  { key: "loanType", label: "Loan Type" },
+  { key: "purpose", label: "Purpose" },
+  { key: "transactionType", label: "Transaction Type" },
+  { key: "withBorrowersGuarantors", label: "With Co-Borrowers?" },
+  { key: "anticipatedSettlementDate", label: "Anticipated Settlement Date", type: "date" },
+  { key: "vedaIssues", label: "Veda Issues" },
+  { key: "conductIssues", label: "Conduct Issues" },
+  { key: "clientNeedsObjectives", label: "Client Needs & Objectives", type: "textarea" },
+  { key: "applicantBackground", label: "Applicant Background", type: "textarea" },
+  { key: "explanationOfIncome", label: "Explanation of Income", type: "textarea" },
+  { key: "security", label: "Security", type: "textarea" },
+  { key: "loanAmount", label: "Loan Amount", type: "number" },
+  { key: "securityValue", label: "Security Value", type: "number" },
+  { key: "lvr", label: "LVR", type: "number" },
+  { key: "specialNotes", label: "Special Notes", type: "textarea" },
+  { key: "status", label: "Team Status" },
+  { key: "assignedSpecialist", label: "Assigned Specialist" },
+];
+
 const normalizeDocumentStatus = (status?: string) => {
   const value = (status || "Pending").trim().toLowerCase();
 
@@ -494,6 +524,23 @@ export default function ClientDocumentSearch() {
   const [clientMessages, setClientMessages] = useState<ClientMessage[]>([]);
   const [clientMessagesLoading, setClientMessagesLoading] = useState(false);
   const [clientMessagesError, setClientMessagesError] = useState("");
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [editDraft, setEditDraft] = useState<Record<string, string>>({});
+  const [savingClient, setSavingClient] = useState(false);
+  const [adminUploadTypes, setAdminUploadTypes] = useState<Record<string, string>>(
+    {},
+  );
+  const [adminUploadFiles, setAdminUploadFiles] = useState<
+    Record<string, File | null>
+  >({});
+  const [adminUploadingKey, setAdminUploadingKey] = useState<string | null>(null);
+  const [adminUploadMarkers, setAdminUploadMarkers] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("adminUploadMarkers") || "[]");
+    } catch {
+      return [];
+    }
+  });
   const [seenMessageSignature, setSeenMessageSignature] = useState(
     () => localStorage.getItem("seenClientMessageSignature") || "",
   );
@@ -579,6 +626,169 @@ export default function ClientDocumentSearch() {
     setClientMessages([]);
     setClientMessagesError("");
     setClientMessagesLoading(false);
+  };
+
+  const startEditingClient = (client: Client) => {
+    setEditDraft(
+      Object.fromEntries(
+        editableClientFields.map(({ key }) => [
+          key,
+          String(client[key] ?? "").slice(0, key === "anticipatedSettlementDate" ? 10 : undefined),
+        ]),
+      ),
+    );
+    setEditingClient(client);
+  };
+
+  const updateClientRecord = async (
+    client: Client,
+    changes: Record<string, unknown>,
+  ) => {
+    const clientId = Number(client.clientId || client.id);
+    if (!clientId) throw new Error("A valid client ID is required.");
+
+    const response = await fetch(`${CLIENTS_API}/${clientId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(changes),
+    });
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || result.success === false) {
+      throw new Error(result.message || "Failed to update client details.");
+    }
+  };
+
+  const saveClientDetails = async () => {
+    if (!editingClient) return;
+
+    try {
+      setSavingClient(true);
+      await updateClientRecord(editingClient, editDraft);
+      await loadClients(search);
+      setEditingClient(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to update client details.");
+    } finally {
+      setSavingClient(false);
+    }
+  };
+
+  const uploadAdminDocument = async (client: Client, clientKey: string) => {
+    const documentType = adminUploadTypes[clientKey];
+    const file = adminUploadFiles[clientKey];
+    if (!documentType || !file) return;
+
+    const adminName =
+      localStorage.getItem("adminName") ||
+      localStorage.getItem("username") ||
+      "Administrator";
+    const attribution = `Uploaded by Admin (${adminName})`;
+    const formData = new FormData();
+
+    Object.entries(client).forEach(([key, value]) => {
+      if (
+        value !== null &&
+        value !== undefined &&
+        (typeof value === "string" || typeof value === "number") &&
+        ![
+          "id",
+          "documentId",
+          "documentType",
+          "fileName",
+          "fileUrl",
+          "documentStatus",
+        ].includes(key)
+      ) {
+        formData.append(key, String(value));
+      }
+    });
+
+    formData.set("uniqueId", client.uniqueId || clientKey);
+    formData.set("clientId", String(client.clientId || client.id));
+    formData.set("documentType", documentType);
+    formData.set("uploaderType", "Admin");
+    formData.set("uploadedByType", "Admin");
+    formData.set("uploadedByRole", "Admin");
+    formData.set("uploadedBy", adminName);
+    formData.set("submittedBy", adminName);
+    formData.set("uploadSource", "Admin Portal");
+    formData.set("remarks", attribution);
+    formData.set("adminRemarks", attribution);
+    formData.set("file", file);
+
+    try {
+      setAdminUploadingKey(clientKey);
+      const response = await fetch(UPLOAD_API, { method: "POST", body: formData });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Document upload failed.");
+      }
+
+      let uploadedDocumentId = Number(result.id || result.documentId || 0);
+
+      if (!uploadedDocumentId) {
+        const refreshedResponse = await fetch(
+          `${CLIENTS_API}?uniqueId=${encodeURIComponent(client.uniqueId || clientKey)}`,
+        );
+        const refreshedResult = await refreshedResponse.json().catch(() => ({}));
+        if (refreshedResponse.ok && refreshedResult.success) {
+          uploadedDocumentId = (refreshedResult.clients || [])
+            .filter(
+              (record: Record<string, unknown>) =>
+                normalizeDocumentTypeValue(String(record.documentType || "")) ===
+                  documentType && String(record.fileName || "") === file.name,
+            )
+            .reduce(
+              (latestId: number, record: Record<string, unknown>) =>
+                Math.max(latestId, Number(record.id || record.documentId || 0)),
+              0,
+            );
+        }
+      }
+
+      if (uploadedDocumentId) {
+        const attributionResponse = await fetch(
+          `${DOCUMENTS_API}/${uploadedDocumentId}/pending`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              verifiedBy: attribution,
+              remarks: attribution,
+              uploaderType: "Admin",
+              uploadedByType: "Admin",
+              uploadedByRole: "Admin",
+              uploadSource: "Admin Portal",
+            }),
+          },
+        );
+        const attributionResult = await attributionResponse
+          .json()
+          .catch(() => ({}));
+        if (!attributionResponse.ok || attributionResult.success === false) {
+          throw new Error(
+            attributionResult.message || "File uploaded, but admin attribution failed.",
+          );
+        }
+      }
+
+      const marker = `${client.uniqueId || clientKey}|${file.name}`;
+      setAdminUploadMarkers((current) => {
+        const updated = Array.from(new Set([...current, marker]));
+        localStorage.setItem("adminUploadMarkers", JSON.stringify(updated));
+        return updated;
+      });
+
+      setAdminUploadTypes((current) => ({ ...current, [clientKey]: "" }));
+      setAdminUploadFiles((current) => ({ ...current, [clientKey]: null }));
+      await loadClients(search);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Document upload failed.");
+    } finally {
+      setAdminUploadingKey(null);
+    }
   };
 
   useEffect(() => {
@@ -1036,8 +1246,11 @@ export default function ClientDocumentSearch() {
   const getDocumentStatus = (file: Client) =>
     normalizeDocumentStatus(file.documentStatus);
 
-  const getDocumentUploader = (file: Client) =>
-    (
+  const getDocumentUploader = (file: Client) => {
+    const uploadMarker = `${file.uniqueId || ""}|${file.fileName || ""}`;
+    if (adminUploadMarkers.includes(uploadMarker)) return "Admin";
+
+    const uploader = (
       file.uploaderType ||
       file.uploadedByType ||
       file.uploadedBy ||
@@ -1046,12 +1259,12 @@ export default function ClientDocumentSearch() {
       file.remarks ||
       file.verifiedBy ||
       "Client"
-    )
-      .trim()
-      .toLowerCase()
-      .includes("referr")
-      ? "Referrer"
-      : "Client";
+    ).trim().toLowerCase();
+
+    if (uploader.includes("admin")) return "Admin";
+    if (uploader.includes("referr")) return "Referrer";
+    return "Client";
+  };
 
   const updateDocumentStatus = async (
     file: Client,
@@ -1845,7 +2058,7 @@ export default function ClientDocumentSearch() {
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`w-full rounded-2xl border p-4 text-left shadow-[0_14px_34px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.1)] ${
+      className={`w-full rounded-2xl border p-3.5 text-left shadow-[0_14px_34px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.1)] ${
         active ? "ring-2 ring-slate-900/15" : ""
       } ${className}`}
     >
@@ -1859,7 +2072,7 @@ export default function ClientDocumentSearch() {
           </span>
         )}
       </div>
-      <p className="mt-4 text-2xl font-black leading-none sm:text-3xl">
+      <p className="mt-3 text-2xl font-black leading-none">
         {value}
       </p>
     </button>
@@ -1874,15 +2087,15 @@ export default function ClientDocumentSearch() {
       onMessagesOpen={handleMessagesOpen}
       onMessageClientClick={handleMessageClientClick}
     >
-      <div className="mx-auto max-w-[1800px] space-y-6">
+      <div className="mx-auto max-w-[1800px] space-y-4">
         <section className={`${panelClass} overflow-hidden`}>
-          <div className="bg-[linear-gradient(135deg,rgba(37,155,143,0.94),rgba(15,23,42,0.98)_56%,rgba(238,101,33,0.88))] p-5 text-white sm:p-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="bg-[linear-gradient(135deg,rgba(37,155,143,0.94),rgba(15,23,42,0.98)_56%,rgba(238,101,33,0.88))] p-4 text-white sm:p-5">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
               <div className="min-w-0">
                 <p className="text-xs font-black uppercase tracking-[0.22em] text-white/65">
                   Document Control
                 </p>
-                <h2 className="mt-2 text-2xl font-black text-white">
+                <h2 className="mt-1.5 text-xl font-black text-white">
                   Search Client Documents
                 </h2>
                 <p className="mt-2 max-w-4xl text-sm leading-6 text-white/75">
@@ -1894,7 +2107,7 @@ export default function ClientDocumentSearch() {
               <button
                 type="button"
                 onClick={() => loadClients()}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-slate-950 shadow-sm hover:bg-slate-100"
+                className="inline-flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-bold text-slate-950 shadow-sm transition hover:bg-slate-100 sm:w-auto"
               >
                 <FaSyncAlt />
                 Refresh
@@ -1902,8 +2115,8 @@ export default function ClientDocumentSearch() {
             </div>
           </div>
 
-          <div className="grid gap-4 p-5 sm:p-6 xl:grid-cols-[minmax(280px,1fr)_200px_180px_180px_auto]">
-            <div className="relative">
+          <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(250px,1fr)_180px_150px_150px_auto]">
+            <div className="relative sm:col-span-2 xl:col-span-1">
               <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 value={search}
@@ -1912,14 +2125,14 @@ export default function ClientDocumentSearch() {
                   if (event.key === "Enter") handleSearch();
                 }}
                 placeholder="Search Unique ID, name, email, phone, source, loan details, status, or file..."
-                className="h-14 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 text-sm font-medium outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
+                className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm font-medium outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
               />
             </div>
 
             <select
               value={selectedType}
               onChange={(event) => setSelectedType(event.target.value)}
-              className="h-14 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none transition focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
+              className="h-12 min-w-0 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-medium outline-none transition focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
             >
               <option value="all">All Document Types</option>
               {documentTypes.map((type) => (
@@ -1932,7 +2145,7 @@ export default function ClientDocumentSearch() {
             <select
               value={selectedSource}
               onChange={(event) => setSelectedSource(event.target.value)}
-              className="h-14 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none transition focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
+              className="h-12 min-w-0 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-medium outline-none transition focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
             >
               <option value="all">All Sources</option>
               <option value="Broker">Broker</option>
@@ -1943,7 +2156,7 @@ export default function ClientDocumentSearch() {
             <select
               value={selectedStatus}
               onChange={(event) => setSelectedStatus(event.target.value)}
-              className="h-14 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium outline-none transition focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
+              className="h-12 min-w-0 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-medium outline-none transition focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
             >
               <option value="all">All Statuses</option>
               {statuses.map((status) => (
@@ -1956,7 +2169,7 @@ export default function ClientDocumentSearch() {
             <button
               type="button"
               onClick={handleSearch}
-              className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-[#EE6521] px-6 text-sm font-black text-white shadow-[0_14px_24px_rgba(238,101,33,0.22)] hover:bg-orange-600"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#EE6521] px-5 text-sm font-black text-white shadow-[0_10px_20px_rgba(238,101,33,0.2)] transition hover:bg-orange-600 sm:col-span-2 xl:col-span-1"
             >
               <FaSearch />
               Search
@@ -1964,7 +2177,7 @@ export default function ClientDocumentSearch() {
           </div>
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
           <StatCard
             label="Total Clients"
             value={clientFolders.length}
@@ -2006,7 +2219,7 @@ export default function ClientDocumentSearch() {
         )}
 
         {!loading && !error && (
-          <div className="space-y-5">
+          <div className="space-y-4">
             {visibleClientFolders.map(
               ({
                 uniqueId,
@@ -2031,47 +2244,49 @@ export default function ClientDocumentSearch() {
                     id={`client-folder-${uniqueId}`}
                     className={`${panelClass} scroll-mt-28 overflow-hidden`}
                   >
-                    <div className="grid gap-5 border-b border-slate-200/80 bg-slate-50/80 p-4 sm:p-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-                      <div className="flex min-w-0 items-center gap-4">
+                    <div className="grid gap-4 border-b border-slate-200/80 bg-slate-50/80 p-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+                      <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
                         <div
-                          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
+                          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
                             isComplete
                               ? "bg-green-100 text-green-600 ring-1 ring-green-200"
                               : "bg-orange-100 text-orange-600 ring-1 ring-orange-200"
                           }`}
                         >
                           {isComplete ? (
-                            <FaCheckCircle className="text-2xl" />
+                            <FaCheckCircle className="text-xl" />
                           ) : (
-                            <FaFolder className="text-2xl" />
+                            <FaFolder className="text-xl" />
                           )}
                         </div>
 
                         <div className="min-w-0">
-                          <h3 className="break-words text-xl font-black text-slate-900">
+                          <h3 className="break-words text-lg font-black text-slate-900">
                             {getFullName(client) || "Unnamed Client"}
                           </h3>
 
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500 xl:flex-nowrap">
-                            <span className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
-                              <FaIdBadge className="text-xs" />
-                              {client.uniqueId || uniqueId}
-                            </span>
+                          <div className="mt-2 min-w-0 space-y-2 text-sm text-slate-500">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                              <span className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
+                                <FaIdBadge className="text-xs" />
+                                {client.uniqueId || uniqueId}
+                              </span>
 
-                            <span className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
+                              <span className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
+                                <FaPhone className="text-xs" />
+                                <span className="truncate">{client.phone || "No phone"}</span>
+                              </span>
+                            </div>
+
+                            <span className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
                               <FaUser className="text-xs" />
-                              {client.email || "No email"}
-                            </span>
-
-                            <span className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
-                              <FaPhone className="text-xs" />
-                              {client.phone || "No phone"}
+                              <span className="truncate">{client.email || "No email"}</span>
                             </span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2 xl:flex-nowrap xl:justify-end">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">
                         <div className="contents">
                           <span
                             className={`inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-xs font-semibold ${
@@ -2158,9 +2373,19 @@ export default function ClientDocumentSearch() {
                     {isExpanded && (
                       <>
                         <div className="border-b border-slate-100 bg-white p-4 sm:p-5">
-                          <p className={sectionTitleClass}>
-                            Submitted Loan Information
-                          </p>
+                          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                            <p className={sectionTitleClass.replace("mb-3 ", "")}>
+                              Submitted Loan Information
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => startEditingClient(client)}
+                              className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-black text-white transition hover:bg-slate-700"
+                            >
+                              <FaEdit />
+                              Edit all fields
+                            </button>
+                          </div>
 
                           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                             <InfoBox
@@ -2364,6 +2589,80 @@ export default function ClientDocumentSearch() {
                             </div>
                           </div>
 
+                          <div className="mb-4 rounded-2xl border border-orange-200 bg-orange-50/60 p-4">
+                            <div className="mb-3">
+                              <p className="text-xs font-black uppercase tracking-wide text-orange-700">
+                                Upload a document as admin
+                              </p>
+                              <p className="mt-1 text-xs font-semibold text-slate-500">
+                                Choose the document type and file. Admin uploads are clearly labelled below.
+                              </p>
+                            </div>
+                            <div className="grid gap-3 lg:grid-cols-[minmax(180px,0.7fr)_minmax(240px,1fr)_auto] lg:items-end">
+                              <label className="text-xs font-black uppercase tracking-wide text-slate-600">
+                                Document type
+                                <select
+                                  value={adminUploadTypes[uniqueId] || ""}
+                                  onChange={(event) =>
+                                    setAdminUploadTypes((current) => ({
+                                      ...current,
+                                      [uniqueId]: event.target.value,
+                                    }))
+                                  }
+                                  className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold normal-case outline-none focus:border-[#EE6521] focus:ring-4 focus:ring-[#EE6521]/15"
+                                >
+                                  <option value="">Select document type</option>
+                                  {allDocumentTypes
+                                    .filter(
+                                      (option, index, options) =>
+                                        options.findIndex(
+                                          (item) => item.value === option.value,
+                                        ) === index,
+                                    )
+                                    .map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                </select>
+                              </label>
+
+                              <label className="text-xs font-black uppercase tracking-wide text-slate-600">
+                                File
+                                <input
+                                  key={`${uniqueId}-${adminUploadFiles[uniqueId]?.name || "empty"}`}
+                                  type="file"
+                                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                                  onChange={(event) =>
+                                    setAdminUploadFiles((current) => ({
+                                      ...current,
+                                      [uniqueId]: event.target.files?.[0] || null,
+                                    }))
+                                  }
+                                  className="mt-2 block h-10 w-full rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-600 file:mr-3 file:h-full file:border-0 file:bg-slate-900 file:px-4 file:text-xs file:font-black file:text-white"
+                                />
+                              </label>
+
+                              <button
+                                type="button"
+                                disabled={
+                                  !adminUploadTypes[uniqueId] ||
+                                  !adminUploadFiles[uniqueId] ||
+                                  adminUploadingKey === uniqueId
+                                }
+                                onClick={() =>
+                                  void uploadAdminDocument(client, uniqueId)
+                                }
+                                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#EE6521] px-5 text-sm font-black text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                <FaPlus />
+                                {adminUploadingKey === uniqueId
+                                  ? "Uploading..."
+                                  : "Upload document"}
+                              </button>
+                            </div>
+                          </div>
+
                           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                             <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                               <p className="mb-2 text-xs font-bold uppercase text-slate-500">
@@ -2524,12 +2823,16 @@ export default function ClientDocumentSearch() {
                                       </span>
                                       <span
                                         className={`inline-flex rounded-full border px-3 py-1 text-xs font-extrabold ${
-                                          getDocumentUploader(file) === "Referrer"
-                                            ? "border-violet-200 bg-violet-50 text-violet-700"
-                                            : "border-cyan-200 bg-cyan-50 text-cyan-700"
+                                          getDocumentUploader(file) === "Admin"
+                                            ? "border-orange-200 bg-orange-50 text-orange-700"
+                                            : getDocumentUploader(file) === "Referrer"
+                                              ? "border-violet-200 bg-violet-50 text-violet-700"
+                                              : "border-cyan-200 bg-cyan-50 text-cyan-700"
                                         }`}
                                       >
-                                        Uploaded by {getDocumentUploader(file)}
+                                        {getDocumentUploader(file) === "Admin"
+                                          ? "Admin Upload"
+                                          : `Uploaded by ${getDocumentUploader(file)}`}
                                       </span>
                                     </div>
 
@@ -2541,7 +2844,13 @@ export default function ClientDocumentSearch() {
                                   </div>
                                 </div>
 
-                                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                <div
+                                  className={`mt-4 grid grid-cols-2 gap-2 ${
+                                    getDocumentStatus(file) === "Verified"
+                                      ? ""
+                                      : "sm:grid-cols-3"
+                                  }`}
+                                >
                                   <button
                                     type="button"
                                     onClick={() => handlePreview(file)}
@@ -2560,41 +2869,45 @@ export default function ClientDocumentSearch() {
                                     Download
                                   </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      updateDocumentStatus(file, "verify")
-                                    }
-                                    disabled={loading}
-                                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-green-600 px-3 py-2 text-xs font-bold text-white hover:bg-green-700 disabled:bg-green-300"
-                                  >
-                                    <FaCheckCircle />
-                                    Approve
-                                  </button>
+                                  {getDocumentStatus(file) !== "Verified" && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          updateDocumentStatus(file, "verify")
+                                        }
+                                        disabled={loading}
+                                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-green-600 px-3 py-2 text-xs font-bold text-white hover:bg-green-700 disabled:bg-green-300"
+                                      >
+                                        <FaCheckCircle />
+                                        Approve
+                                      </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      updateDocumentStatus(file, "reject")
-                                    }
-                                    disabled={loading}
-                                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:bg-red-300"
-                                  >
-                                    <FaExclamationTriangle />
-                                    Reject
-                                  </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          updateDocumentStatus(file, "reject")
+                                        }
+                                        disabled={loading}
+                                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:bg-red-300"
+                                      >
+                                        <FaExclamationTriangle />
+                                        Reject
+                                      </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      updateDocumentStatus(file, "pending")
-                                    }
-                                    disabled={loading}
-                                    className="col-span-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#EE6521] px-3 py-2 text-xs font-bold text-white hover:bg-orange-600 disabled:bg-orange-300 sm:col-span-1"
-                                  >
-                                    <FaSyncAlt />
-                                    Mark Pending
-                                  </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          updateDocumentStatus(file, "pending")
+                                        }
+                                        disabled={loading}
+                                        className="col-span-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#EE6521] px-3 py-2 text-xs font-bold text-white hover:bg-orange-600 disabled:bg-orange-300 sm:col-span-1"
+                                      >
+                                        <FaSyncAlt />
+                                        Mark Pending
+                                      </button>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             ))
@@ -2624,6 +2937,91 @@ export default function ClientDocumentSearch() {
           </div>
         )}
       </div>
+
+      {editingClient && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6">
+          <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#259b8f]">
+                  Admin editing
+                </p>
+                <h2 className="mt-1 text-xl font-black text-slate-900">
+                  Edit {getFullName(editingClient) || "client"}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingClient(null)}
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 ring-1 ring-slate-200 transition hover:bg-slate-100"
+                aria-label="Close client editor"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {editableClientFields.map(({ key, label, type }) => (
+                  <label
+                    key={key}
+                    className={type === "textarea" ? "xl:col-span-3" : ""}
+                  >
+                    <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-slate-500">
+                      {label}
+                    </span>
+                    {type === "textarea" ? (
+                      <textarea
+                        rows={3}
+                        value={editDraft[key] || ""}
+                        onChange={(event) =>
+                          setEditDraft((current) => ({
+                            ...current,
+                            [key]: event.target.value,
+                          }))
+                        }
+                        className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold outline-none focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
+                      />
+                    ) : (
+                      <input
+                        type={type || "text"}
+                        step={type === "number" ? "any" : undefined}
+                        value={editDraft[key] || ""}
+                        onChange={(event) =>
+                          setEditDraft((current) => ({
+                            ...current,
+                            [key]: event.target.value,
+                          }))
+                        }
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold outline-none focus:border-[#259b8f] focus:bg-white focus:ring-4 focus:ring-[#259b8f]/15"
+                      />
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setEditingClient(null)}
+                disabled={savingClient}
+                className="h-11 rounded-xl bg-white px-5 text-sm font-black text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveClientDetails()}
+                disabled={savingClient}
+                className="h-11 rounded-xl bg-[#259b8f] px-5 text-sm font-black text-white transition hover:bg-[#1f8178] disabled:opacity-60"
+              >
+                {savingClient ? "Saving..." : "Save all changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {messageClient && (
         <div

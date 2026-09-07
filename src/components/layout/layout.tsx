@@ -86,9 +86,11 @@ export default function DashboardLayout({
 
     loadNotifications();
     window.addEventListener('storage', loadNotifications);
+    window.addEventListener('notifications-updated', loadNotifications);
 
     return () => {
       window.removeEventListener('storage', loadNotifications);
+      window.removeEventListener('notifications-updated', loadNotifications);
     };
   }, []);
 
@@ -203,11 +205,11 @@ export default function DashboardLayout({
 
       <div
         className={`transition-[padding] duration-300 ${
-          isSidebarHidden ? 'lg:pl-0' : 'lg:pl-96'
+          isSidebarHidden ? 'lg:pl-0' : 'lg:pl-72'
         }`}
       >
-        <header className="sticky top-0 z-40 flex h-20 items-center justify-between border-b border-[#219688]/15 bg-white/95 px-4 shadow-sm backdrop-blur sm:px-6">
-          <div className="flex min-w-0 items-center gap-4">
+        <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-2 border-b border-[#219688]/15 bg-white/95 px-3 shadow-sm backdrop-blur sm:px-5">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
             <button
               type="button"
               onClick={() => setIsSidebarOpen(true)}
@@ -218,7 +220,7 @@ export default function DashboardLayout({
             </button>
 
             <div className="flex min-w-0 items-center gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white p-2 shadow-lg ring-1 ring-[#219688]/15">
+              <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white p-2 shadow-md ring-1 ring-[#219688]/15 sm:flex">
                 <img
                   src={LOGO_PATH}
                   alt="Company Logo"
@@ -227,7 +229,7 @@ export default function DashboardLayout({
               </div>
 
               <div className="min-w-0">
-                <h1 className="truncate text-xl font-extrabold text-slate-900 sm:text-2xl">
+                <h1 className="truncate text-lg font-extrabold text-slate-900 sm:text-xl">
                   {title}
                 </h1>
 
@@ -274,7 +276,7 @@ export default function DashboardLayout({
                 </button>
 
                 {showMessages && (
-                  <div className="absolute right-0 top-full z-[9999] mt-3 w-[330px] overflow-hidden rounded-2xl border border-[#219688]/15 bg-white shadow-2xl sm:w-96">
+                  <div className="absolute right-0 top-full z-[9999] mt-3 w-[calc(100vw-1.5rem)] max-w-96 overflow-hidden rounded-2xl border border-[#219688]/15 bg-white shadow-2xl">
                     <div className="border-b border-[#219688]/10 px-5 py-4">
                       <h3 className="font-bold text-slate-900">
                         Client Messages
@@ -354,7 +356,7 @@ export default function DashboardLayout({
               </button>
 
               {showNotifications && (
-                <div className="absolute right-0 top-full z-[9999] mt-3 w-[330px] overflow-hidden rounded-2xl border border-[#219688]/15 bg-white shadow-2xl sm:w-96">
+                <div className="absolute right-0 top-full z-[9999] mt-3 w-[calc(100vw-1.5rem)] max-w-96 overflow-hidden rounded-2xl border border-[#219688]/15 bg-white shadow-2xl">
                 <div className="flex items-center justify-between border-b border-[#219688]/10 px-5 py-4">
                   <div>
                     <h3 className="font-bold text-slate-900">
@@ -457,7 +459,7 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        <main className="p-4 sm:p-6">{children}</main>
+        <main className="p-3 sm:p-4">{children}</main>
       </div>
     </div>
   );

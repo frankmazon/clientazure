@@ -92,14 +92,14 @@ export default function Sidebar({
   }: {
     isActive: boolean;
   }) =>
-    `ml-6 flex items-start gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold leading-5 transition ${
+    `ml-3 flex items-start gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold leading-5 transition ${
       isActive
         ? 'bg-orange-500 text-white shadow-lg'
         : 'text-slate-400 hover:bg-white/10 hover:text-white'
     }`;
 
   const externalLinkClass =
-    'ml-6 flex items-start gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold leading-5 text-slate-400 transition hover:bg-white/10 hover:text-white';
+    'ml-3 flex items-start gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold leading-5 text-slate-400 transition hover:bg-white/10 hover:text-white';
 
   return (
     <>
@@ -113,7 +113,7 @@ export default function Sidebar({
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-[calc(100vw-2rem)] max-w-96 bg-slate-950 text-white shadow-2xl transition-transform duration-300 ${
+        className={`fixed inset-y-0 left-0 z-40 w-[calc(100vw-2rem)] max-w-72 bg-slate-950 text-white shadow-2xl transition-transform duration-300 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         } ${
           isDesktopHidden
@@ -122,9 +122,9 @@ export default function Sidebar({
         }`}
       >
         <div className="flex h-full flex-col">
-          <div className="flex h-20 items-center justify-between border-b border-white/10 px-6">
+          <div className="flex h-16 items-center justify-between border-b border-white/10 px-5">
             <div>
-              <h2 className="text-xl font-extrabold">
+              <h2 className="text-lg font-extrabold">
                 Document Portal
               </h2>
 
@@ -143,7 +143,7 @@ export default function Sidebar({
             </button>
           </div>
 
-          <nav className="flex-1 space-y-2 overflow-y-auto px-4 py-6">
+          <nav className="flex-1 space-y-2 overflow-y-auto px-3 py-4">
             {/* Clients */}
             <div className="rounded-2xl bg-white/[0.04] p-2">
               <button
@@ -151,7 +151,7 @@ export default function Sidebar({
                 onClick={() =>
                   setShowClients((previous) => !previous)
                 }
-                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10"
+                className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-bold text-white transition hover:bg-white/10"
                 aria-expanded={showClients}
               >
                 <span className="flex items-center gap-3">
@@ -196,7 +196,7 @@ export default function Sidebar({
                 onClick={() =>
                   setShowDocuments((previous) => !previous)
                 }
-                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10"
+                className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-bold text-white transition hover:bg-white/10"
                 aria-expanded={showDocuments}
               >
                 <span className="flex items-center gap-3">
@@ -241,7 +241,7 @@ export default function Sidebar({
                 onClick={() =>
                   setShowReferrers((previous) => !previous)
                 }
-                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10"
+                className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-bold text-white transition hover:bg-white/10"
                 aria-expanded={showReferrers}
               >
                 <span className="flex items-center gap-3">
@@ -277,7 +277,7 @@ export default function Sidebar({
                 onClick={() =>
                   setShowClientPortal((previous) => !previous)
                 }
-                className="flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10"
+                className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-bold text-white transition hover:bg-white/10"
                 aria-expanded={showClientPortal}
               >
                 <span className="flex items-center gap-3">
@@ -315,8 +315,8 @@ export default function Sidebar({
             </div>
           </nav>
 
-          <div className="border-t border-white/10 p-4">
-            <div className="rounded-2xl bg-white/10 p-4">
+          <div className="border-t border-white/10 p-3">
+            <div className="rounded-2xl bg-white/10 p-3">
               <p className="text-sm font-bold">
                 Logged in as
               </p>
@@ -328,7 +328,7 @@ export default function Sidebar({
               <button
                 type="button"
                 onClick={() => setShowLogoutModal(true)}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-red-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-600"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-600"
               >
                 <FaSignOutAlt />
                 Logout
@@ -344,7 +344,7 @@ export default function Sidebar({
         className={`fixed top-24 z-50 hidden h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-[#EE6521] text-xs text-white shadow-[0_8px_20px_rgba(15,23,42,0.24)] transition-all duration-300 hover:scale-105 hover:bg-orange-600 lg:flex ${
           isDesktopHidden
             ? 'left-2'
-            : 'left-96 -translate-x-1/2'
+            : 'left-72 -translate-x-1/2'
         }`}
         aria-label={
           isDesktopHidden
