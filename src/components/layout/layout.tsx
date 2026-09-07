@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaBars,
@@ -66,32 +66,30 @@ export default function DashboardLayout({
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const loadNotifications = async () => {
-      try {
-        const response = await fetch(NOTIFICATIONS_API);
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok || !result.success) {
-          throw new Error(result.message || 'Unable to load notifications.');
-        }
-        if (!cancelled) setNotifications(result.notifications || []);
-      } catch (error) {
-        console.error('Unable to load notifications:', error);
+  const loadNotifications = useCallback(async () => {
+    try {
+      const response = await fetch(NOTIFICATIONS_API, { cache: 'no-store' });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Unable to load notifications.');
       }
-    };
+      setNotifications(result.notifications || []);
+    } catch (error) {
+      console.error('Unable to load notifications:', error);
+    }
+  }, []);
 
+  useEffect(() => {
     loadNotifications();
     const intervalId = window.setInterval(loadNotifications, 15000);
     const handleFocus = () => loadNotifications();
     window.addEventListener('focus', handleFocus);
 
     return () => {
-      cancelled = true;
       window.clearInterval(intervalId);
       window.removeEventListener('focus', handleFocus);
     };
-  }, []);
+  }, [loadNotifications]);
 
   const unreadCount = notifications.filter((item) => item.unread).length;
 
@@ -356,6 +354,7 @@ export default function DashboardLayout({
               <button
                 type="button"
                 onClick={() => {
+                  if (!showNotifications) void loadNotifications();
                   setShowNotifications((prev) => !prev);
                   setShowMessages(false);
                 }}
