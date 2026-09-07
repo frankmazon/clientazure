@@ -26,7 +26,6 @@ import {
   FaRedoAlt,
   FaUserFriends,
 } from "react-icons/fa";
-import { addClientUploadNotification } from "../utils/notifications";
 import ReferrerPortal from "./ReferrerPortal";
 
 type CoBorrower = {
@@ -1883,16 +1882,6 @@ export default function ClientDashboard() {
             throw new Error(result.message || "Upload failed.");
           }
 
-          addClientUploadNotification({
-            clientId: Number(clientRecord.clientId || clientRecord.id || 0) || undefined,
-            clientName:
-              getFullName(clientRecord) || loggedClient.name || cleanUniqueId,
-            uniqueId: cleanUniqueId,
-            documentType: selectedDocumentType,
-            documentLabel: formatDocumentType(selectedDocumentType),
-            fileName: file.name,
-            isReupload: isRejectedReupload,
-          });
         } finally {
           window.clearTimeout(timeout);
         }

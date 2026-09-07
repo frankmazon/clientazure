@@ -1359,16 +1359,6 @@ export default function HomePage() {
         return;
       }
 
-      const existingNotifications = JSON.parse(
-        localStorage.getItem("notifications") || "[]",
-      );
-
-      const fullName =
-        `${formData.firstName} ${formData.middleName} ${formData.lastName}`
-          .replace(/\s+/g, " ")
-          .trim();
-
-      const submittedAt = new Date().toLocaleString();
       const uploadResults = [];
       let sharedUniqueId = "";
 
@@ -1429,42 +1419,12 @@ export default function HomePage() {
         console.info("GHL confirmation workflow triggered successfully.");
       }
 
-      const selectedDocumentLabels = submissionDocumentTypes.length
-        ? submissionDocumentTypes.map(formatDocumentType).join(", ")
-        : "loan application details";
-
       const missingRequirements = getMissingRequirements(formData);
       const isIncomplete = missingRequirements.length > 0;
       const sourceLabel = formatSource(canonicalSource(formData.source));
       const referrerAccount = isReferral
         ? initialSubmissionResult?.referrerAccount
         : null;
-
-      const newNotification = {
-        id: Date.now(),
-        clientId: uploadResults[0]?.clientId,
-        title: isIncomplete
-          ? "Incomplete Client Submission"
-          : "New Complete Document Submission",
-        message: isIncomplete
-          ? `${fullName} submitted ${selectedDocumentLabels}. Missing: ${missingRequirements.join(
-              ", ",
-            )}.`
-          : `${fullName} submitted all required documents.`,
-        time: submittedAt,
-        unread: true,
-        type: isIncomplete ? "incomplete" : "submission",
-        leadType: sourceLabel,
-        source: sourceLabel,
-        status: "Pending Team Call",
-        documentType: submissionDocumentTypes[0],
-        redirectTo: "/dashboard",
-      };
-
-      localStorage.setItem(
-        "notifications",
-        JSON.stringify([newNotification, ...existingNotifications]),
-      );
 
       setSubmissionSuccess({
         uniqueId,

@@ -33,8 +33,9 @@ type NotificationItem = {
   id: number;
   title: string;
   message: string;
-  time: string;
-  type?: 'submission' | 'complete' | 'incomplete' | 'file';
+  time?: string;
+  createdAt?: string;
+  type?: 'client' | 'submission' | 'complete' | 'incomplete' | 'file' | 'notice';
   unread: boolean;
   clientId?: number;
   uniqueId?: string;
@@ -45,9 +46,8 @@ type NotificationItem = {
 };
 
 const LOGO_PATH = '/logo/logo.png';
-// Notifications are browser-local, so clear the stale pre-backend-reset
-// entries once for every browser after the data reset.
-const NOTIFICATION_RESET_VERSION = '2026-08-22-backend-reset';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+const NOTIFICATIONS_API = `${API_BASE}/notifications`;
 
 export default function DashboardLayout({
   title,
@@ -67,30 +67,29 @@ export default function DashboardLayout({
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   useEffect(() => {
-    if (localStorage.getItem('notificationResetVersion') !== NOTIFICATION_RESET_VERSION) {
-      localStorage.removeItem('notifications');
-      localStorage.setItem('notificationResetVersion', NOTIFICATION_RESET_VERSION);
-    }
-
-    const loadNotifications = () => {
-      let savedNotifications: NotificationItem[] = [];
+    let cancelled = false;
+    const loadNotifications = async () => {
       try {
-        savedNotifications = JSON.parse(
-          localStorage.getItem('notifications') || '[]',
-        );
-      } catch {
-        localStorage.removeItem('notifications');
+        const response = await fetch(NOTIFICATIONS_API);
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || 'Unable to load notifications.');
+        }
+        if (!cancelled) setNotifications(result.notifications || []);
+      } catch (error) {
+        console.error('Unable to load notifications:', error);
       }
-      setNotifications(savedNotifications);
     };
 
     loadNotifications();
-    window.addEventListener('storage', loadNotifications);
-    window.addEventListener('notifications-updated', loadNotifications);
+    const intervalId = window.setInterval(loadNotifications, 15000);
+    const handleFocus = () => loadNotifications();
+    window.addEventListener('focus', handleFocus);
 
     return () => {
-      window.removeEventListener('storage', loadNotifications);
-      window.removeEventListener('notifications-updated', loadNotifications);
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
     };
   }, []);
 
@@ -98,6 +97,7 @@ export default function DashboardLayout({
 
   const getNotificationIcon = (type?: string) => {
     switch (type) {
+      case 'client':
       case 'submission':
         return <FaUserPlus />;
       case 'file':
@@ -117,6 +117,7 @@ export default function DashboardLayout({
         return 'bg-[#6CBF51]/15 text-[#6CBF51]';
       case 'incomplete':
         return 'bg-[#EE6521]/15 text-[#EE6521]';
+      case 'client':
       case 'submission':
         return 'bg-[#219688]/15 text-[#219688]';
       case 'file':
@@ -132,6 +133,7 @@ export default function DashboardLayout({
         return 'bg-[#6CBF51]/15 text-[#4f9a39]';
       case 'incomplete':
         return 'bg-[#EE6521]/15 text-[#c74f16]';
+      case 'client':
       case 'submission':
         return 'bg-[#219688]/15 text-[#176d63]';
       case 'file':
@@ -147,6 +149,7 @@ export default function DashboardLayout({
         return 'COMPLETE';
       case 'incomplete':
         return 'INCOMPLETE';
+      case 'client':
       case 'submission':
         return 'SUBMISSION';
       case 'file':
@@ -156,14 +159,21 @@ export default function DashboardLayout({
     }
   };
 
-  const handleMarkAllAsRead = () => {
+  const handleMarkAllAsRead = async () => {
     const updatedNotifications = notifications.map((item) => ({
       ...item,
       unread: false,
     }));
 
     setNotifications(updatedNotifications);
-    localStorage.setItem('notifications', JSON.stringify(updatedNotifications));
+    try {
+      const response = await fetch(`${NOTIFICATIONS_API}/mark-all-read`, {
+        method: 'POST',
+      });
+      if (!response.ok) throw new Error('Unable to mark notifications as read.');
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const getNotificationRedirect = (item: NotificationItem) => {
@@ -180,7 +190,7 @@ export default function DashboardLayout({
     return '/dashboard/clients';
   };
 
-  const handleNotificationClick = (item: NotificationItem) => {
+  const handleNotificationClick = async (item: NotificationItem) => {
     const updatedNotifications = notifications.map((notification) =>
       notification.id === item.id
         ? { ...notification, unread: false }
@@ -188,7 +198,13 @@ export default function DashboardLayout({
     );
 
     setNotifications(updatedNotifications);
-    localStorage.setItem('notifications', JSON.stringify(updatedNotifications));
+    if (item.unread) {
+      fetch(`${NOTIFICATIONS_API}/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isRead: true }),
+      }).catch((error) => console.error('Unable to mark notification as read:', error));
+    }
 
     setShowNotifications(false);
     navigate(getNotificationRedirect(item));
@@ -436,7 +452,9 @@ export default function DashboardLayout({
                           </p>
 
                           <p className="mt-2 text-xs font-medium text-slate-400">
-                            {item.time}
+                            {item.createdAt
+                              ? new Date(item.createdAt).toLocaleString()
+                              : item.time}
                           </p>
                         </div>
                       </button>

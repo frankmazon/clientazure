@@ -61,6 +61,12 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       open: true,
       historyApiFallback: true,
+      proxy: {
+        '/api': {
+          target: 'http://localhost:7071',
+          changeOrigin: true,
+        },
+      },
     },
   };
 });
