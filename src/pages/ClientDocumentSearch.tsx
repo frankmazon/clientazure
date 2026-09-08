@@ -2272,10 +2272,22 @@ export default function ClientDocumentSearch() {
                                 {client.uniqueId || uniqueId}
                               </span>
 
-                              <span className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
-                                <FaPhone className="text-xs" />
-                                <span className="truncate">{client.phone || "No phone"}</span>
-                              </span>
+                               {client.phone ? (
+                                <a
+                                  href={`tel:${client.phone.replace(/[^\d+]/g, "")}`}
+                                  className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full bg-white px-3 py-1 text-slate-500 ring-1 ring-slate-200 transition hover:bg-[#219688]/10 hover:text-[#18776e] hover:ring-[#219688]/40 focus:outline-none focus:ring-2 focus:ring-[#219688]"
+                                  title={`Call ${client.phone} with 3CX`}
+                                  aria-label={`Call ${getFullName(client) || "client"} at ${client.phone}`}
+                                >
+                                  <FaPhone className="shrink-0 text-xs" />
+                                  <span className="truncate">{client.phone}</span>
+                                </a>
+                              ) : (
+                                <span className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">
+                                  <FaPhone className="text-xs" />
+                                  <span className="truncate">No phone</span>
+                                </span>
+                              )}
                             </div>
 
                             <span className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">

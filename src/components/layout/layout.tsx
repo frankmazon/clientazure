@@ -81,7 +81,7 @@ export default function DashboardLayout({
 
   useEffect(() => {
     loadNotifications();
-    const intervalId = window.setInterval(loadNotifications, 15000);
+    const intervalId = window.setInterval(loadNotifications, 5000);
     const handleFocus = () => loadNotifications();
     window.addEventListener('focus', handleFocus);
 
