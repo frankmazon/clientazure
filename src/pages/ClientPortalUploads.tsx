@@ -142,6 +142,7 @@ const CLIENTS_API = `${API_BASE}/clients`;
 const UPLOAD_API = `${API_BASE}/uploadclient`;
 const FILE_URL_API = `${API_BASE}/file-url`;
 const CLIENT_LOGIN_API = `${API_BASE}/client-login`;
+const CLIENT_FORGOT_PASSWORD_API = `${API_BASE}/client-forgot-password`;
 const CLIENT_CHANGE_PASSWORD_API = `${API_BASE}/client-change-password`;
 const REFERRER_LOGIN_API = `${API_BASE}/referrer-login`;
 const REFERRER_CHANGE_PASSWORD_API = `${API_BASE}/referrer-change-password`;
@@ -271,12 +272,14 @@ const normalizeDocumentList = (value: unknown): string[] => {
 const specialists = {
   giulio: {
     name: "Giulio Avian",
+    role: "Lending Specialist",
     phone: "03 8696 6300",
     email: "giulio@sbrfunding.com",
     booking: "https://calendly.com/giulio-4",
   },
   leo: {
-    name: "Leo Iermano",
+    name: "Leo Lemarno",
+    role: "Tax Specialist",
     phone: "03 8696 6300",
     email: "leo@sbrassist.com.au",
     booking: "https://calendly.com/leo-sbrassist/",
@@ -738,6 +741,10 @@ export default function ClientDashboard() {
   const [loginUniqueId, setLoginUniqueId] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [forgotPasswordMessage, setForgotPasswordMessage] = useState("");
   const [loggedClient, setLoggedClient] = useState<ClientLoginUser | null>(
     null,
   );
@@ -1098,6 +1105,37 @@ export default function ClientDashboard() {
       alert(error instanceof Error ? error.message : "Client login failed.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!loginUniqueId.trim() || !forgotEmail.trim()) {
+      setForgotPasswordMessage("Enter your Client ID and registered email.");
+      return;
+    }
+
+    try {
+      setForgotPasswordLoading(true);
+      setForgotPasswordMessage("");
+      const response = await fetch(CLIENT_FORGOT_PASSWORD_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uniqueId: loginUniqueId.trim().toUpperCase(),
+          email: forgotEmail.trim(),
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Unable to reset your password.");
+      }
+      setForgotPasswordMessage(result.message);
+    } catch (error) {
+      setForgotPasswordMessage(
+        error instanceof Error ? error.message : "Unable to reset your password.",
+      );
+    } finally {
+      setForgotPasswordLoading(false);
     }
   };
 
@@ -1751,7 +1789,47 @@ export default function ClientDashboard() {
                     className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15"
                   />
                 </div>
+                {loginMode === "client" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForgotPassword((value) => !value);
+                      setForgotPasswordMessage("");
+                    }}
+                    className="mt-2 text-sm font-bold text-[#259b8f] hover:underline"
+                  >
+                    Forgot password?
+                  </button>
+                )}
               </div>
+
+              {loginMode === "client" && showForgotPassword && (
+                <div className="rounded-2xl border border-[#259b8f]/25 bg-[#259b8f]/5 p-4">
+                  <label className="mb-2 block text-sm font-black text-slate-700">
+                    Registered email
+                  </label>
+                  <input
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(event) => setForgotEmail(event.target.value)}
+                    placeholder="Enter your registered email"
+                    className="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleForgotPassword()}
+                    disabled={forgotPasswordLoading}
+                    className="mt-3 h-11 w-full rounded-xl bg-slate-900 text-sm font-black text-white disabled:opacity-50"
+                  >
+                    {forgotPasswordLoading ? "Resetting..." : "Reset password"}
+                  </button>
+                  {forgotPasswordMessage && (
+                    <p className="mt-3 text-sm font-semibold text-slate-600">
+                      {forgotPasswordMessage}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="mb-2 block text-sm font-black text-slate-700">
@@ -2600,8 +2678,8 @@ export default function ClientDashboard() {
                 }
                 className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-100"
               >
-                <option value="giulio">Giulio Avian</option>
-                <option value="leo">Leo Iermano</option>
+                <option value="giulio">Lending Specialist</option>
+                <option value="leo">Tax Specialist</option>
               </select>
 
               <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 sm:p-5">
@@ -2619,7 +2697,7 @@ export default function ClientDashboard() {
                       {specialist.name}
                     </h3>
                     <p className="text-sm font-semibold text-slate-500">
-                      Client Specialist
+                      {specialist.role}
                     </p>
                   </div>
                 </div>
@@ -2707,19 +2785,17 @@ export default function ClientDashboard() {
                     const status = file
                       ? normalizeDocumentStatus(file.documentStatus)
                       : "Missing";
-                    const isApproved = status === "Approved";
                     const isWaived = waivedDocumentTypes.includes(type.value);
 
                     return (
                       <option
                         key={type.value}
                         value={type.value}
-                        disabled={isApproved || isWaived}
                       >
                         {type.label}
                         {isWaived
                           ? " (Waived by Admin)"
-                          : isApproved
+                          : status === "Approved"
                             ? " (Approved)"
                             : status === "Rejected"
                               ? " (Rejected - re-upload)"
