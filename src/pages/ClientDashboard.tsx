@@ -2218,7 +2218,7 @@ export default function ClientDashboard() {
                     disabled={forgotPasswordLoading}
                     className="mt-3 h-11 w-full rounded-xl bg-slate-900 text-sm font-black text-white disabled:opacity-50"
                   >
-                    {forgotPasswordLoading ? "Resetting..." : "Reset password"}
+                    {forgotPasswordLoading ? "Sending..." : "Send login code"}
                   </button>
                   {forgotPasswordMessage && (
                     <p className="mt-3 text-sm font-semibold text-slate-600">

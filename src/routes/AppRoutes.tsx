@@ -18,7 +18,6 @@ import ProtectedRoute from './ProtectedRoute';
 import DocumentTypePage from '@/pages/DocumentTypePage';
 import ClientPortalUploads from '@/pages/ClientPortalUploads';
 import ClientDocumentSearch from '@/pages/ClientDocumentSearch';
-import ResetPassword from '@/pages/ResetPassword';
 
 const FAVICON_PATH = '/favicon.svg';
 
@@ -88,7 +87,6 @@ export default function AppRoutes() {
         {/* Public portal pages */}
         <Route path="/admin" element={<Login />} />
         <Route path="/clients" element={<ClientDashboard />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* Redirect old URLs */}
         <Route
