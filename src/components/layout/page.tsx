@@ -172,9 +172,9 @@ const borrowerOptions = ["Individual", "Company"];
 const directClientBorrowerOptions = ["Business", "Personal"];
 const referralBorrowerOptions = ["Business", "Personal", "Do not know"];
 const referrerProfessionOptions = [
-  "Broker",
+  "Liquidator/ Insolvency Practitioner",
   "Accountant",
-  "Lawyer",
+  "Lawyer/ Solicitor",
   "Financial Planner",
   "Mortgage Broker",
   "Bookkeeper",
@@ -1412,7 +1412,7 @@ export default function HomePage() {
         );
       } else if (ghlTriggerResult.success !== true) {
         console.warn(
-          "The application was saved, but the GHL confirmation workflow was not triggered:",
+          "The scenario was saved, but the GHL confirmation workflow was not triggered:",
           ghlTriggerResult,
         );
       } else {
@@ -1664,7 +1664,7 @@ export default function HomePage() {
             <div className={sectionClass}>
               <div className="mb-4">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-[#259b8f]">
-                  Application Source
+                  Scenario Source
                 </p>
                 <h2 className="mt-1 text-xl font-black text-slate-950">
                   Are you a direct client or a referrer?
@@ -2034,7 +2034,7 @@ export default function HomePage() {
                       </h4>
                       <p className="mt-1 text-xs text-slate-500">
                         Add the contact details for every co-borrower included
-                        in this application.
+                        in this scenario.
                       </p>
                     </div>
 
@@ -2395,10 +2395,10 @@ export default function HomePage() {
                 id="submission-success-title"
                 className="mt-1 text-2xl font-black sm:text-3xl"
               >
-                Application submitted successfully!
+                Scenario submitted successfully!
               </h2>
               <p className="mt-2 text-sm leading-6 text-white/80">
-                Your application has been received. Keep the unique ID below
+                Your scenario has been received. Keep the unique ID below
                 for future reference.
               </p>
             </div>
@@ -2624,7 +2624,7 @@ export default function HomePage() {
                     <p className="mt-1 text-xs text-slate-500">
                       {coBorrowers.length} co-borrower
                       {coBorrowers.length === 1 ? "" : "s"} added to this
-                      application.
+                      scenario.
                     </p>
                   </div>
                   <span className="rounded-full bg-[#259b8f] px-3 py-1 text-xs font-black text-white">

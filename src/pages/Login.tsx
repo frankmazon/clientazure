@@ -86,7 +86,7 @@ export default function Login() {
               Everything you need to manage your clients.
             </h1>
             <p className="mt-5 max-w-md text-base leading-7 text-white/70">
-              Access applications, supporting documents, and client records
+              Access scenarios, supporting documents, and client records
               from one secure dashboard.
             </p>
           </div>

@@ -184,7 +184,7 @@ type DocumentOption = {
 type NormalizedTransactionType = "alt_doc" | "full_doc";
 
 const identityDocumentTypes: DocumentOption[] = [
-  { label: "ID", value: "id" },
+  { label: "Driver's Licence", value: "id" },
   { label: "Passport", value: "passport" },
 ];
 
@@ -237,7 +237,7 @@ const transactionDocumentTypes: Record<
     ...propertyDocumentTypes,
   ],
   full_doc: [
-    { label: "Payslip", value: "payslip" },
+    { label: "Last 2 Payslips", value: "payslip" },
     ...financialStatementDocumentTypes,
     ...employmentIncomeDocumentTypes,
     taxReturnDocumentTypes.business,
@@ -295,11 +295,19 @@ const getRequiredDocumentTypes = (
   const source = normalizeSourceValue(client.source || client.leadType);
   const isSimplified = source === "Direct Client" || source === "Referral";
 
+  const payslips: DocumentOption[] =
+    client.isSelfEmployed?.trim().toLowerCase() === "no"
+      ? [{ label: "Last 2 Payslips", value: "payslip" }]
+      : [];
+
   if (!isSimplified) {
-    return getDocumentTypesForTransaction(client.transactionType);
+    return Array.from(new Map(
+      [...getDocumentTypesForTransaction(client.transactionType), ...payslips]
+        .map((document) => [document.value, document]),
+    ).values());
   }
 
-  const documents: DocumentOption[] = [...identityDocumentTypes];
+  const documents: DocumentOption[] = [...identityDocumentTypes, ...payslips];
   const financialStatementsAvailable =
     normalizeTransactionType(client.transactionType) === "full_doc";
   const isSelfEmployed = client.isSelfEmployed?.trim().toLowerCase() === "yes";
@@ -1677,7 +1685,7 @@ export default function ClientDashboard() {
       )
     ) {
       alert(
-        "The selected document type is not required for this application. Please select a document from the current checklist.",
+        "The selected document type is not required for this scenario. Please select a document from the current checklist.",
       );
       setDocumentType("");
       setNewFiles(null);
@@ -2444,7 +2452,7 @@ export default function ClientDashboard() {
                   Contact Your Team
                 </h2>
                 <p className="mt-0.5 text-sm font-medium leading-5 text-slate-600">
-                  Send a note about your application. Your SBR Funding team will
+                  Send a note about your scenario. Your SBR Funding team will
                   see it in the admin dashboard.
                 </p>
               </div>
@@ -2625,7 +2633,7 @@ export default function ClientDashboard() {
             {selectedClient && (
               <section className={sectionClass}>
                 <h2 className="mb-5 text-xl font-black text-slate-900">
-                  Submitted Application Information
+                  Submitted Scenario Information
                 </h2>
 
                 <div className="grid gap-4 md:grid-cols-2">
@@ -2698,7 +2706,7 @@ export default function ClientDashboard() {
                           Additional Co-Borrowers
                         </h3>
                         <p className="text-xs text-slate-500">
-                          Co-borrowers included in this application.
+                          Co-borrowers included in this scenario.
                         </p>
                       </div>
                     </div>
@@ -2918,8 +2926,8 @@ export default function ClientDashboard() {
                   </h2>
                   <p className="text-sm text-slate-500">
                     {selectedClient
-                      ? "Required documents based on your application answers."
-                      : "The checklist will appear after your application loads."}
+                      ? "Required documents based on your scenario answers."
+                      : "The checklist will appear after your scenario loads."}
                   </p>
                 </div>
 
@@ -3389,7 +3397,7 @@ export default function ClientDashboard() {
                   </div>
                 ) : (
                   <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
-                    Client application details are unavailable. Refresh the
+                    Client scenario details are unavailable. Refresh the
                     portal before uploading.
                   </div>
                 )}

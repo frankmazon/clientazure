@@ -73,7 +73,7 @@ type ReferrerPortalProps = {
 };
 
 const formatDocumentType = (type?: string) =>
-  (type || "Document")
+  type === "id" ? "Driver's Licence" : type === "payslip" ? "Last 2 Payslips" : (type || "Document")
     .split(/[-_]/)
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -168,7 +168,7 @@ const CLIENTS_API = `${API_BASE}/clients`;
 const DOCUMENTS_API = `${API_BASE}/documents`;
 
 const sharedDocumentOptions = [
-  ["ID", "id"],
+  ["Driver's Licence", "id"],
   ["Passport", "passport"],
   ["Last 6 Months Mortgage Statements", "last-6-months-mortgage-statements"],
   ["Council Rates Notice", "council-rates-notice"],
@@ -181,7 +181,7 @@ const documentOptionsByTransaction = {
     ...sharedDocumentOptions,
   ],
   full_doc: [
-  ["Payslip", "payslip"],
+  ["Last 2 Payslips", "payslip"],
   ["Management Reports / Financial Statements", "management-reports-financial-statements"],
   ["Group Certificate / Payment Summary", "group-certificate-payment-summary"],
   ["Company Tax Returns", "company-tax-returns"],
@@ -271,9 +271,17 @@ export default function ReferrerPortal({
       "transaction_type",
     ]),
   );
-  const selectedDocumentOptions = selectedTransactionType
-    ? documentOptionsByTransaction[selectedTransactionType]
-    : [];
+  const selectedDocumentOptions: (readonly [string, string])[] = [
+    ...(selectedTransactionType
+      ? documentOptionsByTransaction[selectedTransactionType]
+      : []),
+  ];
+  const selfEmployment = String(getRecordValue(selectedClientRecord, [
+    "isSelfEmployed", "IsSelfEmployed", "is_self_employed",
+  ])).trim().toLowerCase();
+  if (selfEmployment === "no" && !selectedDocumentOptions.some(([, value]) => value === "payslip")) {
+    selectedDocumentOptions.push(["Last 2 Payslips", "payslip"]);
+  }
   const selectedClient =
     referredClients.find((client) => client.clientId === selectedClientId) ||
     null;

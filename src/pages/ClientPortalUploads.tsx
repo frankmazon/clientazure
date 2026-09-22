@@ -2149,7 +2149,7 @@ export default function ClientDashboard() {
                           Additional Co-Borrowers
                         </h3>
                         <p className="text-xs text-slate-500">
-                          Co-borrowers included in this application.
+                          Co-borrowers included in this scenario.
                         </p>
                       </div>
                     </div>
