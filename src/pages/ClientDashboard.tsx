@@ -1,4 +1,5 @@
-import { clearPortalSession, readPortalSession, savePortalSession } from "@/lib/portalSession";
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { clearPortalSession, readPortalSession, savePortalSession, watchPortalSession } from "@/lib/portalSession";
 import ClientMessenger from "@/components/messages/ClientMessenger";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
@@ -916,6 +917,10 @@ const normalizeLoggedClient = (client: ClientLoginUser): ClientLoginUser => {
 
 
 export default function ClientDashboard() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnToDocument = searchParams.get('next') === '/privacy-document';
+  useEffect(watchPortalSession, []);
   const [restoredSession] = useState(readPortalSession);
   const [showMessages, setShowMessages] = useState(false);
   const [chatToken, setChatToken] = useState(restoredSession?.chatToken || "");
@@ -945,6 +950,11 @@ export default function ClientDashboard() {
 
   const [showChangePassword, setShowChangePassword] = useState(restoredSession?.mustChangePassword || false);
   const [mustChangePassword, setMustChangePassword] = useState(restoredSession?.mustChangePassword || false);
+  useEffect(() => {
+    if (returnToDocument && loggedClient?.role === 'client' && chatToken && !mustChangePassword) {
+      navigate('/privacy-document', { replace: true });
+    }
+  }, [returnToDocument, loggedClient, chatToken, mustChangePassword, navigate]);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

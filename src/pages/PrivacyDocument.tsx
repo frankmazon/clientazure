@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import PrivacyAuthority from '@/components/PrivacyAuthority';
 import SignaturePad from '@/components/SignaturePad';
-import { readPortalSession } from '@/lib/portalSession';
+import { readPortalSession, clearPortalSession, watchPortalSession } from '@/lib/portalSession';
 import { documentDate, type SigningSubmission } from '@/lib/signingSubmission';
 
 type Document = { submission: SigningSubmission; revision: string; templateVersion: number; id?: string; signedAt?: string; signatures?: Record<string, { image: string; signedAt: string }> };
 const API = `${(import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')}/privacy-document`;
 export default function PrivacyDocument() {
-  const [session] = useState(readPortalSession);
+  const [session, setSession] = useState(readPortalSession);
+  useEffect(watchPortalSession, []);
   const [document, setDocument] = useState<Document | null>(null);
   const [images, setImages] = useState<Record<string, string>>({});
   const [consents, setConsents] = useState<Record<string, boolean>>({});
@@ -16,7 +17,7 @@ export default function PrivacyDocument() {
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    if (!session?.chatToken || session.account.role !== 'client') return;
+    if (!session?.chatToken || session.account.role !== 'client' || session.mustChangePassword) return;
     const controller = new AbortController();
     let active = true;
     setError('');
@@ -24,7 +25,7 @@ export default function PrivacyDocument() {
       if (active) { setError('The server is taking too long to respond. Please try again.'); controller.abort(); }
     }, 30000);
     fetch(API, { headers: { Authorization: `Bearer ${session.chatToken}` }, signal: controller.signal })
-      .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.message || 'Unable to load document.'); if (active) setDocument(data); })
+      .then(async response => { if (response.status === 401) { clearPortalSession(); setSession(null); return; } const data = await response.json(); if (!response.ok) throw new Error(data.message || 'Unable to load document.'); if (active) setDocument(data); })
       .catch(e => { if (active && !controller.signal.aborted) setError(e.message); })
       .finally(() => window.clearTimeout(timer));
     return () => { active = false; window.clearTimeout(timer); controller.abort(); };
@@ -43,6 +44,7 @@ export default function PrivacyDocument() {
     finally { setBusy(false); }
   }
   const authenticated = session?.chatToken && session.account.role === 'client';
+  if (!authenticated || session.mustChangePassword) return <Navigate to="/clients?next=%2Fprivacy-document" replace />;
   return <main className="min-h-screen bg-[#eef8f6] px-4 py-8 text-slate-900">
     <div className="mx-auto max-w-4xl">
       <header className="chat-brand-header mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl p-6 text-white"><div><h1 className="text-2xl font-black">Privacy Statement and Authority</h1><p className="mt-1 text-sm text-white/80">{document?.signedAt ? 'Signed document · Saved to your account' : 'Review your details and sign below'}</p></div><Link to="/clients" className="rounded-xl bg-white/15 px-4 py-2 font-bold">Back to portal</Link></header>
