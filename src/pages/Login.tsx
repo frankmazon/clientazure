@@ -39,6 +39,7 @@ export default function Login() {
         throw new Error(result.message || 'Invalid username or password');
       }
 
+      sessionStorage.setItem('adminChatToken', result.chatToken || '');
       localStorage.setItem('isAdminLoggedIn', 'true');
       localStorage.setItem('user', JSON.stringify(result.user));
 

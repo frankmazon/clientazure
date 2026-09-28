@@ -270,12 +270,12 @@ const normalizeDocumentList = (value: unknown): string[] => {
 };
 
 const specialists = {
-  giulio: {
-    name: "Giulio Avian",
+  olivier: {
+    name: "Olivier Avian",
     role: "Lending Specialist",
-    phone: "03 8696 6300",
-    email: "giulio@sbrfunding.com",
-    booking: "https://calendly.com/giulio-4",
+    phone: "+61 499 032 377",
+    email: "o.avian@sbrfunding.com.au",
+    booking: "",
   },
   leo: {
     name: "Leo Lemarno",
@@ -759,7 +759,7 @@ export default function ClientDashboard() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedSpecialist, setSelectedSpecialist] =
-    useState<SpecialistKey>("giulio");
+    useState<SpecialistKey>("olivier");
 
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
@@ -2678,7 +2678,7 @@ export default function ClientDashboard() {
                 }
                 className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-100"
               >
-                <option value="giulio">Lending Specialist</option>
+                <option value="olivier">Lending Specialist</option>
                 <option value="leo">Tax Specialist</option>
               </select>
 
@@ -2719,7 +2719,7 @@ export default function ClientDashboard() {
                     <span className="break-all">{specialist.email}</span>
                   </a>
 
-                  <a
+                  {specialist.booking && (<a
                     href={specialist.booking}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -2730,7 +2730,7 @@ export default function ClientDashboard() {
                       Book a time
                     </span>
                     <FaExternalLinkAlt className="text-xs" />
-                  </a>
+                  </a>) }
                 </div>
               </div>
             </section>

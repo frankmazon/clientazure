@@ -1,3 +1,4 @@
+import { useChatNotifications, markChatRead } from '@/components/messages/useChatNotifications';
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -59,6 +60,8 @@ export default function DashboardLayout({
   onMessageClientClick,
 }: DashboardLayoutProps) {
   const navigate = useNavigate();
+  const chatToken = sessionStorage.getItem("adminChatToken") || "";
+  const chatAlerts = useChatNotifications(chatToken);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarHidden, setIsSidebarHidden] = useState(false);
@@ -91,7 +94,7 @@ export default function DashboardLayout({
     };
   }, [loadNotifications]);
 
-  const unreadCount = notifications.filter((item) => item.unread).length;
+  const unreadCount = notifications.filter((item) => item.unread).length + chatAlerts.count;
 
   const getNotificationIcon = (type?: string) => {
     switch (type) {
@@ -158,6 +161,7 @@ export default function DashboardLayout({
   };
 
   const handleMarkAllAsRead = async () => {
+    await Promise.allSettled(chatAlerts.items.map(item => markChatRead(chatToken, item.clientId, item.lastMessageId)));
     const updatedNotifications = notifications.map((item) => ({
       ...item,
       unread: false,
@@ -222,7 +226,7 @@ export default function DashboardLayout({
           isSidebarHidden ? 'lg:pl-0' : 'lg:pl-72'
         }`}
       >
-        <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-2 border-b border-[#219688]/15 bg-white/95 px-3 shadow-sm backdrop-blur sm:px-5">
+        <header className={`sticky top-0 z-40 flex h-16 items-center justify-between gap-2 border-b border-[#219688]/15 px-3 shadow-sm backdrop-blur sm:px-5 ${title === "Messages" ? "portal-topbar" : "bg-white/95"}`}>
           <div className="flex min-w-0 items-center gap-2 sm:gap-4">
             <button
               type="button"
@@ -395,6 +399,12 @@ export default function DashboardLayout({
                 </div>
 
                 <div className="max-h-[400px] overflow-y-auto">
+                  {chatAlerts.error && <p role="alert" className="px-5 py-3 text-sm text-red-700">{chatAlerts.error}</p>}
+                  {chatAlerts.items.map(item => <button key={`chat-${item.clientId}`} onClick={() => { setShowNotifications(false); navigate(`/dashboard/messages?clientId=${item.clientId}`); }} className="flex w-full items-center gap-3 border-b border-teal-100 bg-teal-50 px-5 py-4 text-left hover:bg-teal-100">
+                    <span className="rounded-full bg-teal-600 p-3 text-white"><FaCommentDots /></span>
+                    <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{item.name}</strong><span className="text-xs text-slate-600">{item.unreadCount} new message{item.unreadCount === 1 ? '' : 's'} · Reply to client</span></span>
+                    <span className="h-2 w-2 rounded-full bg-orange-500" />
+                  </button>)}
                   {notifications.length > 0 ? (
                     notifications.map((item) => (
                       <button
@@ -458,7 +468,7 @@ export default function DashboardLayout({
                         </div>
                       </button>
                     ))
-                  ) : (
+                  ) : chatAlerts.items.length ? null : (
                     <div className="px-5 py-10 text-center">
                       <FaBell className="mx-auto mb-3 text-2xl text-[#219688]/40" />
                       <p className="text-sm font-semibold text-slate-700">

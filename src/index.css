@@ -21,3 +21,57 @@
 
 
 
+
+/* Portal identity and conversation surfaces. */
+.portal-topbar {
+  background:
+    radial-gradient(ellipse at 4% 0%, rgba(37, 155, 143, .16), transparent 40%),
+    radial-gradient(ellipse at 96% 100%, rgba(238, 101, 33, .10), transparent 35%),
+    linear-gradient(110deg, #f0faf8, #ffffff 55%, #fff8f2);
+  box-shadow: 0 4px 24px rgba(15, 40, 56, .06);
+}
+.portal-topbar::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 3px;
+  background: linear-gradient(90deg, #259b8f, #173646 65%, #ee6521);
+  pointer-events: none;
+}
+.portal-brand {
+  border-left: 3px solid #259b8f;
+  padding-left: 12px;
+}
+.chat-brand-header {
+  background:
+    repeating-linear-gradient(125deg, transparent 0 34px, rgba(255,255,255,.035) 35px 36px),
+    radial-gradient(ellipse at 100% 0%, rgba(238,101,33,.6), transparent 55%),
+    linear-gradient(115deg, #147e76, #173646);
+  box-shadow: 0 4px 16px rgba(15,40,56,.12);
+}
+.chat-pattern {
+  background-color: #f4f9f8;
+  background-image:
+    radial-gradient(circle, rgba(37,155,143,.12) 1px, transparent 1px),
+    radial-gradient(ellipse at 0% 0%, rgba(37,155,143,.08), transparent 65%),
+    linear-gradient(150deg, transparent 40%, rgba(238,101,33,.035));
+  background-size: 20px 20px, 100% 100%, 100% 100%;
+}
+.chat-bubble-outgoing {
+  background: linear-gradient(130deg, #16877f, #155b62);
+  box-shadow: 0 3px 10px rgba(20, 100, 95, .12);
+}
+.chat-bubble-incoming {
+  border: 1px solid #d8e8e5;
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(15,40,56,.04);
+}
+.chat-composer {
+  background: linear-gradient(120deg, #fff, #f0f8f6);
+}
+
+.chat-list-heading {
+  background:
+    radial-gradient(ellipse at 100% 0%, rgba(238,101,33,.09), transparent 65%),
+    linear-gradient(140deg, #e7f5f2, #ffffff 85%);
+}

@@ -76,6 +76,7 @@ export default function Sidebar({
   const handleConfirmLogout = () => {
     localStorage.removeItem('isAdminLoggedIn');
     localStorage.removeItem('adminToken');
+    sessionStorage.removeItem('adminChatToken');
 
     setShowLogoutModal(false);
     onClose();
@@ -144,6 +145,9 @@ export default function Sidebar({
           </div>
 
           <nav className="flex-1 space-y-2 overflow-y-auto px-3 py-4">
+            <NavLink to="/dashboard/messages" onClick={onClose} className={childNavLinkClass}>
+              <FaUsers /><span>Messages</span>
+            </NavLink>
             {/* Clients */}
             <div className="rounded-2xl bg-white/[0.04] p-2">
               <button

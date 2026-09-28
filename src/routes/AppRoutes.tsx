@@ -13,6 +13,9 @@ import Referrers from '../pages/Referrers';
 import ExportClients from '../pages/ExportClients';
 import ClientDashboard from '../pages/ClientDashboard';
 import Login from '../pages/Login';
+import Messages from '../pages/Messages';
+import SigningDemo from '../pages/SigningDemo';
+import PrivacyDocument from '../pages/PrivacyDocument';
 import ProtectedRoute from './ProtectedRoute';
 
 import DocumentTypePage from '@/pages/DocumentTypePage';
@@ -28,7 +31,10 @@ function PageMetadata() {
     const path = location.pathname;
 
     // Client and referrer portal
-    if (path === '/clients' || path === '/client-dashboard') {
+    if (path === '/signing-demo') {
+      document.title = 'Signing Demo | SBR Funding';
+    }
+    else if (path === '/clients' || path === '/client-dashboard') {
       document.title = 'Client Dashboard | SBR Funding';
     }
     // Administrator login and dashboard pages
@@ -81,6 +87,8 @@ export default function AppRoutes() {
       <PageMetadata />
 
       <Routes>
+        <Route path="/signing-demo" element={<SigningDemo />} />
+        <Route path="/privacy-document" element={<PrivacyDocument />} />
         {/* Submission page */}
         <Route path="/" element={<DomainLanding />} />
 
@@ -100,6 +108,7 @@ export default function AppRoutes() {
         />
 
         {/* Protected administrator pages */}
+        <Route path="/dashboard/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
         <Route
           path="/dashboard"
           element={

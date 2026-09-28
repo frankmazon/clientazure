@@ -1,3 +1,4 @@
+import { captureSigningSubmission } from "@/lib/signingSubmission";
 import { useEffect, useState } from "react";
 
 const ENV_API_BASE = import.meta.env.VITE_API_BASE_URL?.trim().replace(
@@ -1426,6 +1427,7 @@ export default function HomePage() {
         ? initialSubmissionResult?.referrerAccount
         : null;
 
+      captureSigningSubmission(uniqueId, formData, formData.withBorrowersGuarantors === "Yes" ? coBorrowers : []);
       setSubmissionSuccess({
         uniqueId,
         source: sourceLabel,
