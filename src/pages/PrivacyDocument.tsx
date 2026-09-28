@@ -14,14 +14,21 @@ export default function PrivacyDocument() {
   const [consents, setConsents] = useState<Record<string, boolean>>({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!session?.chatToken || session.account.role !== 'client') return;
     const controller = new AbortController();
+    let active = true;
+    setError('');
+    const timer = window.setTimeout(() => {
+      if (active) { setError('The server is taking too long to respond. Please try again.'); controller.abort(); }
+    }, 30000);
     fetch(API, { headers: { Authorization: `Bearer ${session.chatToken}` }, signal: controller.signal })
-      .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.message || 'Unable to load document.'); setDocument(data); })
-      .catch(e => { if (!controller.signal.aborted) setError(e.message); });
-    return () => controller.abort();
-  }, [session]);
+      .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.message || 'Unable to load document.'); if (active) setDocument(data); })
+      .catch(e => { if (active && !controller.signal.aborted) setError(e.message); })
+      .finally(() => window.clearTimeout(timer));
+    return () => { active = false; window.clearTimeout(timer); controller.abort(); };
+  }, [session, attempt]);
   const ready = document && document.submission.borrowers.every(b => images[b.id] && consents[b.id]);
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -40,7 +47,7 @@ export default function PrivacyDocument() {
     <div className="mx-auto max-w-4xl">
       <header className="chat-brand-header mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl p-6 text-white"><div><h1 className="text-2xl font-black">Privacy Statement and Authority</h1><p className="mt-1 text-sm text-white/80">{document?.signedAt ? 'Signed document · Saved to your account' : 'Review your details and sign below'}</p></div><Link to="/clients" className="rounded-xl bg-white/15 px-4 py-2 font-bold">Back to portal</Link></header>
       {!authenticated ? <p className="rounded-xl bg-white p-6">Please <Link to="/clients" className="text-teal-700 underline">sign in to the client portal</Link> to open your document.</p> : <>
-        {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-red-800">{error}</p>}
+        {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-red-800">{error}{!document && <button onClick={() => setAttempt(v => v + 1)} className="ml-3 font-bold underline">Try again</button>}</p>}
         {!document && !error && <p role="status">Loading your saved submission…</p>}
         {document && <form onSubmit={submit} className="overflow-hidden rounded-2xl border bg-white shadow-sm">
           <div className="border-b bg-teal-50 p-4 text-sm text-teal-900">Submission {document.submission.uniqueId} · {document.signedAt ? 'Your signatures are saved. Reopening this page shows the completed document.' : 'Names and the document date are loaded from your saved submission.'}</div>
