@@ -15,6 +15,7 @@ export default function ChatDashboard({ token, role, client, initialClientId, on
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
+  const [rejectedToken, setRejectedToken] = useState<string | null>(null);
   const [listError, setListError] = useState('');
   const [loading, setLoading] = useState(false);
   const [listLoading, setListLoading] = useState(role === 'Admin');
@@ -25,12 +26,17 @@ export default function ChatDashboard({ token, role, client, initialClientId, on
   const draft = selected ? drafts[selected] || '' : '';
 
   useEffect(() => {
-    if (role !== 'Admin' || !token || !isActive) return;
+    if (role !== 'Admin' || !token || token === rejectedToken || !isActive) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const load = async () => {
       try {
         const response = await fetch(API, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(35000)]) });
+        if (response.status === 401) {
+          if (!controller.signal.aborted) setRejectedToken(token);
+          controller.abort();
+          return;
+        }
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.message || 'Unable to load conversations.');
         if (!controller.signal.aborted) { setConversations(result.conversations); setListError(''); }
@@ -42,18 +48,23 @@ export default function ChatDashboard({ token, role, client, initialClientId, on
     };
     void load();
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [token, role, refresh, isActive]);
+  }, [token, role, refresh, isActive, rejectedToken]);
 
   useEffect(() => {
     if (!isActive) return;
     setMessages([]); setError('');
-    if (!selected || !token) return;
+    if (!selected || !token || token === rejectedToken) return;
     setLoading(true);
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const load = async () => {
       try {
         const response = await fetch(`${API}?clientId=${selected}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(35000)]) });
+        if (response.status === 401) {
+          if (!controller.signal.aborted) setRejectedToken(token);
+          controller.abort();
+          return;
+        }
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.message || 'Unable to load messages.');
         if (!controller.signal.aborted) {
@@ -79,7 +90,7 @@ export default function ChatDashboard({ token, role, client, initialClientId, on
     };
     void load();
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [selected, token, refresh, isActive, role]);
+  }, [selected, token, refresh, isActive, role, rejectedToken]);
 
   useEffect(() => { bottom.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, [messages.length]);
 
@@ -89,6 +100,7 @@ export default function ChatDashboard({ token, role, client, initialClientId, on
     setSending(true); setError('');
     try {
       const response = await fetch(API, { method: 'POST', signal: AbortSignal.timeout(35000), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId: selected, message: draft.trim() }) });
+      if (response.status === 401) { setRejectedToken(token); throw new Error('Your messaging session expired. Please sign in again.'); }
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.message || 'Message could not be sent.');
       setMessages(current => [...current.filter(m => m.id !== result.clientMessage.id), result.clientMessage].sort((a,b) => a.id-b.id));
@@ -99,7 +111,7 @@ export default function ChatDashboard({ token, role, client, initialClientId, on
     } finally { setSending(false); }
   };
 
-  if (!token) return <div className="rounded-2xl border bg-white p-8"><h2 className="text-xl font-black">Sign in to Messages</h2><p className="mt-2 text-slate-600">Please log out and sign in again to start a messaging session.</p>{onBack && <button onClick={onBack} className="mt-5 font-bold text-teal-700">Back to documents</button>}</div>;
+  if (!token || token === rejectedToken) return <div className="rounded-2xl border bg-white p-8"><h2 className="text-xl font-black">Sign in to Messages</h2><p className="mt-2 text-slate-600">Please log out and sign in again to start a messaging session.</p>{onBack && <button onClick={onBack} className="mt-5 font-bold text-teal-700">Back to documents</button>}</div>;
   const filtered = conversations.filter(c => `${c.name} ${c.uniqueId || ''}`.toLowerCase().includes(search.toLowerCase()));
   return <section className={`flex ${compact ? "h-full min-h-0" : "h-[calc(100dvh-150px)] min-h-[520px] rounded-3xl border border-slate-200 shadow-sm"} overflow-hidden bg-white`} aria-label="Messages dashboard">
     {!compact && <aside className={`${selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-teal-100 bg-gradient-to-b from-white to-teal-50/50 md:w-80`}>

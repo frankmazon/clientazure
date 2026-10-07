@@ -399,7 +399,7 @@ export default function DashboardLayout({
                 </div>
 
                 <div className="max-h-[400px] overflow-y-auto">
-                  {chatAlerts.error && <p role="alert" className="px-5 py-3 text-sm text-red-700">{chatAlerts.error}</p>}
+                  {chatAlerts.error && <p role="alert" className="px-5 py-3 text-sm text-red-700">{chatAlerts.error}{chatAlerts.sessionExpired && <button onClick={() => navigate('/admin')} className="mt-2 block font-bold underline">Sign in again</button>}</p>}
                   {chatAlerts.items.map(item => <button key={`chat-${item.clientId}`} onClick={() => { setShowNotifications(false); navigate(`/dashboard/messages?clientId=${item.clientId}`); }} className="flex w-full items-center gap-3 border-b border-teal-100 bg-teal-50 px-5 py-4 text-left hover:bg-teal-100">
                     <span className="rounded-full bg-teal-600 p-3 text-white"><FaCommentDots /></span>
                     <span className="min-w-0 flex-1"><strong className="block truncate text-sm">{item.name}</strong><span className="text-xs text-slate-600">{item.unreadCount} new message{item.unreadCount === 1 ? '' : 's'} · Reply to client</span></span>
