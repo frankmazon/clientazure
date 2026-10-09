@@ -1,7 +1,9 @@
+import { isChatTokenExpired } from '@/lib/chatSession';
 import { useEffect, useState } from 'react';
 export type ChatAlert = { clientId: number; name: string; unreadCount: number; lastMessageId: number; updatedAt: string };
 const API = `${(import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')}/chat/notifications`;
 export async function markChatRead(token: string, clientId: number, lastMessageId: number) {
+  if (isChatTokenExpired(token)) throw new Error('Your messaging session expired. Please sign in again.');
   const response = await fetch(API, { method: 'PATCH', signal: AbortSignal.timeout(35000), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId, lastMessageId }) });
   if (!response.ok) throw new Error('Unable to update message alerts.');
   window.dispatchEvent(new Event('chat-alerts-changed'));
@@ -12,14 +14,24 @@ export function useChatNotifications(token: string) {
   const [sessionExpired, setSessionExpired] = useState(false);
   useEffect(() => {
     setItems([]); setError(''); setSessionExpired(false);
-    if (!token) return;
+    if (isChatTokenExpired(token)) {
+      setSessionExpired(true);
+      setError('Your messaging session expired. Please sign in again.');
+      return;
+    }
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     let busy = false;
     let unauthorized = false;
     const load = async () => {
       if (busy || unauthorized || controller.signal.aborted) return;
-      clearTimeout(timer); busy = true;
+      clearTimeout(timer);
+      if (isChatTokenExpired(token)) {
+        unauthorized = true; setItems([]); setSessionExpired(true);
+        setError('Your messaging session expired. Please sign in again.');
+        return;
+      }
+      busy = true;
       try {
         const response = await fetch(API, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(35000)]) });
         if (response.status === 401) {

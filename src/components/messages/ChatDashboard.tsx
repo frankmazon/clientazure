@@ -1,3 +1,4 @@
+import { isChatTokenExpired } from '@/lib/chatSession';
 import { markChatRead } from './useChatNotifications';
 import { useEffect, useRef, useState } from 'react';
 import { FaArrowLeft, FaCommentDots, FaPaperPlane, FaSearch, FaSyncAlt } from 'react-icons/fa';
@@ -30,6 +31,7 @@ export default function ChatDashboard({ token, role, client, initialClientId, on
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const load = async () => {
+      if (isChatTokenExpired(token)) { setRejectedToken(token); controller.abort(); return; }
       try {
         const response = await fetch(API, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(35000)]) });
         if (response.status === 401) {
@@ -58,6 +60,7 @@ export default function ChatDashboard({ token, role, client, initialClientId, on
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const load = async () => {
+      if (isChatTokenExpired(token)) { setRejectedToken(token); controller.abort(); return; }
       try {
         const response = await fetch(`${API}?clientId=${selected}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(35000)]) });
         if (response.status === 401) {
@@ -97,6 +100,7 @@ export default function ChatDashboard({ token, role, client, initialClientId, on
   const send = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selected || !draft.trim() || sending) return;
+    if (isChatTokenExpired(token)) { setRejectedToken(token); return; }
     setSending(true); setError('');
     try {
       const response = await fetch(API, { method: 'POST', signal: AbortSignal.timeout(35000), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId: selected, message: draft.trim() }) });
@@ -111,7 +115,7 @@ export default function ChatDashboard({ token, role, client, initialClientId, on
     } finally { setSending(false); }
   };
 
-  if (!token || token === rejectedToken) return <div className="rounded-2xl border bg-white p-8"><h2 className="text-xl font-black">Sign in to Messages</h2><p className="mt-2 text-slate-600">Please log out and sign in again to start a messaging session.</p>{onBack && <button onClick={onBack} className="mt-5 font-bold text-teal-700">Back to documents</button>}</div>;
+  if (isChatTokenExpired(token) || token === rejectedToken) return <div className="rounded-2xl border bg-white p-8"><h2 className="text-xl font-black">Sign in to Messages</h2><p className="mt-2 text-slate-600">Please log out and sign in again to start a messaging session.</p>{onBack && <button onClick={onBack} className="mt-5 font-bold text-teal-700">Back to documents</button>}</div>;
   const filtered = conversations.filter(c => `${c.name} ${c.uniqueId || ''}`.toLowerCase().includes(search.toLowerCase()));
   return <section className={`flex ${compact ? "h-full min-h-0" : "h-[calc(100dvh-150px)] min-h-[520px] rounded-3xl border border-slate-200 shadow-sm"} overflow-hidden bg-white`} aria-label="Messages dashboard">
     {!compact && <aside className={`${selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-teal-100 bg-gradient-to-b from-white to-teal-50/50 md:w-80`}>

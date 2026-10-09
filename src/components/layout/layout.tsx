@@ -486,6 +486,12 @@ export default function DashboardLayout({
           </div>
         </header>
 
+        {chatAlerts.sessionExpired && (
+          <div role="alert" className="mx-3 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:mx-4">
+            <span>Your messaging session has expired. Sign in again to receive alerts and send messages.</span>
+            <button type="button" onClick={() => navigate('/admin')} className="shrink-0 rounded-lg bg-teal-700 px-4 py-2 font-bold text-white hover:bg-teal-800">Sign in again</button>
+          </div>
+        )}
         <main className="p-3 sm:p-4">{children}</main>
       </div>
     </div>
