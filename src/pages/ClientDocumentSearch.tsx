@@ -545,7 +545,7 @@ export default function ClientDocumentSearch() {
       if (busy || unauthorized || isChatTokenExpired(adminToken)) return;
       busy = true;
       try {
-        const response = await fetch(`${API_BASE}/admin-privacy-document`, {
+        const response = await fetch(`${API_BASE}/privacy-document-admin`, {
           headers: { Authorization: `Bearer ${adminToken}` },
           signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]),
         });
