@@ -6,7 +6,7 @@ import { documentDate, type SigningSubmission } from '@/lib/signingSubmission';
 import { isChatTokenExpired } from '@/lib/chatSession';
 
 type SavedDocument = { submission: SigningSubmission; signedAt?: string; signatures?: Record<string, { image: string; signedAt: string }> };
-const API = `${(import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')}/admin/privacy-document`;
+const API = `${(import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')}/admin-privacy-document`;
 
 export default function AdminPrivacyDocument() {
   const { clientId } = useParams();
