@@ -1,3 +1,4 @@
+import { adminGet } from "@/lib/adminRequest";
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
@@ -389,6 +390,7 @@ export default function DocumentTypePage() {
   };
 
   useEffect(() => {
+    const controller = new AbortController();
     const loadDocuments = async () => {
       try {
         setLoading(true);
@@ -400,20 +402,17 @@ export default function DocumentTypePage() {
           );
         }
 
-        const [response, referrersResponse] = await Promise.all([
-          fetch(CLIENTS_API),
-          fetch(REFERRERS_API).catch(() => null),
+        const [{ response, result }, referrersReply] = await Promise.all([
+          adminGet(CLIENTS_API, { signal: controller.signal }),
+          adminGet(REFERRERS_API, { timeoutMs: 5000, attempts: 1, signal: controller.signal }).catch(() => null),
         ]);
 
-        const result = await response.json();
-
+        if (controller.signal.aborted) return;
         if (!response.ok || !result.success) {
           throw new Error(result.message || 'Failed to load documents.');
         }
 
-        const referrersResult = referrersResponse?.ok
-          ? await referrersResponse.json().catch(() => ({}))
-          : {};
+        const referrersResult = referrersReply?.response.ok ? referrersReply.result : {};
         const referrerDirectory = new Map<
           string,
           { firstName: string; middleName: string; lastName: string; phone: string; email: string }
@@ -478,12 +477,13 @@ export default function DocumentTypePage() {
             ),
         );
       } catch (err) {
+        if (controller.signal.aborted) return;
         setError(
           err instanceof Error ? err.message : 'Failed to load documents.',
         );
         setClients([]);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     };
 
@@ -494,6 +494,7 @@ export default function DocumentTypePage() {
       setError('No document type was selected.');
       setLoading(false);
     }
+    return () => controller.abort();
   }, [isSupportedDocumentType, selectedDocumentType]);
 
   const getFullName = (client: Client) =>

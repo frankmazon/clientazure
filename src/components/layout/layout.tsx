@@ -1,6 +1,7 @@
+import { adminGet } from "@/lib/adminRequest";
 import BrandLogo from "@/components/BrandLogo";
 import { useChatNotifications, markChatRead } from '@/components/messages/useChatNotifications';
-import { ReactNode, useCallback, useEffect, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FaBars,
@@ -69,26 +70,33 @@ export default function DashboardLayout({
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
+  const notificationRequest = useRef<AbortController | null>(null);
   const loadNotifications = useCallback(async () => {
+    if (document.hidden || notificationRequest.current) return;
+    const controller = new AbortController();
+    notificationRequest.current = controller;
     try {
-      const response = await fetch(NOTIFICATIONS_API, { cache: 'no-store' });
-      const result = await response.json().catch(() => ({}));
+      const { response, result } = await adminGet(NOTIFICATIONS_API, { signal: controller.signal, attempts: 1 });
       if (!response.ok || !result.success) {
         throw new Error(result.message || 'Unable to load notifications.');
       }
       setNotifications(result.notifications || []);
     } catch (error) {
-      console.error('Unable to load notifications:', error);
+      if (!controller.signal.aborted) console.error('Unable to load notifications:', error);
+    } finally {
+      if (notificationRequest.current === controller) notificationRequest.current = null;
     }
   }, []);
 
   useEffect(() => {
     loadNotifications();
-    const intervalId = window.setInterval(loadNotifications, 5000);
+    const intervalId = window.setInterval(loadNotifications, 15000);
     const handleFocus = () => loadNotifications();
     window.addEventListener('focus', handleFocus);
 
     return () => {
+      notificationRequest.current?.abort();
+      notificationRequest.current = null;
       window.clearInterval(intervalId);
       window.removeEventListener('focus', handleFocus);
     };

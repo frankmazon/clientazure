@@ -1,3 +1,4 @@
+import { adminGet } from "@/lib/adminRequest";
 import { useNavigate } from "react-router-dom";
 import {
   type ChangeEvent,
@@ -5,6 +6,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useRef,
 } from "react";
 import {
   FaBriefcase,
@@ -580,7 +582,12 @@ export default function ClientDocumentSearch() {
     return result.url as string;
   };
 
+  const clientsRequest = useRef<AbortController | null>(null);
+
   const loadClients = async (keyword = "") => {
+    clientsRequest.current?.abort();
+    const controller = new AbortController();
+    clientsRequest.current = controller;
     try {
       setLoading(true);
       setError("");
@@ -589,18 +596,19 @@ export default function ClientDocumentSearch() {
         ? `${CLIENTS_API}?search=${encodeURIComponent(keyword.trim())}`
         : CLIENTS_API;
 
-      const response = await fetch(url);
-      const result = await response.json();
+      const { response, result } = await adminGet(url, { signal: controller.signal });
 
       if (!response.ok || !result.success) {
         throw new Error(result.message || "Failed to load clients.");
       }
 
+      if (controller.signal.aborted) return;
       setClients((result.clients || []).map(normalizeClient));
     } catch (err) {
+      if (controller.signal.aborted) return;
       setError(err instanceof Error ? err.message : "Failed to load clients.");
     } finally {
-      setLoading(false);
+      if (clientsRequest.current === controller) setLoading(false);
     }
   };
 
@@ -773,6 +781,7 @@ export default function ClientDocumentSearch() {
 
   useEffect(() => {
     loadClients();
+    return () => clientsRequest.current?.abort();
   }, []);
 
   const normalizeKey = (key: string) =>

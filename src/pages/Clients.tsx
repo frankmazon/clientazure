@@ -1,4 +1,5 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { adminGet } from "@/lib/adminRequest";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FaBriefcase,
   FaCheckCircle,
@@ -215,28 +216,35 @@ export default function Clients() {
     return result.url as string;
   };
 
+  const clientsRequest = useRef<AbortController | null>(null);
+
   const loadClients = async () => {
+    clientsRequest.current?.abort();
+    const controller = new AbortController();
+    clientsRequest.current = controller;
     try {
       setLoading(true);
       setError('');
 
-      const response = await fetch(CLIENTS_API);
-      const result = await response.json();
+      const { response, result } = await adminGet(CLIENTS_API, { signal: controller.signal });
 
       if (!response.ok || !result.success) {
         throw new Error(result.message || 'Failed to load clients.');
       }
 
+      if (controller.signal.aborted) return;
       setClients(result.clients || []);
     } catch (err) {
+      if (controller.signal.aborted) return;
       setError(err instanceof Error ? err.message : 'Failed to load clients.');
     } finally {
-      setLoading(false);
+      if (clientsRequest.current === controller) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadClients();
+    return () => clientsRequest.current?.abort();
   }, []);
 
   const getFullName = (client: Client) =>
