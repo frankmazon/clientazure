@@ -62,7 +62,7 @@ export async function printDocument(source: HTMLElement, title: string) {
   document.getElementById('privacy-print-frame')?.remove();
   const frame = document.createElement('iframe');
   frame.id = 'privacy-print-frame'; frame.title = 'Print Privacy Authority';
-  frame.style.cssText = 'position:fixed;width:1px;height:1px;left:-10000px;top:0;border:0;';
+  frame.style.cssText = 'position:fixed;width:794px;height:1123px;left:-10000px;top:0;border:0;';
   document.body.append(frame);
   const target = frame.contentDocument;
   if (!target || !frame.contentWindow) { frame.remove(); throw new Error('Unable to open print preview.'); }
@@ -74,10 +74,43 @@ export async function printDocument(source: HTMLElement, title: string) {
   }));
   styles.forEach(node => target.head.append(node));
   const css = target.createElement('style');
-  css.textContent = '@page{size:A4;margin:12mm} body{margin:0;background:white} .privacy-authority{max-width:none!important;width:auto!important;padding:0!important;font-size:10pt!important} section{display:grid!important;grid-template-columns:1fr 1.2fr .7fr!important;align-items:end;break-inside:avoid} p,tr,h2,img{break-inside:avoid} table{width:100%} *{print-color-adjust:exact;-webkit-print-color-adjust:exact}';
+  css.textContent = `
+    @page { size: A4; margin: 10mm; }
+    html, body { margin: 0; padding: 0; background: white; }
+    body { width: 190mm; }
+    .privacy-authority {
+      box-sizing: border-box; width: 190mm !important; max-width: none !important;
+      margin: 0 auto !important; padding: 0 !important;
+      font-size: 9.5pt !important; line-height: 1.4 !important;
+    }
+    .privacy-authority > div:first-child { width: 150px; margin-bottom: 12px; }
+    .privacy-authority h2 { margin: 0 0 6px; }
+    .privacy-authority table { width: 100%; margin-bottom: 12px; font-size: 8.5pt; }
+    .privacy-authority th, .privacy-authority td { padding: 3px 4px; }
+    .privacy-authority > .space-y-4 > p { margin-top: 8px; margin-bottom: 0; }
+    .privacy-authority > .mt-8 { margin-top: 16px; }
+    .privacy-authority section {
+      display: grid !important; grid-template-columns: 1fr 1.2fr .7fr !important;
+      align-items: end; gap: 12px; break-inside: avoid; margin-top: 12px;
+    }
+    .privacy-authority section img { height: 48px; }
+    .privacy-authority section .min-h-10 { min-height: 24px; padding-bottom: 4px; }
+    .privacy-authority section p { font-size: 8.5pt; }
+    .privacy-authority footer { margin-top: 12px; padding-top: 8px; font-size: 7pt; line-height: 1.3; }
+    p, tr, h2, img, footer { break-inside: avoid; }
+    * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  `;
   target.head.append(css); target.body.append(source.cloneNode(true));
   try {
     await Promise.all(loaded); await target.fonts.ready; await readyImages(target.body);
+    const printable = target.querySelector<HTMLElement>('.privacy-authority');
+    if (printable) {
+      // Fit every saved signature and the footer within the A4 printable height.
+      // Leave 2 mm of tolerance for browser rounding and printer pagination.
+      const availableHeight = 275 * 96 / 25.4;
+      const height = printable.getBoundingClientRect().height;
+      if (height > availableHeight) printable.style.setProperty('zoom', String(availableHeight / height));
+    }
     frame.contentWindow.focus(); frame.contentWindow.print();
   } catch (error) { frame.remove(); throw error; }
   // Keep the frame alive while the browser's print dialog is open.
