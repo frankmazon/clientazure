@@ -1,7 +1,8 @@
+import BrandLogo from "@/components/BrandLogo";
 import type { ReactNode } from 'react';
 export default function PrivacyAuthority({ date, children }: { date: string; children: ReactNode }) {
   return <article className="privacy-authority mx-auto max-w-[794px] bg-white px-5 py-8 text-[13px] leading-relaxed text-black sm:px-12">
-    <img src="/logo/logo.png" alt="SBR Funding" className="mb-5 h-20 w-32 object-contain object-left" />
+    <BrandLogo variant="document" className="mb-5" />
     <h2 className="mb-2 font-bold underline">Privacy Statement and Authority</h2>
     <table className="mb-5 w-full border-collapse text-left text-xs"><thead><tr><th colSpan={2} className="border border-black bg-cyan-500 p-1 text-center text-white">ABOUT US</th></tr></thead><tbody>
       {[["Licensee", 'SBR Funding ("Licensee") ABN 25 074 790 882'], ['Australian Credit License Number', '565712'], ['Address', 'Level 4 / 24 Albert Road, South Melbourne VIC 3205'], ['Date', date]].map(([label, value]) => <tr key={label}><th className="w-[35%] border border-black p-1 font-normal">{label}</th><td className="border border-black p-1">{value}</td></tr>)}

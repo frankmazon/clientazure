@@ -1,3 +1,4 @@
+import BrandLogo from "@/components/BrandLogo";
 import { useState } from 'react';
 import {
   FaArrowRight,
@@ -64,13 +65,7 @@ export default function Login() {
           <div className="absolute -bottom-28 -left-24 h-80 w-80 rounded-full bg-[#EE6521]/20 blur-2xl" />
 
           <div className="relative flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white p-2.5 shadow-xl">
-              <img
-                src="/logo/logo.png"
-                alt="Company Logo"
-                className="h-full w-full object-contain"
-              />
-            </div>
+            <BrandLogo variant="login" />
             <div>
               <p className="text-xs font-black uppercase tracking-[0.25em] text-white/60">
                 Secure workspace
@@ -101,13 +96,7 @@ export default function Login() {
         <section className="flex items-center px-6 py-8 sm:px-12 lg:px-14">
           <div className="mx-auto w-full max-w-md">
             <div className="mb-8 lg:hidden">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white p-2 shadow-lg ring-1 ring-slate-200">
-                <img
-                  src="/logo/logo.png"
-                  alt="Company Logo"
-                  className="h-full w-full object-contain"
-                />
-              </div>
+              <BrandLogo variant="login" />
             </div>
 
             <p className="text-xs font-black uppercase tracking-[0.22em] text-[#219688]">

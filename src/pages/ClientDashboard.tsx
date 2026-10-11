@@ -1,3 +1,4 @@
+import BrandLogo from "@/components/BrandLogo";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { clearPortalSession, readPortalSession, savePortalSession, watchPortalSession } from "@/lib/portalSession";
 import ClientMessenger from "@/components/messages/ClientMessenger";
@@ -1997,13 +1998,7 @@ export default function ClientDashboard() {
         <div className="relative grid w-full max-w-5xl overflow-hidden rounded-[28px] bg-white shadow-[0_24px_70px_rgba(15,23,42,0.18)] ring-1 ring-white/70 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="hidden bg-slate-950 p-8 text-white lg:flex lg:flex-col lg:justify-between">
             <div>
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white p-3 shadow-lg">
-                <img
-                  src="/logo/logo.png"
-                  alt="Company Logo"
-                  className="h-full w-full object-contain"
-                />
-              </div>
+              <BrandLogo variant="login" />
 
               <div className="mt-10">
                 <p className="text-xs font-black uppercase tracking-[0.26em] text-[#6CBF51]">
@@ -2040,13 +2035,7 @@ export default function ClientDashboard() {
 
           <div className="px-5 py-7 sm:px-8 sm:py-9 lg:px-10">
             <div className="mb-7 flex items-center gap-4 lg:hidden">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white p-2 shadow-md ring-1 ring-slate-200">
-                <img
-                  src="/logo/logo.png"
-                  alt="Company Logo"
-                  className="h-full w-full object-contain"
-                />
-              </div>
+              <BrandLogo variant="loginCompact" />
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-[#259b8f]">
                   Client Portal
@@ -2230,11 +2219,9 @@ export default function ClientDashboard() {
       <ClientMessenger token={chatToken} client={{ id: loggedClient.id, name: getFullName(loggedClient), uniqueId: loggedClient.uniqueId }} open={showMessages} onOpenChange={setShowMessages} onLogout={handleLogout} onChangePassword={() => { resetPasswordForm(); setShowChangePassword(true); }} />
       <div className="fixed inset-0 -z-10 bg-[linear-gradient(135deg,rgba(37,155,143,0.16),rgba(255,255,255,0.88)_38%,rgba(238,101,33,0.1)),radial-gradient(circle_at_12%_16%,rgba(37,155,143,0.22),transparent_28%),radial-gradient(circle_at_86%_12%,rgba(108,191,81,0.16),transparent_26%),radial-gradient(circle_at_72%_88%,rgba(238,101,33,0.14),transparent_30%)]" />
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="flex flex-col gap-5 rounded-3xl bg-[linear-gradient(115deg,#218f86_0%,#142838_55%,#c65419_100%)] p-5 text-white shadow-[0_16px_40px_rgba(15,23,42,0.14)] sm:flex-row sm:items-center sm:justify-between sm:p-7">
-          <div className="flex min-w-0 items-center gap-4 sm:gap-5">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white p-2 shadow-sm sm:h-20 sm:w-20 sm:p-3">
-              <img src="/logo/logo.png" alt="SBR Funding" className="h-full w-full object-contain" />
-            </div>
+        <section className="flex flex-col gap-5 rounded-3xl bg-[linear-gradient(115deg,#218f86_0%,#142838_55%,#c65419_100%)] p-5 text-white shadow-[0_16px_40px_rgba(15,23,42,0.14)] lg:flex-row lg:items-center lg:justify-between sm:p-7">
+          <div className="flex min-w-0 flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-5">
+            <BrandLogo variant="hero" />
             <div className="min-w-0">
               <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">Document Dashboard</h1>
               <p className="mt-2 text-sm leading-relaxed text-white/80">Upload your documents and follow your scenario's progress.</p>

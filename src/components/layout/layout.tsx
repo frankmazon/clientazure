@@ -1,3 +1,4 @@
+import BrandLogo from "@/components/BrandLogo";
 import { useChatNotifications, markChatRead } from '@/components/messages/useChatNotifications';
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -46,7 +47,6 @@ type NotificationItem = {
   redirectTo?: string;
 };
 
-const LOGO_PATH = '/logo/logo.png';
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 const NOTIFICATIONS_API = `${API_BASE}/notifications`;
 
@@ -238,13 +238,7 @@ export default function DashboardLayout({
             </button>
 
             <div className="flex min-w-0 items-center gap-4">
-              <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white p-2 shadow-md ring-1 ring-[#219688]/15 sm:flex">
-                <img
-                  src={LOGO_PATH}
-                  alt="Company Logo"
-                  className="h-full w-full object-contain"
-                />
-              </div>
+              <BrandLogo variant="compact" className="hidden sm:block" />
 
               <div className="min-w-0">
                 <h1 className="truncate text-lg font-extrabold text-slate-900 sm:text-xl">

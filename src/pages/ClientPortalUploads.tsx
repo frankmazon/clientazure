@@ -1,3 +1,4 @@
+import BrandLogo from "@/components/BrandLogo";
 import { type ReactNode, useMemo, useState } from "react";
 import {
   FaBriefcase,
@@ -1669,13 +1670,7 @@ export default function ClientDashboard() {
         <div className="relative grid w-full max-w-5xl overflow-hidden rounded-[28px] bg-white shadow-[0_24px_70px_rgba(15,23,42,0.18)] ring-1 ring-white/70 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="hidden bg-slate-950 p-8 text-white lg:flex lg:flex-col lg:justify-between">
             <div>
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white p-3 shadow-lg">
-                <img
-                  src="/logo/logo.png"
-                  alt="Company Logo"
-                  className="h-full w-full object-contain"
-                />
-              </div>
+              <BrandLogo variant="login" />
 
               <div className="mt-10">
                 <p className="text-xs font-black uppercase tracking-[0.26em] text-[#6CBF51]">
@@ -1712,13 +1707,7 @@ export default function ClientDashboard() {
 
           <div className="px-5 py-7 sm:px-8 sm:py-9 lg:px-10">
             <div className="mb-7 flex items-center gap-4 lg:hidden">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white p-2 shadow-md ring-1 ring-slate-200">
-                <img
-                  src="/logo/logo.png"
-                  alt="Company Logo"
-                  className="h-full w-full object-contain"
-                />
-              </div>
+              <BrandLogo variant="loginCompact" />
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-[#259b8f]">
                   Client Portal
@@ -1913,13 +1902,7 @@ export default function ClientDashboard() {
           <div className="bg-[linear-gradient(135deg,rgba(37,155,143,0.92),rgba(15,23,42,0.98)_54%,rgba(238,101,33,0.88))] p-5 text-white sm:p-6 lg:p-7">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-white p-3 shadow-[0_18px_40px_rgba(0,0,0,0.18)] sm:h-24 sm:w-24">
-                  <img
-                    src="/logo/logo.png"
-                    alt="Company Logo"
-                    className="h-full w-full object-contain"
-                  />
-                </div>
+                <BrandLogo variant="hero" />
 
                 <div className="min-w-0">
                   <p className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-white/70 sm:text-sm">

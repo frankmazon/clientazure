@@ -1,3 +1,4 @@
+import BrandLogo from "@/components/BrandLogo";
 import PrivacyAuthority from '@/components/PrivacyAuthority';
 import { readSigningSubmission, sampleSubmission, documentDate, type SigningSubmission } from '@/lib/signingSubmission';
 import SignaturePad from '@/components/SignaturePad';
@@ -41,7 +42,7 @@ export default function SigningDemo() {
   return <main className="min-h-screen bg-[#eef8f6] px-4 py-8 text-slate-900 sm:px-8">
     <div className="mx-auto max-w-5xl">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3"><img src="/logo/logo.png" alt="SBR Funding" className="h-14 w-14 rounded-xl bg-white p-2" /><div><h1 className="text-xl font-black">Document signing sample</h1><p className="text-sm text-slate-500">Email → Review → Sign → Reopen</p></div></div>
+        <div className="flex items-center gap-3"><BrandLogo variant="compact" /><div><h1 className="text-xl font-black">Document signing sample</h1><p className="text-sm text-slate-500">Email → Review → Sign → Reopen</p></div></div>
         <button onClick={restart} className="rounded-xl border border-teal-200 bg-white px-4 py-2 text-sm font-bold text-teal-700">Start a new sample</button>
       </header>
       <p className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>Demo only.</strong> Template preview based on your supplied Privacy Statement and Authority. No emails are sent. Saved signatures remain in this browser only; this is not a production signing service.</p>

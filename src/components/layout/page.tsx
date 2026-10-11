@@ -1,3 +1,4 @@
+import BrandLogo from "@/components/BrandLogo";
 import { captureSigningSubmission } from "@/lib/signingSubmission";
 import { useEffect, useState } from "react";
 
@@ -1614,13 +1615,7 @@ export default function HomePage() {
           <div className="bg-[linear-gradient(135deg,rgba(37,155,143,0.94),rgba(15,23,42,0.98)_56%,rgba(238,101,33,0.88))] px-6 py-8 text-white sm:px-8 lg:px-10">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-white p-3 shadow-[0_18px_40px_rgba(0,0,0,0.18)]">
-                  <img
-                    src="/logo/logo.png"
-                    alt="Company Logo"
-                    className="h-full w-full object-contain"
-                  />
-                </div>
+                <BrandLogo variant="hero" />
 
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.24em] text-white/70">
