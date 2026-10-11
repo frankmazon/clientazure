@@ -375,7 +375,7 @@ const specialists = {
     role: "Lending Specialist",
     phone: "+61 499 032 377",
     email: "o.avian@sbrfunding.com.au",
-    booking: "",
+    booking: "https://calendly.com/o-avian-sbrfunding?utm_id=97757_v0_s00_e0_tv0",
   },
   leo: {
     name: "Leo Lemarno",
