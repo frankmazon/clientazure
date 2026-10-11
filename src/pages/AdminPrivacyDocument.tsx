@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { FaDownload, FaPrint } from 'react-icons/fa';
+import { downloadDocumentPdf, printDocument } from '@/lib/documentExport';
 import DashboardLayout from '@/components/layout/layout';
 import PrivacyAuthority from '@/components/PrivacyAuthority';
 import { documentDate, type SigningSubmission } from '@/lib/signingSubmission';
@@ -9,6 +11,20 @@ type SavedDocument = { submission: SigningSubmission; signedAt?: string; signatu
 const API = `${(import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')}/privacy-document-admin`;
 
 export default function AdminPrivacyDocument() {
+  const documentRef = useRef<HTMLElement>(null);
+  const [exporting, setExporting] = useState<'download' | 'print' | null>(null);
+  const [exportError, setExportError] = useState('');
+  async function exportDocument(action: 'download' | 'print') {
+    const source = documentRef.current?.querySelector<HTMLElement>('.privacy-authority');
+    if (!source || !document || exporting) return;
+    setExporting(action); setExportError('');
+    try {
+      const name = `Privacy-Authority-${document.submission.uniqueId}`;
+      if (action === 'download') await downloadDocumentPdf(source, name);
+      else await printDocument(source, name);
+    } catch (error) { setExportError(error instanceof Error ? error.message : 'Unable to export document. Please try again.'); }
+    finally { setExporting(null); }
+  }
   const { clientId } = useParams();
   const [document, setDocument] = useState<SavedDocument | null>(null);
   const [error, setError] = useState('');
@@ -32,11 +48,18 @@ export default function AdminPrivacyDocument() {
   }, [clientId, attempt]);
   return <DashboardLayout title="Privacy Authority" subtitle="Review the client's saved document and signatures.">
     <div className="mx-auto max-w-5xl space-y-4">
-      <Link to="/dashboard/client-search" className="inline-block font-bold text-teal-700">← Back to clients</Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link to="/dashboard/client-search" className="inline-block font-bold text-teal-700">← Back to clients</Link>
+        {document && <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={!!exporting} onClick={() => void exportDocument('download')} className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-3 font-bold text-white disabled:opacity-50"><FaDownload />{exporting === 'download' ? 'Preparing PDF…' : 'Download PDF'}</button>
+          <button type="button" disabled={!!exporting} onClick={() => void exportDocument('print')} className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-white px-4 py-3 font-bold text-teal-800 disabled:opacity-50"><FaPrint />{exporting === 'print' ? 'Preparing print…' : 'Print'}</button>
+        </div>}
+      </div>
+      {exportError && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-800">{exportError}</p>}
       {expired && <p role="alert">Your session expired. <Link to="/admin" className="underline">Sign in again</Link> to view the document.</p>}
       {error && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-800">{error} <button onClick={() => setAttempt(v => v + 1)} className="font-bold underline">Try again</button></p>}
       {!document && !error && !expired && <p role="status">Loading Privacy Authority…</p>}
-      {document && <article className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+      {document && <article ref={documentRef} className="overflow-hidden rounded-2xl border bg-white shadow-sm">
         <div className="border-b bg-teal-50 p-4 font-semibold text-teal-900">{document.submission.uniqueId} · {document.signedAt ? 'Signed · Saved document (read-only)' : 'Not signed · Awaiting client signatures'}</div>
         <PrivacyAuthority date={documentDate(document.submission.submittedAt)}>
           {document.submission.borrowers.map((borrower, index) => {

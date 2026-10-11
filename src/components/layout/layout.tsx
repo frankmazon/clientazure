@@ -226,7 +226,7 @@ export default function DashboardLayout({
           isSidebarHidden ? 'lg:pl-0' : 'lg:pl-72'
         }`}
       >
-        <header className={`sticky top-0 z-40 flex h-16 items-center justify-between gap-2 border-b border-[#219688]/15 px-3 shadow-sm backdrop-blur sm:px-5 ${title === "Messages" ? "portal-topbar" : "bg-white/95"}`}>
+        <header className={`sticky top-0 z-40 flex min-h-20 items-center justify-between gap-2 border-b border-[#219688]/15 px-3 py-2 shadow-sm backdrop-blur sm:px-5 ${title === "Messages" ? "portal-topbar" : "bg-white/95"}`}>
           <div className="flex min-w-0 items-center gap-2 sm:gap-4">
             <button
               type="button"
