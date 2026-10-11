@@ -27,6 +27,8 @@ import {
   FaUser,
   FaUserFriends,
 } from "react-icons/fa";
+import { useChatNotifications } from "@/components/messages/useChatNotifications";
+import { isChatTokenExpired } from "@/lib/chatSession";
 import DashboardLayout from "../components/layout/layout";
 
 const DEFAULT_API_BASE = import.meta.env.DEV
@@ -528,9 +530,37 @@ export default function ClientDocumentSearch() {
       return [];
     }
   });
-  const [seenMessageSignature, setSeenMessageSignature] = useState(
-    () => localStorage.getItem("seenClientMessageSignature") || "",
-  );
+  const adminToken = sessionStorage.getItem("adminChatToken") || "";
+  const chatAlerts = useChatNotifications(adminToken);
+  const unreadFor = (client: Client) => chatAlerts.items.find(
+    item => item.clientId === Number(client.clientId || client.id),
+  )?.unreadCount || 0;
+  const [signedClients, setSignedClients] = useState<Set<number> | null>(null);
+  useEffect(() => {
+    if (isChatTokenExpired(adminToken)) return;
+    const controller = new AbortController();
+    let busy = false;
+    let unauthorized = false;
+    const load = async () => {
+      if (busy || unauthorized || isChatTokenExpired(adminToken)) return;
+      busy = true;
+      try {
+        const response = await fetch(`${API_BASE}/admin/privacy-document`, {
+          headers: { Authorization: `Bearer ${adminToken}` },
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]),
+        });
+        if (response.status === 401) unauthorized = true;
+        if (!response.ok) throw new Error('Unable to load signature status');
+        const data = await response.json();
+        if (!controller.signal.aborted) setSignedClients(new Set(data.documents.map((d: {clientId: number}) => d.clientId)));
+      } catch { if (!controller.signal.aborted) setSignedClients(null); }
+      finally { busy = false; }
+    };
+    void load();
+    const timer = window.setInterval(load, 30000);
+    window.addEventListener('focus', load);
+    return () => { controller.abort(); clearInterval(timer); window.removeEventListener('focus', load); };
+  }, [adminToken]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -1595,53 +1625,14 @@ export default function ClientDocumentSearch() {
     [clientFolders, completionFilter],
   );
 
-  const totalMessageCount = clientFolders.reduce(
-    (total, folder) => total + Number(folder.client.messageCount || 0),
-    0,
-  );
-
-  const messageClients = [...clientFolders]
-    .filter((folder) => Number(folder.client.messageCount || 0) > 0)
-    .sort((first, second) => {
-      const firstTime = first.client.latestMessageAt
-        ? new Date(first.client.latestMessageAt).getTime()
-        : 0;
-      const secondTime = second.client.latestMessageAt
-        ? new Date(second.client.latestMessageAt).getTime()
-        : 0;
-
-      return secondTime - firstTime;
-    })
-    .map((folder) => ({
-      clientKey: folder.uniqueId,
-      clientName: getFullName(folder.client) || "Unnamed Client",
-      uniqueId: folder.client.uniqueId || folder.uniqueId,
-      messageCount: Number(folder.client.messageCount || 0),
-      latestMessageAt: folder.client.latestMessageAt
-        ? formatMessageDate(folder.client.latestMessageAt)
-        : undefined,
-    }));
-
-  const currentMessageSignature = messageClients
-    .map(
-      (client) =>
-        `${client.clientKey}:${client.messageCount}:${client.latestMessageAt || ""}`,
-    )
-    .join("|");
-
-  const unreadMessageCount =
-    currentMessageSignature &&
-    currentMessageSignature !== seenMessageSignature
-      ? totalMessageCount
-      : 0;
-
-  const handleMessagesOpen = () => {
-    setSeenMessageSignature(currentMessageSignature);
-    localStorage.setItem(
-      "seenClientMessageSignature",
-      currentMessageSignature,
-    );
-  };
+  const unreadMessageCount = chatAlerts.count;
+  const messageClients = clientFolders.filter(folder => unreadFor(folder.client) > 0).map(folder => ({
+    clientKey: folder.uniqueId,
+    clientName: getFullName(folder.client) || "Unnamed Client",
+    uniqueId: folder.client.uniqueId || folder.uniqueId,
+    messageCount: unreadFor(folder.client),
+    latestMessageAt: folder.client.latestMessageAt ? formatMessageDate(folder.client.latestMessageAt) : undefined,
+  }));
 
   const handleMessageClientClick = (clientKey: string) => {
     const folder = clientFolders.find(
@@ -2019,7 +2010,6 @@ export default function ClientDocumentSearch() {
       subtitle="Search client files, source, phone number, team status, loan details, and missing documents."
       messageCount={unreadMessageCount}
       messageClients={messageClients}
-      onMessagesOpen={handleMessagesOpen}
       onMessageClientClick={handleMessageClientClick}
     >
       <div className="mx-auto max-w-[1800px] space-y-4">
@@ -2171,7 +2161,7 @@ export default function ClientDocumentSearch() {
               }) => {
                 const sourceLabel = getClientSource(client);
                 const isExpanded = expandedFolderKey === uniqueId;
-                const messageCount = Number(client.messageCount || 0);
+                const messageCount = unreadFor(client);
 
                 return (
                   <div
@@ -2274,6 +2264,11 @@ export default function ClientDocumentSearch() {
                         </div>
 
                         <div className="contents">
+                          <button type="button"
+                            onClick={() => navigate(`/dashboard/privacy-authority/${Number(client.clientId || client.id)}`)}
+                            className="rounded-full border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-bold text-teal-800">
+                            Privacy Authority{signedClients ? (signedClients.has(Number(client.clientId || client.id)) ? ' · Signed' : ' · Not signed') : ''}
+                          </button>
                           <button
                             type="button"
                             onClick={() => void openClientMessages(client)}

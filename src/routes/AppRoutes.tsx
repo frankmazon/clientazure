@@ -15,6 +15,7 @@ import ClientDashboard from '../pages/ClientDashboard';
 import Login from '../pages/Login';
 import Messages from '../pages/Messages';
 import SigningDemo from '../pages/SigningDemo';
+import AdminPrivacyDocument from '../pages/AdminPrivacyDocument';
 import PrivacyDocument from '../pages/PrivacyDocument';
 import ProtectedRoute from './ProtectedRoute';
 
@@ -88,6 +89,7 @@ export default function AppRoutes() {
 
       <Routes>
         <Route path="/signing-demo" element={<SigningDemo />} />
+        <Route path="/dashboard/privacy-authority/:clientId" element={<ProtectedRoute><AdminPrivacyDocument /></ProtectedRoute>} />
         <Route path="/privacy-document" element={<PrivacyDocument />} />
         {/* Submission page */}
         <Route path="/" element={<DomainLanding />} />
