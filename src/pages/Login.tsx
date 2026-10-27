@@ -10,7 +10,7 @@ import {
 } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 const LOGIN_API = `${API_BASE}/login`;
 
 export default function Login() {
@@ -32,9 +32,15 @@ export default function Login() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
+        signal: AbortSignal.timeout(35000),
       });
 
-      const result = await response.json();
+      const result = await response.json().catch(() => null);
+      if (!result || typeof result !== 'object') {
+        throw new Error(import.meta.env.DEV
+          ? 'The local API is unavailable. Start the backend on port 7071, then try again.'
+          : 'The sign-in service is temporarily unavailable. Please try again shortly.');
+      }
 
       if (!response.ok || !result.success) {
         throw new Error(result.message || 'Invalid username or password');
@@ -47,7 +53,11 @@ export default function Login() {
       navigate('/dashboard/client-search');
     } catch (error) {
       setError(
-        error instanceof Error ? error.message : 'Unable to connect to server.',
+        error instanceof Error && error.name === 'TimeoutError'
+          ? 'The sign-in service took too long to respond. Please try again.'
+          : error instanceof TypeError
+            ? 'Unable to reach the sign-in service. Please check your connection and try again.'
+            : error instanceof Error ? error.message : 'Unable to connect to server.',
       );
     } finally {
       setLoading(false);
