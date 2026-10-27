@@ -1,6 +1,7 @@
 import BrandLogo from "@/components/BrandLogo";
 import { captureSigningSubmission } from "@/lib/signingSubmission";
 import { useEffect, useState } from "react";
+import { FaArrowRight, FaCalendarAlt, FaFileAlt, FaLaptop, FaPenNib } from "react-icons/fa";
 
 const ENV_API_BASE = import.meta.env.VITE_API_BASE_URL?.trim().replace(
   /\/+$/,
@@ -1643,6 +1644,61 @@ export default function HomePage() {
               </div>
             </div>
           </div>
+
+          <section
+            aria-labelledby="submission-steps-title"
+            className="border-b border-slate-100 bg-[linear-gradient(180deg,#f5fbfa_0%,#ffffff_100%)] px-5 py-8 sm:px-8 lg:px-10 lg:py-10"
+          >
+            <div className="mx-auto max-w-4xl text-center">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-[#259b8f]">
+                Your next steps
+              </p>
+              <h2 id="submission-steps-title" className="mt-2 text-3xl font-black tracking-tight text-[#123b64] sm:text-4xl">
+                Let’s Get Moving
+              </h2>
+              <p className="mt-2 text-sm text-slate-600 sm:text-base">
+                Complete these steps so we can review your scenario efficiently.
+              </p>
+
+              <ol className="mt-8 grid gap-6 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center sm:gap-3">
+                {[
+                  { title: "Complete Submission Form", Icon: FaFileAlt },
+                  { title: "Sign Privacy Form", Icon: FaPenNib },
+                  { title: "Upload Supporting Documents", Icon: FaLaptop },
+                ].map(({ title, Icon }, index) => (
+                  <li key={title} className="contents">
+                    <div className="flex flex-col items-center">
+                      <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-[#e6f6f4] text-[#174b76] ring-1 ring-[#c8ece7]">
+                        <span className="absolute -left-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#18aaa5] text-sm font-black text-white shadow-sm">
+                          {index + 1}
+                        </span>
+                        <Icon aria-hidden="true" className="text-3xl" />
+                      </div>
+                      <span className="mt-3 max-w-44 text-center text-sm font-extrabold leading-5 text-[#123b64]">
+                        {title}
+                      </span>
+                    </div>
+                    {index < 2 && (
+                      <FaArrowRight aria-hidden="true" className="mx-auto hidden text-xl text-[#57c9c4] sm:block" />
+                    )}
+                  </li>
+                ))}
+              </ol>
+
+              <div className="mx-auto mt-7 flex max-w-2xl flex-col items-center justify-center gap-3 rounded-2xl border border-[#d6f0ed] bg-[#edfaf8] px-5 py-4 text-center sm:flex-row sm:gap-4 sm:text-left">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-2xl text-[#16766e] shadow-sm ring-1 ring-[#d6f0ed]">
+                  <FaCalendarAlt aria-hidden="true" />
+                </span>
+                <p className="text-sm leading-6 text-[#123b64] sm:text-base">
+                  <span className="font-black text-[#168f88]">Our goal:</span>{" "}
+                  initial pre-assessment within <strong>5 business days*</strong>
+                </p>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                *Once we receive your signed Privacy Form and all required supporting documents.
+              </p>
+            </div>
+          </section>
 
           <form
             onSubmit={handleSubmit}

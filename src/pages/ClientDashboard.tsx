@@ -379,7 +379,7 @@ const specialists = {
     booking: "https://calendly.com/o-avian-sbrfunding?utm_id=97757_v0_s00_e0_tv0",
   },
   leo: {
-    name: "Leo Lemarno",
+    name: "Leo IERMANO",
     role: "Tax Specialist",
     phone: "03 8696 6300",
     email: "leo@sbrassist.com.au",
@@ -930,7 +930,6 @@ export default function ClientDashboard() {
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState("");
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
   const [forgotPasswordMessage, setForgotPasswordMessage] = useState("");
   const [loggedClient, setLoggedClient] = useState<ClientLoginUser | null>(
@@ -1279,18 +1278,10 @@ export default function ClientDashboard() {
     event.preventDefault();
 
     if (!loginUniqueId.trim()) {
-      alert(`Please enter your ${loginMode === "client" ? "Client" : "Referrer"} ID.`);
+      alert("Please enter your email address.");
       return;
     }
-
-    const normalizedLoginId = loginUniqueId.trim().toUpperCase();
-    const requiredPrefix = loginMode === "client" ? "CL-" : "RF-";
-    if (!normalizedLoginId.startsWith(requiredPrefix)) {
-      alert(
-        `${loginMode === "client" ? "Client" : "Referrer"} login accepts ${requiredPrefix} IDs only.`,
-      );
-      return;
-    }
+    const normalizedLoginEmail = loginUniqueId.trim().toLowerCase();
 
     if (!loginPassword.trim()) {
       alert("Please enter your password.");
@@ -1306,8 +1297,7 @@ export default function ClientDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          uniqueId: normalizedLoginId,
-          referrerId: normalizedLoginId,
+          email: normalizedLoginEmail,
           password: loginPassword.trim(),
         }),
         },
@@ -1316,7 +1306,7 @@ export default function ClientDashboard() {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || "Invalid Client ID or password.");
+        throw new Error(result.message || "Invalid email or password.");
       }
 
       const normalizedClient = normalizeLoggedClient(
@@ -1357,8 +1347,8 @@ export default function ClientDashboard() {
   };
 
   const handleForgotPassword = async () => {
-    if (!loginUniqueId.trim() || !forgotEmail.trim()) {
-      setForgotPasswordMessage("Enter your Client ID and registered email.");
+    if (!loginUniqueId.trim()) {
+      setForgotPasswordMessage("Enter your email address first.");
       return;
     }
 
@@ -1369,8 +1359,7 @@ export default function ClientDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          uniqueId: loginUniqueId.trim().toUpperCase(),
-          email: forgotEmail.trim(),
+          email: loginUniqueId.trim().toLowerCase(),
         }),
       });
       const result = await response.json().catch(() => ({}));
@@ -2080,19 +2069,21 @@ export default function ClientDashboard() {
             <form onSubmit={handleClientLogin} className="mt-5 space-y-5">
               <div>
                 <label className="mb-2 block text-sm font-black text-slate-700">
-                  {loginMode === "client" ? "Client ID" : "Referrer ID"}
+                  Email address
                 </label>
 
                 <div className="relative">
                   <FaIdBadge className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
 
                   <input
+                    type="email"
+                    autoComplete="email"
                     value={loginUniqueId}
                     onChange={(event) => setLoginUniqueId(event.target.value)}
                     placeholder={
                       loginMode === "client"
-                        ? "Example: CL-81BE533A"
-                        : "Example: RF-81BE533A"
+                        ? "Enter your client email"
+                        : "Enter your referrer email"
                     }
                     className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15"
                   />
@@ -2113,16 +2104,9 @@ export default function ClientDashboard() {
 
               {loginMode === "client" && showForgotPassword && (
                 <div className="rounded-2xl border border-[#259b8f]/25 bg-[#259b8f]/5 p-4">
-                  <label className="mb-2 block text-sm font-black text-slate-700">
-                    Registered email
-                  </label>
-                  <input
-                    type="email"
-                    value={forgotEmail}
-                    onChange={(event) => setForgotEmail(event.target.value)}
-                    placeholder="Enter your registered email"
-                    className="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none focus:border-[#259b8f] focus:ring-4 focus:ring-[#259b8f]/15"
-                  />
+                  <p className="text-sm leading-6 text-slate-600">
+                    We’ll send a temporary login code to the email address above.
+                  </p>
                   <button
                     type="button"
                     onClick={() => void handleForgotPassword()}

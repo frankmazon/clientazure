@@ -2615,7 +2615,7 @@ export default function ClientDocumentSearch() {
                           </div>
 
                           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                            <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                            <div className="order-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                               <p className="mb-2 text-xs font-bold uppercase text-slate-500">
                                 Verified Documents
                               </p>
@@ -2649,7 +2649,7 @@ export default function ClientDocumentSearch() {
                               </div>
                             </div>
 
-                            <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                            <div className="order-1 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                               <p className="mb-2 text-xs font-bold uppercase text-slate-500">
                                 Missing Documents
                               </p>
@@ -2685,7 +2685,7 @@ export default function ClientDocumentSearch() {
                               </div>
                             </div>
 
-                            <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                            <div className="order-2 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                               <p className="mb-2 text-xs font-bold uppercase text-slate-500">
                                 Pending Review
                               </p>
@@ -2707,7 +2707,7 @@ export default function ClientDocumentSearch() {
                               </div>
                             </div>
 
-                            <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+                            <div className="order-4 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                               <p className="mb-2 text-xs font-bold uppercase text-slate-500">
                                 Rejected Documents
                               </p>
