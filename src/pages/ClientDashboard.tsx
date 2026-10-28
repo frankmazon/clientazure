@@ -1347,8 +1347,9 @@ export default function ClientDashboard() {
   };
 
   const handleForgotPassword = async () => {
-    if (!loginUniqueId.trim()) {
-      setForgotPasswordMessage("Enter your email address first.");
+    if (forgotPasswordLoading) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginUniqueId.trim())) {
+      setForgotPasswordMessage("Enter a valid email address first.");
       return;
     }
 
@@ -1366,7 +1367,7 @@ export default function ClientDashboard() {
       if (!response.ok || !result.success) {
         throw new Error(result.message || "Unable to reset your password.");
       }
-      setForgotPasswordMessage(result.message);
+      setForgotPasswordMessage(result.message || "If your email matches an account, a temporary login code will be sent. Check your inbox and spam folder.");
     } catch (error) {
       setForgotPasswordMessage(
         error instanceof Error ? error.message : "Unable to reset your password.",
@@ -1497,8 +1498,8 @@ export default function ClientDashboard() {
 
       alert(
         result.emailNotificationSent
-          ? "Password changed successfully. A confirmation email has been sent."
-          : "Password changed successfully.",
+          ? "Password changed successfully. An email confirmation was requested; check your inbox and spam folder."
+          : "Password changed successfully, but an email confirmation could not be requested. You can sign in with your new password.",
       );
     } catch (error) {
       alert(
@@ -2078,6 +2079,9 @@ export default function ClientDashboard() {
                   <input
                     type="email"
                     autoComplete="email"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    spellCheck={false}
                     value={loginUniqueId}
                     onChange={(event) => setLoginUniqueId(event.target.value)}
                     placeholder={
@@ -2105,7 +2109,10 @@ export default function ClientDashboard() {
               {loginMode === "client" && showForgotPassword && (
                 <div className="rounded-2xl border border-[#259b8f]/25 bg-[#259b8f]/5 p-4">
                   <p className="text-sm leading-6 text-slate-600">
-                    We’ll send a temporary login code to the email address above.
+                    Request a temporary login code using your registered email.
+                    Check your inbox and spam folder, then enter the code in the
+                    Password field below. Codes expire after 20 minutes. If you
+                    request another code, use the newest one.
                   </p>
                   <button
                     type="button"
@@ -2116,7 +2123,7 @@ export default function ClientDashboard() {
                     {forgotPasswordLoading ? "Sending..." : "Send login code"}
                   </button>
                   {forgotPasswordMessage && (
-                    <p className="mt-3 text-sm font-semibold text-slate-600">
+                    <p role="status" aria-live="polite" className="mt-3 break-words text-sm font-semibold text-slate-600">
                       {forgotPasswordMessage}
                     </p>
                   )}
