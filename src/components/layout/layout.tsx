@@ -28,6 +28,7 @@ export type MessageClientItem = {
   clientKey: string;
   clientName: string;
   uniqueId?: string;
+  email?: string;
   messageCount: number;
   latestMessageAt?: string;
 }
@@ -42,6 +43,7 @@ type NotificationItem = {
   unread: boolean;
   clientId?: number;
   uniqueId?: string;
+  email?: string;
   clientName?: string;
   documentType?: string;
   source?: string;
@@ -328,7 +330,7 @@ export default function DashboardLayout({
                                 {item.clientName}
                               </span>
                               <span className="mt-0.5 block truncate text-xs text-slate-500">
-                                {item.uniqueId || 'Client'}
+                                {item.email || 'Client'}
                                 {item.latestMessageAt
                                   ? ` · ${item.latestMessageAt}`
                                   : ''}
@@ -446,9 +448,9 @@ export default function DashboardLayout({
                                 </p>
                               )}
 
-                              {item.uniqueId && (
+                              {item.email && (
                                 <p className="text-xs text-slate-400">
-                                  {item.uniqueId}
+                                  {item.email}
                                 </p>
                               )}
                             </div>

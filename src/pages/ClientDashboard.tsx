@@ -1,3 +1,4 @@
+import { formatCurrency, formatLvr } from "@/lib/loanValues";
 import BrandLogo from "@/components/BrandLogo";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { clearPortalSession, readPortalSession, savePortalSession, watchPortalSession } from "@/lib/portalSession";
@@ -2562,13 +2563,13 @@ export default function ClientDashboard() {
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     {(usesSimplifiedIntake
                       ? [
-                          ["Funds required", selectedClient.loanAmount],
+                          ["Funds required", formatCurrency(selectedClient.loanAmount)],
                           ["Special Notes", selectedClient.specialNotes],
                         ]
                       : [
-                          ["Loan Amount", selectedClient.loanAmount],
-                          ["Security Value", selectedClient.securityValue],
-                          ["LVR", selectedClient.lvr],
+                          ["Loan Amount", formatCurrency(selectedClient.loanAmount)],
+                          ["Security Value", formatCurrency(selectedClient.securityValue)],
+                          ["LVR", formatLvr(selectedClient.loanAmount, selectedClient.securityValue)],
                           [
                             "Anticipated Settlement Date",
                             selectedClient.anticipatedSettlementDate,

@@ -1,3 +1,5 @@
+import { formatCurrency, formatLvr } from "@/lib/loanValues";
+import { normalizeDocumentList, getOutstandingDocuments } from "@/lib/documentChecklist";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   FaBriefcase,
@@ -29,6 +31,8 @@ type NormalizedTransactionType = "alt_doc" | "full_doc";
 type DocumentReviewStatus = "Approved" | "Pending" | "Rejected";
 
 const sharedDocumentTypes: DocumentOption[] = [
+  { label: "ID", value: "id" },
+  { label: "Passport", value: "passport" },
   {
     label: "Last 6 Months Mortgage Statements",
     value: "last-6-months-mortgage-statements",
@@ -163,6 +167,8 @@ type Client = {
     email?: string;
   };
 
+  requiredDocuments?: string[];
+  waivedDocuments?: string[];
   documentType?: string;
   fileName?: string;
   fileUrl?: string;
@@ -292,6 +298,8 @@ const normalizeClientFromApi = (client: RawClient): Client => {
     purpose: toOptionalString(
       getFirstValue(client, ["purpose", "Purpose", "PURPOSE"]),
     ),
+    requiredDocuments: normalizeDocumentList(getFirstValue(client, ["requiredDocuments", "RequiredDocuments", "required_documents"])),
+    waivedDocuments: normalizeDocumentList(getFirstValue(client, ["waivedDocuments", "WaivedDocuments", "waived_documents"])),
     transactionType: toOptionalString(
       getFirstValue(client, [
         "transactionType",
@@ -712,9 +720,15 @@ export default function Clients() {
       const mergedFiles = documentRows.map((file) =>
         mergeClientRows([mergedClient, file]),
       );
-      const requiredDocuments = getRequiredDocuments(
+      const fallbackDocuments = getRequiredDocuments(
         mergedClient.transactionType,
       );
+      const requiredDocuments = Array.from(new Set([
+        ...fallbackDocuments,
+        ...clientRows.flatMap(row => normalizeDocumentList(row.requiredDocuments)),
+      ]));
+      const waivedDocuments = Array.from(new Set(clientRows.flatMap(row => normalizeDocumentList(row.waivedDocuments))));
+
       const hasSupportedTransaction = requiredDocuments.length > 0;
       const statusByDocument = new Map<string, DocumentReviewStatus>();
       const statusPriority: Record<DocumentReviewStatus, number> = {
@@ -750,12 +764,11 @@ export default function Clients() {
       const pendingDocuments = requiredDocuments.filter(
         (document) => statusByDocument.get(document) === "Pending",
       );
-      const missingDocuments = requiredDocuments.filter(
-        (document) => !statusByDocument.has(document),
-      );
+      const missingDocuments = getOutstandingDocuments(requiredDocuments, approvedDocuments, waivedDocuments);
+      const satisfiedDocuments = requiredDocuments.filter(document => approvedDocuments.includes(document) || waivedDocuments.includes(document));
       const progress = hasSupportedTransaction
         ? Math.round(
-            (approvedDocuments.length / requiredDocuments.length) * 100,
+            (satisfiedDocuments.length / requiredDocuments.length) * 100,
           )
         : 0;
 
@@ -772,7 +785,7 @@ export default function Clients() {
         hasSupportedTransaction,
         isComplete:
           hasSupportedTransaction &&
-          approvedDocuments.length === requiredDocuments.length,
+          satisfiedDocuments.length === requiredDocuments.length,
         progress,
       };
     });
@@ -1728,13 +1741,13 @@ export default function Clients() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <InfoBox
                     label="Loan Amount"
-                    value={selectedClient.loanAmount}
+                    value={formatCurrency(selectedClient.loanAmount)}
                   />
                   <InfoBox
                     label="Security Value"
-                    value={selectedClient.securityValue}
+                    value={formatCurrency(selectedClient.securityValue)}
                   />
-                  <InfoBox label="LVR" value={selectedClient.lvr} />
+                  <InfoBox label="LVR" value={formatLvr(selectedClient.loanAmount, selectedClient.securityValue)} />
                   <InfoBox
                     label="Anticipated Settlement Date"
                     value={selectedClient.anticipatedSettlementDate}

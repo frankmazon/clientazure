@@ -1,3 +1,4 @@
+import { formatCurrency, formatLvr } from "@/lib/loanValues";
 import BrandLogo from "@/components/BrandLogo";
 import { type ReactNode, useMemo, useState } from "react";
 import {
@@ -2211,9 +2212,9 @@ export default function ClientDashboard() {
 
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     {[
-                      ["Loan Amount", selectedClient.loanAmount],
-                      ["Security Value", selectedClient.securityValue],
-                      ["LVR", selectedClient.lvr],
+                      ["Loan Amount", formatCurrency(selectedClient.loanAmount)],
+                      ["Security Value", formatCurrency(selectedClient.securityValue)],
+                      ["LVR", formatLvr(selectedClient.loanAmount, selectedClient.securityValue)],
                       [
                         "Anticipated Settlement Date",
                         selectedClient.anticipatedSettlementDate,

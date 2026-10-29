@@ -1,3 +1,5 @@
+import { formatCurrency, formatLvr } from "@/lib/loanValues";
+import { normalizeDocumentList, getOutstandingDocuments } from "@/lib/documentChecklist";
 import { adminGet } from "@/lib/adminRequest";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -29,6 +31,8 @@ type DocumentOption = {
 type NormalizedTransactionType = 'alt_doc' | 'full_doc';
 
 const sharedDocumentTypes: DocumentOption[] = [
+  { label: 'ID', value: 'id' },
+  { label: 'Passport', value: 'passport' },
   {
     label: 'Last 6 Months Mortgage Statements',
     value: 'last-6-months-mortgage-statements',
@@ -168,6 +172,8 @@ type Client = {
     email?: string;
   };
 
+  requiredDocuments?: string[];
+  waivedDocuments?: string[];
   documentType?: string;
   fileName?: string;
   fileUrl?: string;
@@ -401,13 +407,19 @@ export default function Clients() {
       const files = clientRows.filter(
         (row) => Boolean(row.documentType || row.fileName || row.fileUrl),
       );
-      const requiredDocuments = getRequiredDocuments(
+      const fallbackDocuments = getRequiredDocuments(
         getClientText(client, [
           'transactionType',
           'TransactionType',
           'transaction_type',
         ]),
       );
+      const requiredDocuments = Array.from(new Set([
+        ...fallbackDocuments,
+        ...clientRows.flatMap(row => normalizeDocumentList(row.requiredDocuments ?? row.RequiredDocuments ?? row.required_documents)),
+      ]));
+      const waivedDocuments = Array.from(new Set(clientRows.flatMap(row => normalizeDocumentList(row.waivedDocuments ?? row.WaivedDocuments ?? row.waived_documents))));
+
       const hasSupportedTransaction = requiredDocuments.length > 0;
       const statusByDocument = new Map<string, DocumentStatus>();
       const statusPriority: Record<DocumentStatus, number> = {
@@ -437,9 +449,8 @@ export default function Clients() {
       const approvedDocuments = requiredDocuments.filter(
         (document) => statusByDocument.get(document) === 'approved',
       );
-      const missingDocuments = requiredDocuments.filter(
-        (document) => !statusByDocument.has(document),
-      );
+      const missingDocuments = getOutstandingDocuments(requiredDocuments, approvedDocuments, waivedDocuments);
+      const satisfiedDocuments = requiredDocuments.filter(document => approvedDocuments.includes(document) || waivedDocuments.includes(document));
       const statusCounts = Array.from(statusByDocument.values()).reduce<
         Record<DocumentStatus, number>
       >(
@@ -451,7 +462,7 @@ export default function Clients() {
       );
       const progress = hasSupportedTransaction
         ? Math.round(
-            (approvedDocuments.length / requiredDocuments.length) * 100,
+            (satisfiedDocuments.length / requiredDocuments.length) * 100,
           )
         : 0;
 
@@ -466,7 +477,7 @@ export default function Clients() {
         hasSupportedTransaction,
         isComplete:
           hasSupportedTransaction &&
-          approvedDocuments.length === requiredDocuments.length,
+          satisfiedDocuments.length === requiredDocuments.length,
         progress,
       };
     });
@@ -1229,12 +1240,12 @@ export default function Clients() {
                 </h3>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <InfoBox label="Loan Amount" value={getClientValue(selectedClient, ['loanAmount', 'LoanAmount', 'loan_amount'])} />
+                  <InfoBox label="Loan Amount" value={formatCurrency(getClientValue(selectedClient, ['loanAmount', 'LoanAmount', 'loan_amount']))} />
                   <InfoBox
                     label="Security Value"
-                    value={getClientValue(selectedClient, ['securityValue', 'SecurityValue', 'security_value'])}
+                    value={formatCurrency(getClientValue(selectedClient, ['securityValue', 'SecurityValue', 'security_value']))}
                   />
-                  <InfoBox label="LVR" value={getClientValue(selectedClient, ['lvr', 'Lvr', 'LVR'])} />
+                  <InfoBox label="LVR" value={formatLvr(getClientValue(selectedClient, ['loanAmount', 'LoanAmount', 'loan_amount']), getClientValue(selectedClient, ['securityValue', 'SecurityValue', 'security_value']))} />
                   <InfoBox
                     label="Anticipated Settlement Date"
                     value={getClientValue(selectedClient, ['anticipatedSettlementDate', 'AnticipatedSettlementDate', 'anticipated_settlement_date'])}

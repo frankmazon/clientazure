@@ -10,3 +10,5 @@ In the GHL Client Submission Confirmation email action:
 3. Save the action and preview the email. Verify the existing contact merge fields and document link with a test contact before live use.
 
 No GHL workflow was edited and no emails were sent by creating this file.
+
+The portal login field uses `{{contact.email}}` rather than the internal Client ID. Apply this revised HTML to the GHL workflow to update outgoing emails.

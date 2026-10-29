@@ -1,3 +1,5 @@
+import { calculateLvr, formatCurrency, formatLvr } from "@/lib/loanValues";
+import { getOutstandingDocuments } from "@/lib/documentChecklist";
 import { adminGet } from "@/lib/adminRequest";
 import { useNavigate } from "react-router-dom";
 import {
@@ -652,7 +654,7 @@ export default function ClientDocumentSearch() {
 
     try {
       setSavingClient(true);
-      await updateClientRecord(editingClient, editDraft);
+      await updateClientRecord(editingClient, { ...editDraft, lvr: calculateLvr(editDraft.loanAmount, editDraft.securityValue) });
       await loadClients(search);
       setEditingClient(null);
     } catch (err) {
@@ -1560,11 +1562,7 @@ export default function ClientDocumentSearch() {
         (document) => statusByDocument.get(document) === "Pending",
       );
 
-      const missingDocuments = requiredDocuments.filter(
-        (document) =>
-          !statusByDocument.has(document) &&
-          !waivedDocuments.includes(document),
-      );
+      const missingDocuments = getOutstandingDocuments(requiredDocuments, verifiedDocuments, waivedDocuments);
 
       const isComplete =
         hasSupportedTransaction &&
@@ -1638,7 +1636,7 @@ export default function ClientDocumentSearch() {
   const messageClients = clientFolders.filter(folder => unreadFor(folder.client) > 0).map(folder => ({
     clientKey: folder.uniqueId,
     clientName: getFullName(folder.client) || "Unnamed Client",
-    uniqueId: folder.client.uniqueId || folder.uniqueId,
+    email: folder.client.email,
     messageCount: unreadFor(folder.client),
     latestMessageAt: folder.client.latestMessageAt ? formatMessageDate(folder.client.latestMessageAt) : undefined,
   }));
@@ -2503,13 +2501,13 @@ export default function ClientDocumentSearch() {
                           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                             <InfoBox
                               label="Loan Amount"
-                              value={client.loanAmount}
+                              value={formatCurrency(client.loanAmount)}
                             />
                             <InfoBox
                               label="Security Value"
-                              value={client.securityValue}
+                              value={formatCurrency(client.securityValue)}
                             />
-                            <InfoBox label="LVR" value={client.lvr} />
+                            <InfoBox label="LVR" value={formatLvr(client.loanAmount, client.securityValue)} />
                             <InfoBox
                               label="Anticipated Settlement Date"
                               value={client.anticipatedSettlementDate}
@@ -2937,7 +2935,8 @@ export default function ClientDocumentSearch() {
                       <input
                         type={type || "text"}
                         step={type === "number" ? "any" : undefined}
-                        value={editDraft[key] || ""}
+                        readOnly={key === "lvr"}
+                        value={key === "lvr" ? calculateLvr(editDraft.loanAmount, editDraft.securityValue) : editDraft[key] || ""}
                         onChange={(event) =>
                           setEditDraft((current) => ({
                             ...current,

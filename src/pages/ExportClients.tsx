@@ -1,3 +1,4 @@
+import { formatCurrency, formatLvr } from "@/lib/loanValues";
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
@@ -858,12 +859,12 @@ export default function DocumentTypePage() {
                             value={client.explanationOfIncome}
                           />
                           <InfoBox label="Security" value={client.security} />
-                          <InfoBox label="Loan Amount" value={client.loanAmount} />
+                          <InfoBox label="Loan Amount" value={formatCurrency(client.loanAmount)} />
                           <InfoBox
                             label="Security Value"
-                            value={client.securityValue}
+                            value={formatCurrency(client.securityValue)}
                           />
-                          <InfoBox label="LVR" value={client.lvr} />
+                          <InfoBox label="LVR" value={formatLvr(client.loanAmount, client.securityValue)} />
                           <InfoBox
                             label="Anticipated Settlement Date"
                             value={client.anticipatedSettlementDate}
@@ -1091,9 +1092,9 @@ export default function DocumentTypePage() {
                     value={previewFile.explanationOfIncome}
                   />
                   <InfoBox label="Security" value={previewFile.security} />
-                  <InfoBox label="Loan Amount" value={previewFile.loanAmount} />
-                  <InfoBox label="Security Value" value={previewFile.securityValue} />
-                  <InfoBox label="LVR" value={previewFile.lvr} />
+                  <InfoBox label="Loan Amount" value={formatCurrency(previewFile.loanAmount)} />
+                  <InfoBox label="Security Value" value={formatCurrency(previewFile.securityValue)} />
+                  <InfoBox label="LVR" value={formatLvr(previewFile.loanAmount, previewFile.securityValue)} />
                   <InfoBox
                     label="Anticipated Settlement Date"
                     value={previewFile.anticipatedSettlementDate}

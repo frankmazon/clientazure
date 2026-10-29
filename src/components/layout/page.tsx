@@ -1,3 +1,4 @@
+import { calculateLvr, formatCurrency } from "@/lib/loanValues";
 import BrandLogo from "@/components/BrandLogo";
 import { captureSigningSubmission } from "@/lib/signingSubmission";
 import { useEffect, useState } from "react";
@@ -98,7 +99,7 @@ type CoBorrower = {
 };
 
 type SubmissionSuccess = {
-  uniqueId: string;
+  email: string;
   source: string;
   status: string;
   missingRequirements: string[];
@@ -404,19 +405,11 @@ const splitStoredPhoneNumber = (phone?: string) => {
   };
 };
 
-const calculateLvr = (loanAmount: string, securityValue: string) => {
-  const loanAmountValue = Number(loanAmount);
-  const securityValueValue = Number(securityValue);
-
-  if (!loanAmountValue || !securityValueValue) return "";
-
-  return ((loanAmountValue / securityValueValue) * 100).toFixed(2);
-};
-
 export default function HomePage() {
   console.info("Client Submission API:", API_URL);
 
   const [formData, setFormData] = useState(initialFormData);
+  const [loanAmountFocused, setLoanAmountFocused] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [coBorrowers, setCoBorrowers] = useState<CoBorrower[]>([]);
   const [coBorrowerDraft, setCoBorrowerDraft] = useState<CoBorrower>(
@@ -567,8 +560,11 @@ export default function HomePage() {
     const cleanValue =
       name === "phone" || name === "referrerPhone"
         ? value.replace(/\D/g, "")
-        : value;
+        : name === "loanAmount" || name === "securityValue"
+          ? value.replace(/[$,\s]/g, "")
+          : value;
 
+    if ((name === "loanAmount" || name === "securityValue") && !/^\d*(?:\.\d{0,2})?$/.test(cleanValue)) return;
     clearFieldError(name);
 
     if (name === "uniqueReferrerCode" && isReferrerResolved) {
@@ -1092,12 +1088,12 @@ export default function HomePage() {
     appendFormAliases(
       azureFormData,
       ["securityValue", "SecurityValue", "security_value"],
-      SHOW_ADVANCED_LOAN_FIELDS ? formData.securityValue : "0",
+      formData.securityValue || "0",
     );
     appendFormAliases(
       azureFormData,
       ["lvr", "Lvr", "LVR"],
-      SHOW_ADVANCED_LOAN_FIELDS ? formData.lvr : "0",
+      calculateLvr(formData.loanAmount, formData.securityValue) || "0",
     );
     appendFormAliases(
       azureFormData,
@@ -1431,7 +1427,7 @@ export default function HomePage() {
 
       captureSigningSubmission(uniqueId, formData, formData.withBorrowersGuarantors === "Yes" ? coBorrowers : []);
       setSubmissionSuccess({
-        uniqueId,
+        email: formData.email,
         source: sourceLabel,
         status: "Pending Team Call",
         missingRequirements,
@@ -2256,31 +2252,36 @@ export default function HomePage() {
 
               <div className="grid gap-5 md:grid-cols-2">
                 <input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
+                  aria-label={usesSimplifiedIntake ? "Funds required" : "Loan Amount"}
+                  onFocus={() => setLoanAmountFocused(true)}
+                  onBlur={() => setLoanAmountFocused(false)}
                   name="loanAmount"
-                  value={formData.loanAmount}
+                  value={loanAmountFocused || !formData.loanAmount ? formData.loanAmount : formatCurrency(formData.loanAmount)}
                   onChange={handleChange}
                   placeholder={usesSimplifiedIntake ? "Funds required" : "Loan Amount"}
                   className={inputClass}
                 />
 
-                {SHOW_ADVANCED_LOAN_FIELDS && !usesSimplifiedIntake && <input
+                {!usesSimplifiedIntake && <input
                   type="number"
                   step="0.01"
                   name="securityValue"
+                  aria-label="Security Value"
+                  min="0"
                   value={formData.securityValue}
                   onChange={handleChange}
                   placeholder="Security Value"
                   className={inputClass}
                 />}
 
-                {SHOW_ADVANCED_LOAN_FIELDS && !usesSimplifiedIntake && <div>
+                {!usesSimplifiedIntake && <div>
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
                     name="lvr"
-                    value={formData.lvr}
+                    aria-label="LVR percentage"
+                    value={formData.lvr ? `${formData.lvr}%` : ""}
                     placeholder="LVR (%)"
                     className={`${inputClass} bg-slate-50`}
                     readOnly
@@ -2451,18 +2452,18 @@ export default function HomePage() {
                 Scenario submitted successfully!
               </h2>
               <p className="mt-2 text-sm leading-6 text-white/80">
-                Your scenario has been received. Keep the unique ID below
-                for future reference.
+                Your scenario has been received. Use the email address below
+                to sign in to the client portal.
               </p>
             </div>
 
             <div className="space-y-5 p-6 sm:p-8">
               <div className="rounded-2xl border border-[#259b8f]/20 bg-[#259b8f]/5 p-4 text-center">
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-[#16766e]">
-                  Unique ID
+                  Email address
                 </p>
                 <p className="mt-1 break-all text-2xl font-black tracking-wide text-slate-950">
-                  {submissionSuccess.uniqueId}
+                  {submissionSuccess.email}
                 </p>
               </div>
 
