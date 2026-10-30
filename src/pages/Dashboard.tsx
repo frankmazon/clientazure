@@ -32,7 +32,7 @@ type NormalizedTransactionType = "alt_doc" | "full_doc";
 type DocumentReviewStatus = "Approved" | "Pending" | "Rejected";
 
 const sharedDocumentTypes: DocumentOption[] = [
-  { label: "ID", value: "id" },
+  { label: "Driver license", value: "id" },
   { label: "Passport", value: "passport" },
   {
     label: "Last 6 Months Mortgage Statements",

@@ -177,7 +177,7 @@ type DocumentOption = {
 type NormalizedTransactionType = "alt_doc" | "full_doc";
 
 const identityDocumentTypes: DocumentOption[] = [
-  { label: "Driver's Licence", value: "id" },
+  { label: "Driver license", value: "id" },
   { label: "Passport", value: "passport" },
 ];
 

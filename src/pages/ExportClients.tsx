@@ -87,8 +87,8 @@ type ClientFolder = {
 };
 
 const documentTypeLabels: Record<string, string> = {
-  id: 'ID',
-  ID: 'ID',
+  id: 'Driver license',
+  ID: 'Driver license',
   'property-documents': 'Property Documents',
   'credit-history': 'Credit History',
   'income-documents': 'Income Documents',

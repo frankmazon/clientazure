@@ -25,7 +25,7 @@ const CLIENT_PORTAL_URL =
   'https://dashboard.sbrfunding.com.au/clients';
 
 const documentTypes = [
-  { label: 'ID', value: 'id' },
+  { label: 'Driver license', value: 'id' },
   { label: 'Passport', value: 'passport' },
   { label: 'Payslip', value: 'payslip' },
   { label: 'BAS from ATO Portal', value: 'bas-from-ato-portal' },
