@@ -1,3 +1,4 @@
+import { getRequiredDocumentValues, normalizeChecklistStatus, getOutstandingDocuments } from "@/lib/documentChecklist";
 import { formatCurrency, formatLvr } from "@/lib/loanValues";
 import BrandLogo from "@/components/BrandLogo";
 import { type ReactNode, useMemo, useState } from "react";
@@ -196,43 +197,9 @@ const transactionDocumentTypes: Record<
 
 const allDocumentTypes = Object.values(transactionDocumentTypes).flat();
 
-const normalizeTransactionType = (
-  transactionType?: string,
-): NormalizedTransactionType | "" => {
-  const normalized = (transactionType || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
 
-  if (
-    normalized === "alt" ||
-    normalized === "alt_doc" ||
-    normalized === "altdoc"
-  ) {
-    return "alt_doc";
-  }
-
-  if (
-    normalized === "full" ||
-    normalized === "full_doc" ||
-    normalized === "fulldoc"
-  ) {
-    return "full_doc";
-  }
-
-  return "";
-};
-
-const getDocumentTypesForTransaction = (
-  transactionType?: string,
-): DocumentOption[] => {
-  const normalizedTransactionType = normalizeTransactionType(transactionType);
-
-  return normalizedTransactionType
-    ? transactionDocumentTypes[normalizedTransactionType]
-    : [];
-};
+const getDocumentTypesForTransaction = (client?: Submission | null): DocumentOption[] =>
+  getRequiredDocumentValues(client).map(value => ({ value, label: allDocumentTypes.find(document => document.value === value)?.label || value }));
 
 const normalizeDocumentTypeValue = (documentType?: string) =>
   (documentType || "")
@@ -399,21 +366,8 @@ const normalizeNumberText = (value: unknown) => {
 
 type DocumentStatusType = "Approved" | "Rejected" | "Pending" | "Missing";
 
-const approvedStatusValues = ["approved", "verified", "complete", "completed"];
-const rejectedStatusValues = ["rejected", "declined", "failed"];
-
-const normalizeDocumentStatus = (
-  status?: string | number | null,
-): DocumentStatusType => {
-  const normalized = toText(status).toLowerCase().replace(/_/g, "-").trim();
-
-  if (approvedStatusValues.includes(normalized)) return "Approved";
-  if (rejectedStatusValues.includes(normalized)) return "Rejected";
-  if (!normalized || normalized === "missing" || normalized === "not-uploaded")
-    return "Missing";
-
-  return "Pending";
-};
+const normalizeDocumentStatus = (status?: string | number | null): DocumentStatusType =>
+  normalizeChecklistStatus(status);
 
 const getStatusStyles = (status: DocumentStatusType) => {
   if (status === "Approved") {
@@ -797,7 +751,7 @@ export default function ClientDashboard() {
   }, [clientFiles]);
 
   const requiredDocumentTypes = useMemo(
-    () => getDocumentTypesForTransaction(selectedClient?.transactionType),
+    () => getDocumentTypesForTransaction(selectedClient),
     [selectedClient?.transactionType],
   );
 
@@ -979,11 +933,7 @@ export default function ClientDashboard() {
 
   const missingDocumentTypes = useMemo(
     () =>
-      requiredDocumentTypeValues.filter(
-        (type) =>
-          !approvedDocumentTypes.includes(type) &&
-          !waivedDocumentTypes.includes(type),
-      ),
+      getOutstandingDocuments(requiredDocumentTypeValues, approvedDocumentTypes, waivedDocumentTypes),
     [approvedDocumentTypes, requiredDocumentTypeValues, waivedDocumentTypes],
   );
 
@@ -1325,9 +1275,7 @@ export default function ClientDashboard() {
       return;
     }
 
-    const allowedDocumentTypes = getDocumentTypesForTransaction(
-      clientRecord.transactionType,
-    );
+    const allowedDocumentTypes = getDocumentTypesForTransaction(clientRecord);
 
     if (allowedDocumentTypes.length === 0) {
       alert(

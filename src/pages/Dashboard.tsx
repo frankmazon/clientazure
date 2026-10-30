@@ -1,3 +1,4 @@
+import { getRequiredDocumentValues, normalizeChecklistStatus } from "@/lib/documentChecklist";
 import { formatCurrency, formatLvr } from "@/lib/loanValues";
 import { normalizeDocumentList, getOutstandingDocuments } from "@/lib/documentChecklist";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
@@ -71,33 +72,6 @@ const documentLabels = Object.fromEntries(
   allDocumentTypes.map((document) => [document.value, document.label]),
 ) as Record<string, string>;
 
-const normalizeTransactionType = (transactionType?: string): NormalizedTransactionType | "" => {
-  const normalized = (transactionType || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-
-  if (normalized === "alt" || normalized === "alt_doc" || normalized === "altdoc") {
-    return "alt_doc";
-  }
-
-  if (normalized === "full" || normalized === "full_doc" || normalized === "fulldoc") {
-    return "full_doc";
-  }
-
-  return "";
-};
-
-const getRequiredDocuments = (transactionType?: string): string[] => {
-  const normalizedTransactionType = normalizeTransactionType(transactionType);
-
-  return normalizedTransactionType
-    ? transactionDocumentTypes[normalizedTransactionType].map(
-        (document) => document.value,
-      )
-    : [];
-};
 
 const normalizeDocumentTypeValue = (documentType?: string) =>
   (documentType || "")
@@ -144,6 +118,9 @@ type Client = {
   loanType?: string;
   purpose?: string;
   transactionType?: string;
+  isSelfEmployed?: string;
+  hasProperty?: string;
+  hasTaxReturn?: string;
   withBorrowersGuarantors?: string;
 
   vedaIssues?: string;
@@ -298,6 +275,9 @@ const normalizeClientFromApi = (client: RawClient): Client => {
     purpose: toOptionalString(
       getFirstValue(client, ["purpose", "Purpose", "PURPOSE"]),
     ),
+    isSelfEmployed: toOptionalString(getFirstValue(client, ["isSelfEmployed", "IsSelfEmployed", "is_self_employed"])),
+    hasProperty: toOptionalString(getFirstValue(client, ["hasProperty", "HasProperty", "has_property"])),
+    hasTaxReturn: toOptionalString(getFirstValue(client, ["hasTaxReturn", "HasTaxReturn", "has_tax_return"])),
     requiredDocuments: normalizeDocumentList(getFirstValue(client, ["requiredDocuments", "RequiredDocuments", "required_documents"])),
     waivedDocuments: normalizeDocumentList(getFirstValue(client, ["waivedDocuments", "WaivedDocuments", "waived_documents"])),
     transactionType: toOptionalString(
@@ -624,13 +604,8 @@ export default function Clients() {
   const getStatus = (client: Client) => client.status || "Pending Team Call";
 
   const getDocumentStatus = (client: Client): DocumentReviewStatus => {
-    const value = (client.documentStatus || "Pending").trim();
-    const normalized = value.toLowerCase();
-
-    if (["approved", "verified", "complete"].includes(normalized))
-      return "Approved";
-    if (["rejected", "declined"].includes(normalized)) return "Rejected";
-    return "Pending";
+    const status = normalizeChecklistStatus(client.documentStatus);
+    return status === "Missing" ? "Pending" : status;
   };
 
   const getDocumentStatusClass = (status?: string) => {
@@ -720,13 +695,7 @@ export default function Clients() {
       const mergedFiles = documentRows.map((file) =>
         mergeClientRows([mergedClient, file]),
       );
-      const fallbackDocuments = getRequiredDocuments(
-        mergedClient.transactionType,
-      );
-      const requiredDocuments = Array.from(new Set([
-        ...fallbackDocuments,
-        ...clientRows.flatMap(row => normalizeDocumentList(row.requiredDocuments)),
-      ]));
+      const requiredDocuments = getRequiredDocumentValues(mergedClient);
       const waivedDocuments = Array.from(new Set(clientRows.flatMap(row => normalizeDocumentList(row.waivedDocuments))));
 
       const hasSupportedTransaction = requiredDocuments.length > 0;

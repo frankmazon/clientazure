@@ -1,3 +1,4 @@
+import { getRequiredDocumentValues, normalizeChecklistStatus } from "@/lib/documentChecklist";
 import { calculateLvr, formatCurrency, formatLvr } from "@/lib/loanValues";
 import { getOutstandingDocuments } from "@/lib/documentChecklist";
 import { adminGet } from "@/lib/adminRequest";
@@ -131,43 +132,6 @@ const documentTypeLabels = Object.fromEntries(
   allDocumentTypes.map((document) => [document.value, document.label]),
 ) as Record<string, string>;
 
-const normalizeTransactionType = (
-  transactionType?: string,
-): NormalizedTransactionType | "" => {
-  const normalized = (transactionType || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-
-  if (
-    normalized === "alt" ||
-    normalized === "alt_doc" ||
-    normalized === "altdoc"
-  ) {
-    return "alt_doc";
-  }
-
-  if (
-    normalized === "full" ||
-    normalized === "full_doc" ||
-    normalized === "fulldoc"
-  ) {
-    return "full_doc";
-  }
-
-  return "";
-};
-
-const getRequiredDocuments = (transactionType?: string): string[] => {
-  const normalizedTransactionType = normalizeTransactionType(transactionType);
-
-  return normalizedTransactionType
-    ? transactionDocumentTypes[normalizedTransactionType].map(
-        (document) => document.value,
-      )
-    : [];
-};
 
 const normalizeDocumentTypeValue = (documentType?: string) =>
   (documentType || "")
@@ -301,6 +265,9 @@ type Client = {
   loanType?: string;
   purpose?: string;
   transactionType?: string;
+  isSelfEmployed?: string;
+  hasProperty?: string;
+  hasTaxReturn?: string;
   withBorrowersGuarantors?: string;
   coBorrowers?: CoBorrower[];
 
@@ -409,17 +376,8 @@ const editableClientFields: Array<{
 ];
 
 const normalizeDocumentStatus = (status?: string) => {
-  const value = (status || "Pending").trim().toLowerCase();
-
-  if (value === "verified" || value === "approved" || value === "approve") {
-    return "Verified";
-  }
-
-  if (value === "rejected" || value === "reject") {
-    return "Rejected";
-  }
-
-  return "Pending";
+  const normalized = normalizeChecklistStatus(status);
+  return normalized === "Approved" ? "Verified" : normalized === "Missing" ? "Pending" : normalized;
 };
 
 const normalizeDocumentList = (value: unknown): string[] => {
@@ -850,6 +808,9 @@ export default function ClientDocumentSearch() {
           rawClient.clientId ||
           rawClient.id,
       ),
+      isSelfEmployed: pickValue(rawClient, ["isSelfEmployed", "IsSelfEmployed", "is_self_employed"]) as string,
+      hasProperty: pickValue(rawClient, ["hasProperty", "HasProperty", "has_property"]) as string,
+      hasTaxReturn: pickValue(rawClient, ["hasTaxReturn", "HasTaxReturn", "has_tax_return"]) as string,
       uniqueId: pickValue(rawClient, ["uniqueId", "UniqueId", "uniqueID"]) as
         | string
         | undefined,
@@ -1509,12 +1470,7 @@ export default function ClientDocumentSearch() {
         Boolean(row.documentType || row.fileName || row.fileUrl),
       );
 
-      const requiredDocuments = Array.from(
-        new Set([
-          ...getRequiredDocuments(client.transactionType),
-          ...clientRows.flatMap((row) => row.requiredDocuments || []),
-        ]),
-      );
+      const requiredDocuments = getRequiredDocumentValues(client);
       const hasSupportedTransaction = requiredDocuments.length > 0;
       const waivedDocuments = Array.from(
         new Set(

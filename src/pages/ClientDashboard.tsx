@@ -1,3 +1,4 @@
+import { getRequiredDocumentValues, normalizeChecklistStatus, getOutstandingDocuments } from "@/lib/documentChecklist";
 import { formatCurrency, formatLvr } from "@/lib/loanValues";
 import BrandLogo from "@/components/BrandLogo";
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -269,70 +270,8 @@ const normalizeTransactionType = (
   return "";
 };
 
-const getDocumentTypesForTransaction = (
-  transactionType?: string,
-): DocumentOption[] => {
-  const normalizedTransactionType = normalizeTransactionType(transactionType);
-
-  return normalizedTransactionType
-    ? transactionDocumentTypes[normalizedTransactionType]
-    : [];
-};
-
-const getRequiredDocumentTypes = (
-  client?: Submission | null,
-): DocumentOption[] => {
-  if (!client) return [];
-
-  const source = normalizeSourceValue(client.source || client.leadType);
-  const isSimplified = source === "Direct Client" || source === "Referral";
-
-  const payslips: DocumentOption[] =
-    client.isSelfEmployed?.trim().toLowerCase() === "no"
-      ? [{ label: "Last 2 Payslips", value: "payslip" }]
-      : [];
-
-  if (!isSimplified) {
-    return Array.from(new Map(
-      [...getDocumentTypesForTransaction(client.transactionType), ...payslips]
-        .map((document) => [document.value, document]),
-    ).values());
-  }
-
-  const documents: DocumentOption[] = [...identityDocumentTypes, ...payslips];
-  const financialStatementsAvailable =
-    normalizeTransactionType(client.transactionType) === "full_doc";
-  const isSelfEmployed = client.isSelfEmployed?.trim().toLowerCase() === "yes";
-  const hasTaxReturn = client.hasTaxReturn?.trim().toLowerCase() === "yes";
-  const hasProperty = client.hasProperty?.trim().toLowerCase() === "yes";
-  const borrowerType = client.borrowerType?.trim().toLowerCase();
-
-  if (hasProperty) documents.push(...propertyDocumentTypes);
-
-  if (financialStatementsAvailable) {
-    documents.push(...financialStatementDocumentTypes);
-    if (!isSelfEmployed) documents.push(...employmentIncomeDocumentTypes);
-  } else if (isSelfEmployed) {
-    documents.push(...alternativeIncomeDocumentTypes);
-  }
-
-  if (hasTaxReturn) {
-    if (borrowerType === "business") {
-      documents.push(taxReturnDocumentTypes.business);
-    } else if (borrowerType === "personal") {
-      documents.push(taxReturnDocumentTypes.personal);
-    } else {
-      documents.push(
-        taxReturnDocumentTypes.business,
-        taxReturnDocumentTypes.personal,
-      );
-    }
-  }
-
-  return Array.from(
-    new Map(documents.map((document) => [document.value, document])).values(),
-  );
-};
+const getRequiredDocumentTypes = (client?: Submission | null): DocumentOption[] =>
+  getRequiredDocumentValues(client).map(value => ({ value, label: allDocumentTypes.find(document => document.value === value)?.label || value }));
 
 const normalizeDocumentTypeValue = (documentType?: string) =>
   (documentType || "")
@@ -499,21 +438,8 @@ const normalizeNumberText = (value: unknown) => {
 
 type DocumentStatusType = "Approved" | "Rejected" | "Pending" | "Missing";
 
-const approvedStatusValues = ["approved", "verified", "complete", "completed"];
-const rejectedStatusValues = ["rejected", "declined", "failed"];
-
-const normalizeDocumentStatus = (
-  status?: string | number | null,
-): DocumentStatusType => {
-  const normalized = toText(status).toLowerCase().replace(/_/g, "-").trim();
-
-  if (approvedStatusValues.includes(normalized)) return "Approved";
-  if (rejectedStatusValues.includes(normalized)) return "Rejected";
-  if (!normalized || normalized === "missing" || normalized === "not-uploaded")
-    return "Missing";
-
-  return "Pending";
-};
+const normalizeDocumentStatus = (status?: string | number | null): DocumentStatusType =>
+  normalizeChecklistStatus(status);
 
 const getStatusStyles = (status: DocumentStatusType) => {
   if (status === "Approved") {
@@ -1215,11 +1141,7 @@ export default function ClientDashboard() {
 
   const missingDocumentTypes = useMemo(
     () =>
-      requiredDocumentTypeValues.filter(
-        (type) =>
-          !approvedDocumentTypes.includes(type) &&
-          !waivedDocumentTypes.includes(type),
-      ),
+      getOutstandingDocuments(requiredDocumentTypeValues, approvedDocumentTypes, waivedDocumentTypes),
     [approvedDocumentTypes, requiredDocumentTypeValues, waivedDocumentTypes],
   );
 

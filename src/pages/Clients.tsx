@@ -1,3 +1,4 @@
+import { getRequiredDocumentValues, normalizeChecklistStatus } from "@/lib/documentChecklist";
 import { formatCurrency, formatLvr } from "@/lib/loanValues";
 import { normalizeDocumentList, getOutstandingDocuments } from "@/lib/documentChecklist";
 import { adminGet } from "@/lib/adminRequest";
@@ -71,33 +72,6 @@ const documentLabels = Object.fromEntries(
   allDocumentTypes.map((document) => [document.value, document.label]),
 ) as Record<string, string>;
 
-const normalizeTransactionType = (transactionType?: string): NormalizedTransactionType | '' => {
-  const normalized = (transactionType || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-
-  if (normalized === 'alt' || normalized === 'alt_doc' || normalized === 'altdoc') {
-    return 'alt_doc';
-  }
-
-  if (normalized === 'full' || normalized === 'full_doc' || normalized === 'fulldoc') {
-    return 'full_doc';
-  }
-
-  return '';
-};
-
-const getRequiredDocuments = (transactionType?: string): string[] => {
-  const normalizedTransactionType = normalizeTransactionType(transactionType);
-
-  return normalizedTransactionType
-    ? transactionDocumentTypes[normalizedTransactionType].map(
-        (document) => document.value,
-      )
-    : [];
-};
 
 const normalizeDocumentTypeValue = (documentType?: string) =>
   (documentType || '')
@@ -124,8 +98,6 @@ const formatDocumentType = (documentType?: string) => {
 type DocumentStatus = 'approved' | 'pending' | 'rejected';
 type SummaryFilter = 'all' | 'complete' | 'incomplete';
 
-const approvedStatusValues = ['approved', 'verified', 'complete', 'completed'];
-const rejectedStatusValues = ['rejected', 'declined', 'failed'];
 
 type Client = {
   [key: string]: unknown;
@@ -266,15 +238,8 @@ export default function Clients() {
   const normalizeDocumentStatus = (
     status?: string | number | null,
   ): DocumentStatus => {
-    const normalized = String(status || '')
-      .trim()
-      .toLowerCase()
-      .replace(/_/g, '-');
-
-    if (approvedStatusValues.includes(normalized)) return 'approved';
-    if (rejectedStatusValues.includes(normalized)) return 'rejected';
-
-    return 'pending';
+    const normalized = normalizeChecklistStatus(status);
+    return normalized === "Approved" ? "approved" : normalized === "Rejected" ? "rejected" : "pending";
   };
 
   const formatSource = (type?: string | null) => {
@@ -407,17 +372,7 @@ export default function Clients() {
       const files = clientRows.filter(
         (row) => Boolean(row.documentType || row.fileName || row.fileUrl),
       );
-      const fallbackDocuments = getRequiredDocuments(
-        getClientText(client, [
-          'transactionType',
-          'TransactionType',
-          'transaction_type',
-        ]),
-      );
-      const requiredDocuments = Array.from(new Set([
-        ...fallbackDocuments,
-        ...clientRows.flatMap(row => normalizeDocumentList(row.requiredDocuments ?? row.RequiredDocuments ?? row.required_documents)),
-      ]));
+      const requiredDocuments = getRequiredDocumentValues(client);
       const waivedDocuments = Array.from(new Set(clientRows.flatMap(row => normalizeDocumentList(row.waivedDocuments ?? row.WaivedDocuments ?? row.waived_documents))));
 
       const hasSupportedTransaction = requiredDocuments.length > 0;

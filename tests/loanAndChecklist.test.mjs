@@ -37,3 +37,27 @@ test('waivers normalize both arrays and legacy JSON or comma-separated lists', (
   assert.deepEqual(normalizeDocumentList('ID, Passport'), ['id', 'passport']);
   assert.deepEqual(normalizeDocumentList(undefined), []);
 });
+
+const { getRequiredDocumentValues, normalizeChecklistStatus } = await loadModule('documentChecklist');
+test('direct-client and referral checklists depend on answers, not the legacy full-doc list', () => {
+  for (const source of ['Direct Client', 'Referral']) {
+    assert.deepEqual(getRequiredDocumentValues({source, transactionType: 'alt_doc', isSelfEmployed: 'No', hasProperty: 'No', hasTaxReturn: 'No'}), ['id', 'passport', 'payslip']);
+    assert.deepEqual(getRequiredDocumentValues({source, transactionType: 'alt_doc', isSelfEmployed: 'Yes', hasProperty: 'Yes', hasTaxReturn: 'Yes', borrowerType: 'Business'}), ['id', 'passport', 'last-6-months-mortgage-statements', 'council-rates-notice', 'bas-from-ato-portal', 'business-banking-statements', 'company-tax-returns']);
+    assert.deepEqual(getRequiredDocumentValues({source, transactionType: 'full_doc', isSelfEmployed: 'No', hasProperty: 'No', hasTaxReturn: 'Yes', borrowerType: 'Personal'}), ['id', 'passport', 'payslip', 'management-reports-financial-statements', 'group-certificate-payment-summary', 'individual-tax-returns']);
+  }
+});
+test('legacy broker checklists remain available and aliases use the same rules', () => {
+  assert.deepEqual(getRequiredDocumentValues({Source: 'Broker', TransactionType: 'alt doc'}), ['bas-from-ato-portal', 'business-banking-statements', 'id', 'passport', 'last-6-months-mortgage-statements', 'council-rates-notice']);
+  assert.deepEqual(getRequiredDocumentValues({source: 'direct_client', transaction_type: 'alt_doc', is_self_employed: 'No'}), ['id', 'passport', 'payslip']);
+});
+test('all portals recognize approval and rejection aliases consistently', () => {
+  for (const status of ['Verified', 'Approved', 'Complete', 'Completed']) assert.equal(normalizeChecklistStatus(status), 'Approved');
+  for (const status of ['Rejected', 'Declined', 'Failed']) assert.equal(normalizeChecklistStatus(status), 'Rejected');
+  assert.equal(normalizeChecklistStatus('Pending'), 'Pending');
+  assert.equal(normalizeChecklistStatus(undefined), 'Missing');
+});
+test('submission email uses email login and contains no Client ID merge field', () => {
+  const html = readFileSync(new URL('../docs/emails/ghl-client-submission.html', import.meta.url), 'utf8');
+  assert.match(html, /{{contact\.email}}/);
+  assert.doesNotMatch(html, /{{\s*contact\.(?:client_?id|unique_?id)\s*}}/i);
+});
